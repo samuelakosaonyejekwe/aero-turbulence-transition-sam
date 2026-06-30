@@ -1,0 +1,4 @@
+case,Tu_pct,Re_theta_t_exp,Re_theta_t_pred,Re_theta_t_err_pct,Re_x_tr_pred,mean_Cf_err_pct,mechanism
+ERCOFTAC T3A flat plate (bypass transition),3.3,200.0,200.3,0.2,8.921e+04,22.8,bypass
+ERCOFTAC T3B flat plate (high-Tu bypass),6.0,160.0,166.5,4.1,6.168e+04,5.8,bypass
+Schubauer & Skramstad flat plate (natural transition),0.03,1100.0,1135.9,3.3,2.867e+06,23.6,TS-natural

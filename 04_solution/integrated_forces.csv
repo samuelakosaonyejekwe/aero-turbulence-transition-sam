@@ -1,0 +1,9 @@
+quantity,value,unit
+Section lift coefficient Cl,0.4554,-
+Section profile drag Cd,0.00308,-
+Section Cd (counts),30.8,counts
+Section L/D,147.8,-
+"Wing lift (3D est, e=0.85)",37972.0,N
+Dynamic pressure q,2794.6,Pa
+Reynolds number Re_MAC,6.414e+06,-
+Mach number,0.42,-

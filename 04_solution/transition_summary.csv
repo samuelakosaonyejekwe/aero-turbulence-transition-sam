@@ -1,0 +1,5 @@
+case,surface,x_tr_c,Re_x_tr,Re_theta_at_onset,mechanism,laminar_run_pct,Cf_te
+CRUISE,upper,0.409,2.623e+06,1131.5,TS-natural,40.9,0.00016
+CRUISE,lower,0.456,2.923e+06,1048.9,TS-natural,45.6,0.0002
+CLIMB,upper,0.047,5.069e+05,511.4,bypass,4.7,0.00012
+CLIMB,lower,0.159,1.706e+06,603.7,bypass,15.9,0.00017

@@ -1,0 +1,16 @@
+parameter,value,unit
+Aircraft,AETHER-NLF 25,-
+Wing reference area S,33.150,m^2
+Wing span b,17.00,m
+Aspect ratio AR,8.72,-
+Root chord c_root,2.600,m
+Tip chord c_tip,1.300,m
+Taper ratio,0.500,-
+Mean aerodynamic chord MAC,2.022,m
+Leading-edge sweep,12.0,deg
+Dihedral,4.0,deg
+Tip washout (twist),-3.0,deg
+Section,UTSS-NLF16,-
+Section max thickness,16.0,% chord
+Max-thickness location,42.2,% chord
+Section design Cl,0.45,-

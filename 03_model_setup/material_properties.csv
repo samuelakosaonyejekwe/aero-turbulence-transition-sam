@@ -1,0 +1,11 @@
+property,value,unit
+Working fluid,air (ideal gas),-
+Specific gas constant R,287.05,J/kg.K
+Ratio of specific heats gamma,1.40,-
+Prandtl number Pr,0.72,-
+Sutherland reference mu0,1.716e-5,Pa.s
+Sutherland reference T0,273.15,K
+Sutherland constant S,110.4,K
+Recovery factor (turbulent),0.89,-
+Cruise dynamic viscosity,1.422e-5,Pa.s
+Cruise density,0.36392,kg/m^3
