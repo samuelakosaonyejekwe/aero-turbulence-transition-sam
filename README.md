@@ -85,6 +85,57 @@ A single, fixed calibration set (see `03_model_setup/calibration_constants.csv`)
 
 ---
 
+## Results figures
+
+A selection of generated outputs. The full set of curves, contours, profiles, and 3-D renders lives in [`05_postprocessing/`](05_postprocessing/) and [`06_validation/plots/`](06_validation/plots/).
+
+<table>
+  <tr>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/cruise_Cp.png" width="100%"><br>
+      <sub><b>Pressure distribution (cruise).</b> Upper/lower-surface C<sub>p</sub> over the UTSS-NLF16 section.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/cruise_Cf.png" width="100%"><br>
+      <sub><b>Skin friction &amp; BL state.</b> Laminar run shaded; the C<sub>f</sub> jump marks transition onset.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/contours/contour_Cp_cruise.png" width="100%"><br>
+      <sub><b>C<sub>p</sub> contour field (cruise).</b> Inviscid panel solution around the aerofoil.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/nlf_vs_turbulent.png" width="100%"><br>
+      <sub><b>NLF benefit.</b> Profile drag of predicted-transition vs fully-turbulent wing (≈ 37% viscous reduction).</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/aero_polar.png" width="100%"><br>
+      <sub><b>Aerodynamic polar.</b> Lift–drag behaviour of the wing section.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/spanwise_transition.png" width="100%"><br>
+      <sub><b>Spanwise transition.</b> Chordwise transition location swept across the span.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/profiles/bl_velocity_profiles.png" width="100%"><br>
+      <sub><b>Boundary-layer velocity profiles.</b> Developing BL through laminar, transitional, and turbulent stations.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/three_d/td_Cp.png" width="100%"><br>
+      <sub><b>3-D surface C<sub>p</sub>.</b> Pressure mapped over the lofted 3-D wing.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="06_validation/plots/val_combined_Re_theta_t.png" width="100%"><br>
+      <sub><b>Validation.</b> Re<sub>θt</sub> at transition: UTSS vs ERCOFTAC T3A/T3B and Schubauer–Skramstad data.</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## Validation
 
 The solver is validated against three canonical published transition experiments, using the **one universal calibration set**:
