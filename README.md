@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/banner.png" alt="AETHER-NLF 25 — Laminar to Turbulent Boundary-Layer Transition over a 3-D NLF Wing" width="100%">
+  <img src="assets/banner.png" alt="AETHER-NLF 25 — Laminar to Turbulent Boundary-Layer Transition over a 3-D NLF Wing" width="100%">
 </p>
 
 # AETHER-NLF 25 — Laminar→Turbulent Transition Case Study
