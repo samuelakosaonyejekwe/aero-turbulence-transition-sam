@@ -1,0 +1,9 @@
+constant,value,role,calibration_source
+A_TS,1.0,TS/natural onset weight,clean: validated on Schubauer-Skramstad (NACA Rep.909)
+A_BP,1.0,bypass onset weight,validated on ERCOFTAC T3A/T3B
+A_SEP,1.0,separation-induced weight,Mayle (1991) bubble correlation
+A_CF,1.0,crossflow weight,Arnal C1 criterion
+N_crit,9.0,e^N amplification factor,9.0 (clean free-atmosphere)
+C_len,6.5,Narasimha transition-length scale,Dhawan-Narasimha (1958)
+CF_C1,150.0,crossflow critical Re,Arnal et al.
+sep_floor,120.0,min separation onset Re_theta,calibration floor

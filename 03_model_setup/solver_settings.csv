@@ -1,0 +1,15 @@
+setting,value
+Inviscid method,Constant-strength vortex-panel (Kuethe-Chow)
+Kutta condition,Enforced at sharp trailing edge
+Surface panels,260 (cosine-clustered)
+Compressibility,Prandtl-Glauert/Karman-Tsien for Cp (M=0.42)
+Laminar BL closure,Thwaites integral method
+Transition model,UTSS unified 4-mechanism kernel
+  mechanisms,TS/natural(e^N) | bypass(AGS) | separation | crossflow(C1)
+Intermittency closure,Narasimha universal (gamma)
+Turbulent BL closure,Head entrainment + Ludwieg-Tillmann Cf
+Separation criterion,Thwaites lambda<=-0.09 / H>2.6 turbulent
+Drag integration,Squire-Young far-wake
+Marching scheme,"explicit, arc-length stepping"
+Convergence tol (panel),1e-10 (direct solve)
+Wall y+ target,~1 (reconstruction grid)

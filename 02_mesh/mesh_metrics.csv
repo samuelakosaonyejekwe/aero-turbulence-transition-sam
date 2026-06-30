@@ -1,0 +1,14 @@
+metric,value,unit
+Surface streamwise nodes,321,-
+Wall-normal layers (reconstruction),44,-
+First-cell height y1,6.51,micron
+Target wall y+,0.80,-
+Wall-normal growth ratio,1.12,-
+Min streamwise spacing,0.099,mm (xc)
+Max streamwise spacing,9.927,mm (xc)
+LE clustering ratio,99.9,-
+BL grid outer extent,7.04,mm
+Friction velocity u_tau (TE),4.800,m/s
+Max cell aspect ratio,1524,-
+Grid orthogonality (min),88.5,deg
+Mesh type,structured C-type (surface) + normal reconstruction,-

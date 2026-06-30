@@ -1,0 +1,12 @@
+category,item,reference
+Validation,ERCOFTAC T3A flat plate,"Roach P.E. & Brierley D.H. (1990), 'The influence of a turbulent free stream on zero pressure gradient transitional boundary layer development', ERCOFTAC Workshop; reproduced in Savill (1993) and Langtry & Menter, AIAA J. 47(12), 2009."
+Validation,ERCOFTAC T3B flat plate,"Roach & Brierley (1990), ERCOFTAC T3B (Tu=6%); Langtry & Menter, AIAA J. 47(12), 2009."
+Validation,Schubauer & Skramstad natural transition,"Schubauer G.B. & Skramstad H.K. (1948), 'Laminar boundary-layer oscillations and transition on a flat plate', NACA Report 909."
+Calibration,Bypass onset correlation (AGS),"Abu-Ghannam B.J. & Shaw R. (1980), 'Natural transition of boundary layers - the effects of turbulence, pressure gradient and flow history', J. Mech. Eng. Sci. 22(5)."
+Calibration,Laminar integral method,"Thwaites B. (1949), 'Approximate calculation of the laminar boundary layer', Aero. Quarterly 1."
+Calibration,Turbulent entrainment / Cf,Head M.R. (1958) entrainment method; Ludwieg H. & Tillmann W. (1950) skin-friction law.
+Calibration,Intermittency / transition length,"Narasimha R. (1957); Dhawan S. & Narasimha R. (1958), J. Fluid Mech. 3."
+Calibration,Cross-flow criterion,"Arnal D. (1984), C1 cross-flow criterion; Mayle R.E. (1991), J. Turbomachinery 113."
+Case study,NLF aerofoil design reference,"Somers D.M. (1981), 'Design and experimental results for a natural-laminar-flow aerofoil for general aviation applications', NASA TP-1861 (NLF(1)-0416)."
+Case study,Panel method,"Kuethe A.M. & Chow C.Y. (1998), 'Foundations of Aerodynamics', 5th ed., Wiley."
+Case study,ISA atmosphere,"ICAO Standard Atmosphere (ISO 2533:1975), FL360 properties."
