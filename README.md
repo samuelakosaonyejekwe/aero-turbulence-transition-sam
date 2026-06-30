@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/banner.png" alt="AETHER-NLF 25 — Laminar to Turbulent Boundary-Layer Transition over a 3-D NLF Wing" width="100%">
+</p>
+
 # AETHER-NLF 25 — Laminar→Turbulent Transition Case Study
 
 **Prediction of boundary-layer transition over a 3-D natural-laminar-flow aircraft wing, and the engineering quantities that depend on it.**
