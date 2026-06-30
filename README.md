@@ -142,4 +142,4 @@ A complete, categorised bibliography is in `06_validation/sources_and_references
 
 ## License & attribution
 
-© 2026 Akosa Samuel Onyejekwe. All rights reserved. Provided for review and educational reference. Please credit the author when citing the method, data, or figures.
+© 2026 Akosa Samuel Onyejekwe. Licensed under [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](LICENSE) — you may share and adapt this work for non-commercial purposes with appropriate credit to the author. For commercial use, please contact the author. Please credit the author when citing the method, data, or figures.
