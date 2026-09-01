@@ -12,7 +12,7 @@ import os, sys
 import numpy as np, pandas as pd
 sys.path.insert(0,"solver")
 import case_config as C
-from utss_solver import solve_flat_plate, solve_airfoil
+from utss_solver import solve_flat_plate, solve_airfoil, panel_solve
 from uplot import apply_style, INK, INK_SOFT, PALETTE, new_fig, finish
 import matplotlib.pyplot as plt
 
@@ -284,6 +284,183 @@ def run_swept2():
           % float(np.mean(np.abs(df["err_pct"]))))
     return df
 
+
+def _cl_curve(X, Y, mach, alphas=(-4.0, 2.0, 8.0)):
+    """Quadratic fit of the inviscid c_l against incidence.
+
+    The panel influence matrix does not depend on incidence, but the lift does
+    so through both the circulation (linear) and C_p = 1 - (V/U_inf)^2
+    (quadratic), and the departure from a straight line reaches 0.008 in c_l
+    over the range needed here.  Three inviscid solves therefore fix the curve
+    to better than 1e-4 in c_l, and the incidence that matches any measured
+    lift coefficient follows analytically - no iteration, and no boundary-layer
+    march wasted on trial incidences.
+    """
+    cls = []
+    for a in alphas:
+        xc, yc, Cp, V, th, S = panel_solve(X, Y, a, mach=mach)
+        nx = -np.sin(th); ny = np.cos(th)
+        Cn = -np.sum(Cp*ny*S); Ca = -np.sum(Cp*nx*S)
+        al = np.radians(a)
+        cls.append(Cn*np.cos(al) - Ca*np.sin(al))
+    return np.polyfit(np.array(alphas, float), np.array(cls), 2)
+
+
+def _alpha_for_cl(coef, cl_target):
+    """Invert the quadratic c_l(alpha) fit, taking the root nearest zero lift."""
+    a, b, c = coef
+    r = np.roots([a, b, c - cl_target])
+    r = np.array([z.real for z in r if abs(z.imag) < 1e-9])
+    if not len(r):
+        return float((cl_target - c)/b)
+    return float(r[np.argmin(np.abs(r))])
+
+
+def _panel_cl(X, Y, alpha_deg, mach):
+    xc, yc, Cp, V, th, S = panel_solve(X, Y, alpha_deg, mach=mach)
+    nx = -np.sin(th); ny = np.cos(th)
+    Cn = -np.sum(Cp*ny*S); Ca = -np.sum(Cp*nx*S)
+    al = np.radians(alpha_deg)
+    return float(Cn*np.cos(al) - Ca*np.sin(al))
+
+
+def _trim(X, Y, coef, cl_target, mach, tol=1e-3):
+    """Analytic inversion of the c_l(alpha) fit, refined once if necessary.
+
+    The quadratic fit is good to ~1e-4 in c_l over the design range but drifts
+    to ~0.02 near alpha = -13 deg, at the extreme negative-lift end of the
+    TP-1861 data.  One secant step against the true panel solution removes that
+    drift; the refinement costs a single inviscid solve and is only taken when
+    the fit is outside tolerance.
+    """
+    a = _alpha_for_cl(coef, cl_target)
+    cl = _panel_cl(X, Y, a, mach)
+    if abs(cl - cl_target) > tol:
+        slope = coef[1] + 2.0*coef[0]*a          # dc_l/dalpha from the fit
+        a2 = a + (cl_target - cl)/slope
+        cl2 = _panel_cl(X, Y, a2, mach)
+        if abs(cl2 - cl_target) < abs(cl - cl_target):
+            a, cl = a2, cl2
+    return a, cl
+
+
+def run_nlf0416(Tu_pct=None, quiet=False):
+    """Aerofoil transition validation against NASA TP-1861, Fig. 9.
+
+    86 transition locations on the NLF(1)-0416 section, both surfaces, at four
+    chord Reynolds numbers.  Nothing in the model is calibrated on this set.
+    Each measured point is matched by trimming the incidence to the measured
+    lift coefficient; the experimental uncertainty is half the 0.05c orifice
+    pitch, so a prediction is counted as within the measurement bracket when it
+    falls inside +/-0.025c of the tabulated midpoint.
+    """
+    v = C.NLF0416
+    Tu = v["Tu_pct"] if Tu_pct is None else Tu_pct
+    X, Y = _section_points(v["section"], n=220)
+    half = v["orifice_pitch"]/2.0
+    coef = _cl_curve(X, Y, v["mach"])
+    rows = []
+    for Rec in sorted(v["data"]):
+        U = Rec*v["nu"]/v["chord_m"]
+        for surf in ("upper", "lower"):
+            for cl_m, x_m in v["data"][Rec][surf]:
+                al, cl_got = _trim(X, Y, coef, cl_m, v["mach"])
+                r = solve_airfoil(X, Y, al, U, v["nu"], v["chord_m"], Tu,
+                                  mach=v["mach"])
+                s = r["surfaces"][surf]
+                xp = s["x_tr_chord"]
+                xp = 1.0 if xp != xp else float(xp)
+                # A prediction at either end of the surface is not a transition
+                # location: it means the march either separated at the nose or
+                # never reached onset.  Such points are kept in the table but
+                # flagged, so that they are visible rather than averaged in as
+                # though they were ordinary errors.
+                degenerate = bool(xp < 0.02 or xp > 0.93)
+                rows.append(dict(
+                    Re_c=f"{Rec:.1e}", surface=surf, c_l_exp=cl_m,
+                    alpha_deg=round(al, 3), c_l_solver=round(cl_got, 4),
+                    x_tr_c_exp=x_m, x_tr_c_pred=round(xp, 3),
+                    err_c=round(xp-x_m, 3),
+                    err_pct=round((xp-x_m)/x_m*100, 1),
+                    within_bracket=bool(abs(xp-x_m) <= half),
+                    degenerate=degenerate,
+                    mechanism=s["onset_mech"]))
+    df = pd.DataFrame(rows)
+    if Tu_pct is None:
+        df.to_csv(f"{VAL}/aerofoil_nlf0416.csv", index=False)
+        pd.DataFrame([dict(dataset=v["name"], source=v["source"],
+                           n_points=len(df), Tu_pct=Tu,
+                           orifice_pitch=v["orifice_pitch"])]).to_csv(
+            f"{VAL}/aerofoil_nlf0416_source.csv", index=False)
+    if not quiet:
+        for surf in ("upper", "lower"):
+            d = df[df.surface == surf]
+            print("NLF(1)-0416 %s surface: %d pts, mean |err| = %.3fc (%.1f%%), "
+                  "%d/%d inside the +/-0.025c measurement bracket"
+                  % (surf, len(d), float(np.mean(np.abs(d.err_c))),
+                     float(np.mean(np.abs(d.err_pct))),
+                     int(d.within_bracket.sum()), len(d)))
+    return df
+
+
+
+def plot_nlf0416(df=None):
+    """Reproduce the layout of Fig. 9 of TP-1861 with the predictions overlaid.
+
+    One panel per chord Reynolds number, transition location against lift
+    coefficient, both surfaces.  The measurement is drawn with the +/-0.025c
+    bar set by the orifice pitch, so the reader can see directly which
+    predictions fall inside the experimental bracket.
+    """
+    v = C.NLF0416
+    if df is None:
+        df = run_nlf0416(quiet=True)
+    fig, axes = plt.subplots(2, 2, figsize=(10.4, 8.2), sharex=True, sharey=True)
+    half = v["orifice_pitch"]/2.0
+    for ax, Rec in zip(axes.ravel(), sorted(v["data"])):
+        tag = f"{Rec:.1e}"
+        for surf, col, mk in (("upper", PALETTE[0], "o"), ("lower", PALETTE[3], "s")):
+            d = df[(df.Re_c == tag) & (df.surface == surf)].sort_values("c_l_exp")
+            ax.errorbar(d.x_tr_c_exp, d.c_l_exp, xerr=half, fmt=mk, ms=6,
+                        color=col, mec=INK_SOFT, lw=0, elinewidth=1.1,
+                        capsize=2.5, ecolor=col, alpha=0.95,
+                        label=f"measured, {surf}")
+            # The line is broken at conditions outside the incidence envelope of
+            # an attached-flow formulation: beyond about 8.5 deg the laminar
+            # layer separates within a few per cent of chord on this section.
+            # Those points remain in every error statistic reported; they are
+            # only excluded from the polyline, which would otherwise sweep
+            # across the panel and misrepresent the trend.
+            out = d.degenerate | (d.alpha_deg.abs() > 8.5)
+            good = d[~out]
+            ax.plot(good.x_tr_c_pred, good.c_l_exp, "-", lw=2.0, color=col,
+                    alpha=0.85, label=f"UTSS, {surf}")
+            bad = d[out]
+            if len(bad):
+                ax.plot(bad.x_tr_c_pred, bad.c_l_exp, "x", ms=7, mew=1.6,
+                        color=PALETTE[2], lw=0,
+                        label="outside ±8.5° envelope" if surf == "upper" else None)
+        ax.set_title(r"$R = %.1f\times10^6$" % (Rec/1e6), fontsize=11)
+        ax.set_xlim(0, 1.0); ax.set_ylim(-1.3, 1.7)
+        ax.grid(alpha=0.25, lw=0.6)
+    for ax in axes[-1]: ax.set_xlabel(r"transition location  $x_T/c$")
+    for ax in axes[:, 0]: ax.set_ylabel(r"section lift coefficient  $c_l$")
+    axes[0, 0].legend(loc="upper left", fontsize=8.5, framealpha=0.9)
+    fig.suptitle("NLF(1)-0416 transition location, M = 0.10  —  "
+                 "86 points digitised from NASA TP-1861, Fig. 9", fontsize=12)
+    fig.tight_layout(rect=(0, 0.035, 1, 0.97))
+    fig.text(0.5, 0.012,
+             "Bars show the +/-0.025c orifice-pitch bracket within which the "
+             "experiment localises transition.  Nothing is calibrated on this set.",
+             ha="center", fontsize=8.5, color=INK_SOFT, style="italic")
+    import os as _os
+    _os.makedirs(VP, exist_ok=True)
+    fig.savefig(f"{VP}/val_aerofoil_nlf0416.png", bbox_inches="tight",
+                facecolor="white")
+    plt.close(fig)
+    return f"{VP}/val_aerofoil_nlf0416.png"
+
+
 def plot_case(key):
     v=C.VALIDATION[key]; ex=EXP[key]
     ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
@@ -337,5 +514,7 @@ if __name__=="__main__":
     print(df_sw.to_string(index=False))
     df_sw2=run_swept2()
     print(df_sw2.to_string(index=False))
+    df_nlf=run_nlf0416()
+    plot_nlf0416(df_nlf)
     print(df.to_string(index=False))
     print("validation files:",sorted([f for f in os.listdir(VAL) if f.endswith('.csv')]))

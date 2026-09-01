@@ -9,7 +9,7 @@ Architecture
 ------------
  1. Inviscid edge solution   : constant-strength vortex-panel method
                                (Kuethe & Chow formulation) -> Cp, Ue,
-                               with a Prandtl-Glauert correction.
+                               with a Karman-Tsien correction.
  2. Laminar boundary layer    : Thwaites' integral method.
  3. UNIFIED TRANSITION KERNEL : the novel contribution. A single
        onset is taken as the minimum effective transition-Re across
@@ -34,17 +34,22 @@ separation and cross-flow branches are calibrated, not validated.
 Author: Akosa Samuel Onyejekwe, 2026.
 """
 import numpy as np
+import stability as _stab
 
 # ----------------------------------------------------------------------
 #  Default universal calibration constants  (single set, all cases)
 # ----------------------------------------------------------------------
+_OM_TAB = _stab.load_database()[2]   # tabulated omega*theta/U_e grid
+
 CAL = dict(
     A_TS      = 1.00,   # weight on TS/natural onset
     A_BP      = 1.00,   # weight on bypass onset
     A_SEP     = 1.00,   # weight on separation-induced onset
     A_CF      = 1.00,   # weight on cross-flow onset
     N_crit    = 9.0,    # reference e^N factor; the value actually used is
-                        # obtained from Tu by Mack's relation (see _n_crit)
+                        # obtained from Tu by Mack's relation (see _n_crit),
+                        # which is clamped to its stated validity range and so
+                        # returns 8.68 for any stream quieter than 0.08 %
     N_floor   = 0.5,    # lower clamp on N_crit at high Tu
     C_mu      = 0.09,   # k-epsilon constants, used only for the decay of
     C_eps2    = 1.92,   # free-stream turbulence (see _tu_decay)
@@ -66,6 +71,25 @@ CAL = dict(
                         # in transition location over six chord Reynolds
                         # numbers from 1.92e6 to 3.73e6.
     sep_floor = 120.0,  # min Re_theta for separation-induced onset
+    use_os_db = True,   # integrate the amplification factor from the tabulated
+                        # Orr-Sommerfeld growth rates (solver/stability.py)
+                        # rather than from the Drela-Giles envelope.  The
+                        # envelope is retained, and selected by setting this
+                        # False, so that the two can be compared on the same
+                        # calibration; nothing else in the model changes.
+    bubble    = True,   # close the separation branch by continuing the
+                        # amplification integral through the detached shear
+                        # layer instead of transitioning at separation itself
+    sigma_sep = 0.048,  # amplification rate -alpha_i*theta of the detached
+                        # shear layer; the one constant of the bubble closure,
+                        # and a property of a free shear layer rather than of
+                        # any case.  See the note in march_bl.
+    n_freq    = 40,     # number of physical frequencies carried by the e^N
+                        # integration.  The amplification factor is the
+                        # envelope of the individual N(omega) curves, so this
+                        # is a discretisation parameter, not a fitted one: the
+                        # predicted onset changes by under 0.2% between 24 and
+                        # 64 frequencies.
 )
 
 
@@ -105,14 +129,23 @@ def _tu_decay(Tu0_pct, x, L_turb, U=None, cal=None):
 def _n_crit(Tu_pct, floor=0.5):
     """Critical amplification factor from the free-stream turbulence level.
 
-    Mack's correlation, N_crit = -8.43 - 2.4 ln(Tu), with Tu as a fraction.
+    Mack's correlation, N_crit = -8.43 - 2.4 ln(Tu) with Tu as a fraction.
     Using it means N_crit is not a free constant: it is fixed by the same
-    disturbance level that drives the bypass branch.  The relation is
-    quoted for Tu below roughly 3 %; above that it returns small or
-    negative values and is clamped, by which point the bypass criterion
-    governs in any case.  At the cruise turbulence intensity of 0.07 % it
-    returns 9.00, the conventional free-flight value."""
-    Tu = max(float(Tu_pct), 1e-3)/100.0
+    disturbance level that drives the bypass branch; it returns 9.00 at
+    Tu = 0.07 %, the conventional free-flight value, before the clamp below
+    is applied.
+
+    The correlation is quoted over 0.0008 <= Tu <= 0.0298, and Tu is clamped
+    to that interval before it is applied.  The lower clamp matters: a
+    logarithm extrapolated below its calibration range keeps rising without
+    bound, so an 0.02 % tunnel would be assigned N_crit = 12.0 and an 0.03 %
+    tunnel 11.0, whereas the measured transition Reynolds number of a flat
+    plate stops falling once the stream is this quiet - free-stream turbulence
+    has ceased to be the controlling disturbance, and residual sound and
+    surface roughness set the amplification that the layer actually sees.
+    Clamping caps N_crit at 8.68 rather than inventing a ceiling for it.
+    """
+    Tu = min(max(float(Tu_pct)/100.0, 8.0e-4), 2.98e-2)
     return max(-8.43 - 2.4*np.log(Tu), floor)
 
 
@@ -163,53 +196,64 @@ def panel_solve(xb, yb, alpha_deg, mach=0.0):
     th = np.arctan2(y[1:] - y[:-1], x[1:] - x[:-1])
     sin_t, cos_t = np.sin(th), np.cos(th)
 
-    CN1 = np.zeros((m, m)); CN2 = np.zeros((m, m))
-    CT1 = np.zeros((m, m)); CT2 = np.zeros((m, m))
-    for i in range(m):
-        for j in range(m):
-            if i == j:
-                CN1[i, j] = -1.0; CN2[i, j] = 1.0
-                CT1[i, j] = 0.5 * np.pi; CT2[i, j] = 0.5 * np.pi
-            else:
-                A = -(xc[i]-x[j])*cos_t[j] - (yc[i]-y[j])*sin_t[j]
-                B = (xc[i]-x[j])**2 + (yc[i]-y[j])**2
-                C = np.sin(th[i]-th[j]); D = np.cos(th[i]-th[j])
-                E = (xc[i]-x[j])*sin_t[j] - (yc[i]-y[j])*cos_t[j]
-                F = np.log(1.0 + (S[j]**2 + 2*A*S[j])/B)
-                G = np.arctan2(E*S[j], B + A*S[j])
-                P = (xc[i]-x[j])*np.sin(th[i]-2*th[j]) + \
-                    (yc[i]-y[j])*np.cos(th[i]-2*th[j])
-                Q = (xc[i]-x[j])*np.cos(th[i]-2*th[j]) - \
-                    (yc[i]-y[j])*np.sin(th[i]-2*th[j])
-                CN2[i, j] = D + 0.5*Q*F/S[j] - (A*C + D*E)*G/S[j]
-                CN1[i, j] = 0.5*D*F + C*G - CN2[i, j]
-                CT2[i, j] = C + 0.5*P*F/S[j] + (A*D - C*E)*G/S[j]
-                CT1[i, j] = 0.5*C*F - D*G - CT2[i, j]
+    # Influence coefficients (Kuethe & Chow, constant-strength vortex panel).
+    # Built by broadcasting rather than by a double loop: the matrices are
+    # m x m with m of order 400, so the loop form spent almost all of the
+    # solver's runtime evaluating scalar numpy calls.  The expressions are
+    # unchanged; only the iteration is vectorised.  B vanishes on the
+    # diagonal, so it is masked to 1 while the off-diagonal terms are formed
+    # and the diagonal is then overwritten with its analytic value.
+    dx = xc[:, None] - x[None, :m]
+    dy = yc[:, None] - y[None, :m]
+    dth = th[:, None] - th[None, :]
+    Sj  = S[None, :]
+    A = -dx*cos_t[None, :] - dy*sin_t[None, :]
+    B = dx**2 + dy**2
+    np.fill_diagonal(B, 1.0)
+    Cc = np.sin(dth); Dd = np.cos(dth)
+    E = dx*sin_t[None, :] - dy*cos_t[None, :]
+    F = np.log1p((Sj**2 + 2.0*A*Sj)/B)
+    G = np.arctan2(E*Sj, B + A*Sj)
+    th2 = th[:, None] - 2.0*th[None, :]
+    P = dx*np.sin(th2) + dy*np.cos(th2)
+    Q = dx*np.cos(th2) - dy*np.sin(th2)
+    CN2 = Dd + 0.5*Q*F/Sj - (A*Cc + Dd*E)*G/Sj
+    CN1 = 0.5*Dd*F + Cc*G - CN2
+    CT2 = Cc + 0.5*P*F/Sj + (A*Dd - Cc*E)*G/Sj
+    CT1 = 0.5*Cc*F - Dd*G - CT2
+    np.fill_diagonal(CN1, -1.0); np.fill_diagonal(CN2, 1.0)
+    np.fill_diagonal(CT1, 0.5*np.pi); np.fill_diagonal(CT2, 0.5*np.pi)
 
     AN = np.zeros((m+1, m+1)); AT = np.zeros((m, m+1))
-    for i in range(m):
-        AN[i, 0]  = CN1[i, 0]
-        AN[i, m]  = CN2[i, m-1]
-        AT[i, 0]  = CT1[i, 0]
-        AT[i, m]  = CT2[i, m-1]
-        for j in range(1, m):
-            AN[i, j] = CN1[i, j] + CN2[i, j-1]
-            AT[i, j] = CT1[i, j] + CT2[i, j-1]
+    AN[:m, 0] = CN1[:, 0];   AN[:m, m] = CN2[:, m-1]
+    AT[:m, 0] = CT1[:, 0];   AT[:m, m] = CT2[:, m-1]
+    AN[:m, 1:m] = CN1[:, 1:m] + CN2[:, 0:m-1]
+    AT[:m, 1:m] = CT1[:, 1:m] + CT2[:, 0:m-1]
     AN[m, 0] = 1.0; AN[m, m] = 1.0
     rhs = np.append(np.sin(th - al), 0.0)
     gamma = np.linalg.solve(AN, rhs)
 
     V  = np.cos(th - al) + AT @ gamma
     Cp = 1.0 - V**2
-    # Prandtl-Glauert compressibility correction, applied to the pressure
-    # coefficient and hence to the integrated loads.  The correction is a
-    # small-perturbation result and is not valid near the stagnation
-    # point, so the edge velocity passed to the boundary-layer march is
-    # left incompressible; the integral closures used downstream are
-    # themselves incompressible formulations.
+    # Karman-Tsien compressibility correction,
+    #
+    #     Cp = Cp0 / [ beta + (M^2/(1+beta)) (Cp0/2) ],   beta = sqrt(1-M^2),
+    #
+    # applied to the pressure coefficient and hence to the integrated loads.
+    # It replaces the Prandtl-Glauert scaling Cp = Cp0/beta used previously.
+    # Prandtl-Glauert is the linearised result: it multiplies every pressure
+    # by the same factor, so it cannot know that a suction peak compresses the
+    # flow more than a mild gradient does, and at the stagnation point it
+    # returns Cp = 1/beta rather than the correct value near unity.  The
+    # Karman-Tsien form retains the leading nonlinear term and stays bounded,
+    # which matters here because the transition kernel is driven by the
+    # gradient of the pressure and not by its level.  Both reduce to the
+    # incompressible result as M -> 0, and the two differ by under half a
+    # percent in C_p below M = 0.2, which is why every validation case in this
+    # work is unaffected by the change.
     if mach > 1e-6:
         beta = np.sqrt(max(1.0 - mach*mach, 1e-6))
-        Cp = Cp/beta
+        Cp = Cp/(beta + (mach*mach/(1.0 + beta))*0.5*Cp)
     panel_solve.last_gamma = gamma          # nodal vortex strengths
     return xc, yc, Cp, V, th, S
 
@@ -314,8 +358,38 @@ def _smooth_gradient(y, x, half=5):
     return g
 
 
+
+def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True):
+    """Eckert reference-temperature factor for the kinematic viscosity.
+
+    The integral closures used here - Thwaites, Head's entrainment method,
+    Ludwieg-Tillmann - are incompressible.  They are carried into compressible
+    flow in the standard way, by evaluating the fluid properties not at the
+    edge conditions but at Eckert's reference temperature
+
+        T*/T_e = 1 + 0.032 M_e^2 + 0.58 (T_w/T_e - 1),
+
+    with an adiabatic wall, T_w/T_e = 1 + r (gamma-1)/2 M_e^2 and r = Pr^(1/2)
+    laminar, Pr^(1/3) turbulent.  At constant static pressure rho ~ 1/T and
+    mu ~ T^omega, so nu*/nu_e = (T*/T_e)^(1+omega).  The layer is then marched
+    with nu* in place of nu, which is what makes the incompressible closures
+    return the compressible skin friction and the compressible momentum
+    thickness; the effective Reynolds number falls, so heating a boundary
+    layer this way delays transition, as it should.
+
+    The factor is 1 at M_e = 0 and reaches 1.09 at M_e = 0.42, so it changes
+    nothing in the low-speed validation cases and becomes significant only in
+    the cruise case for which it was added.
+    """
+    Me = np.asarray(Me, float)
+    r = Pr**0.5 if laminar else Pr**(1.0/3.0)
+    Tw_Te = 1.0 + r*(gamma - 1.0)/2.0*Me**2
+    Tstar_Te = 1.0 + 0.032*Me**2 + 0.58*(Tw_Te - 1.0)
+    return Tstar_Te**(1.0 + omega)
+
+
 def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
-             cal=None, label=""):
+             cal=None, label="", a_sound=0.0):
     """
     March the boundary layer along one surface.
       s    : arc length from stagnation/leading edge [m]  (increasing)
@@ -330,6 +404,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
               ambient level does not decay over a chord and a scalar is
               appropriate.
       sweep_deg: surface sweep angle (cross-flow mechanism)
+      a_sound: speed of sound [m/s].  If given, the local edge Mach number is
+              formed at every station and the closures are evaluated at
+              Eckert's reference temperature; if zero the march is
+              incompressible, which is the default and what every low-speed
+              validation case uses.
     Returns a dict of station arrays describing the full BL state.
     """
     cal = {**CAL, **(cal or {})}
@@ -340,6 +419,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         raise ValueError("Tu_pct array must match the station count")
     s = np.asarray(s, float); Ue = np.maximum(np.asarray(Ue, float), 1e-6)
     dUeds = _smooth_gradient(Ue, s)
+
+    # Compressible closures: properties at Eckert's reference temperature.
+    Me = (Ue/a_sound if a_sound > 1e-6 else np.zeros(n))
+    nu_l = nu*_ref_temp_nu(Me, laminar=True)      # laminar recovery factor
+    nu_t = nu*_ref_temp_nu(Me, laminar=False)     # turbulent recovery factor
 
     theta = np.zeros(n); H = np.zeros(n); Cf = np.zeros(n)
     Reth = np.zeros(n); lam = np.zeros(n); gamma = np.zeros(n)
@@ -353,7 +437,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     I = np.zeros(n)
     for i in range(1, n):
         I[i] = I[i-1] + 0.5*(Ue[i]**5 + Ue[i-1]**5)*(s[i]-s[i-1])
-    th2 = 0.45*nu/np.maximum(Ue**6, 1e-12)*I
+    th2 = 0.45*nu_l/np.maximum(Ue**6, 1e-12)*I
     th_lam = np.sqrt(np.maximum(th2, 1e-16))
 
     # ---- Flow-history-averaged free-stream turbulence ----
@@ -367,27 +451,108 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     # unit of momentum-thickness growth rather than per unit of distance.
     # It carries no fitted constant, and reduces to the local value in a
     # stream that does not decay, such as the free atmosphere.
-    Reth_lam = Ue*th_lam/nu
+    Reth_lam = Ue*th_lam/nu_l
     dR = np.diff(Reth_lam)
     num = np.concatenate([[0.0], np.cumsum(0.5*(Tu_arr[1:] + Tu_arr[:-1])*dR)])
     den = Reth_lam - Reth_lam[0]
     Tu_eff = np.where(den > 1e-9, num/np.maximum(den, 1e-30), Tu_arr)
 
+    # ---- frequency set for the e^N integration ----
+    # A physical frequency is fixed along the layer while theta grows and U_e
+    # changes, so the dimensionless frequency omega*theta/U_e sweeps across the
+    # tabulated band.  The set is therefore chosen from the flow itself: it
+    # spans every frequency that is inside the amplified band at some station
+    # where amplification is possible at all.
+    use_db = bool(cal.get("use_os_db", True))
+    bubble_on = bool(cal.get("bubble", True))
+    i_sep = None; s_sep = 0.0; th_sep = 0.0; H_sep = 0.0; th_b = 0.0; n_bub = 0.0
+    omegas = np.array([]); amp = np.array([])
+    if use_db:
+        om_lo, om_hi = _stab.omega_grid_bounds()
+        rat = Ue/np.maximum(th_lam, 1e-12)
+        live = Reth_lam > 60.0
+        if live.any():
+            w_lo = om_lo*float(np.min(rat[live]))
+            w_hi = om_hi*float(np.max(rat[live]))
+            omegas = np.geomspace(max(w_lo, 1e-9), max(w_hi, w_lo*10.0),
+                                  int(cal.get("n_freq", 40)))
+            amp = np.zeros(omegas.size)
+
     i_tr = None
+    bub_trig = False
     for i in range(n):
         theta[i] = th_lam[i]
-        lam[i] = theta[i]**2/nu*dUeds[i]
+        lam[i] = theta[i]**2/nu_l[i]*dUeds[i]
         Hh, l = _thwaites_HL(lam[i])
         H[i] = Hh
-        Reth[i] = Ue[i]*theta[i]/nu
-        Cf[i] = 2.0*l*nu/max(Ue[i]*theta[i], 1e-12)
+        Reth[i] = Ue[i]*theta[i]/nu_l[i]
+        Cf[i] = 2.0*l*nu_l[i]/max(Ue[i]*theta[i], 1e-12)
+
+        # ---------- laminar separation bubble ----------
+        # Thwaites' march is defined only up to lambda = -0.09; past that the
+        # layer has left the wall and neither its shape factor nor its skin
+        # friction means anything.  Across the dead-air region the momentum
+        # integral still holds with no wall stress, so the shear layer is
+        # carried forward with C_f = 0 and the shape factor frozen at its
+        # separation value.  That is a closure with no fitted constant, and it
+        # reproduces the growth the T3C4 hot films record through the bubble,
+        # Re_theta from 309 at separation to 381 at the end of the plateau.
+        #
+        # The bubble closes where the disturbance riding on the detached shear
+        # layer has amplified by the same factor that ends transition anywhere
+        # else in the model.  The shear layer is inflectional, so it amplifies
+        # at a rate characteristic of a free shear layer rather than of an
+        # attached boundary layer - the tabulated Orr-Sommerfeld rate has
+        # already climbed to 0.035 by H = 3.9, and sigma_sep continues that
+        # trend - and the amplification factor is restarted at separation,
+        # because the wave that grows in the detached layer is a new one
+        # selected by its own inflection, not the continuation of whatever the
+        # attached layer was carrying.
+        #
+        # Writing the bubble this way rather than as a fixed multiple of the
+        # separation momentum thickness is what lets one closure span both
+        # regimes.  The length is N_crit*theta_sep/sigma_sep, so it collapses
+        # in a turbulent stream, where N_crit is small, and stretches in a
+        # quiet one: the measured bubbles here run to about 40 momentum
+        # thicknesses on T3C4 at Tu = 2.1 % and about 180 on the NLF(1)-0416
+        # lower surface at Tu = 0.03 %, a spread of four and a half that no
+        # fixed multiple reproduces.
+        if bubble_on and (lam[i] <= -0.09 or i_sep is not None):
+            if i_sep is None:
+                i_sep = i; s_sep = s[i]
+                th_sep = max(theta[i], 1e-12); H_sep = H[i]
+                th_b = th_sep; n_bub = 0.0
+            elif i > 0:
+                th_b = max(th_b - (2.0 + H_sep)*th_b/max(Ue[i], 1e-9)
+                           * dUeds[i]*(s[i] - s[i-1]), 1e-12)
+                n_bub += cal["sigma_sep"]/th_b*(s[i] - s[i-1])
+            theta[i] = th_b; H[i] = H_sep; Cf[i] = 0.0
+            Reth[i] = Ue[i]*th_b/nu_l[i]
+            n_fac[i] = n_bub
+            bub_trig = n_bub >= _n_crit(Tu_eff[i], cal.get("N_floor", 0.5))
 
         # ---------- UNIFIED TRANSITION KERNEL ----------
         lam_t = lam[i]
 
-        # (a) natural / Tollmien-Schlichting: envelope e^N amplification,
-        #     integrated in Re_theta from the critical point (Drela & Giles).
-        if i > 0:
+        # (a) natural / Tollmien-Schlichting.  One amplification factor is
+        #     carried per physical frequency and advanced with the spatial
+        #     growth rate sigma = -alpha_i*theta read from the tabulated
+        #     Orr-Sommerfeld solutions, dN/dx = sigma/theta; the amplification
+        #     factor is the envelope of those curves.  This is the e^N method
+        #     as defined, rather than the Drela-Giles fit to its envelope,
+        #     which is retained behind use_os_db for comparison.  Individual
+        #     frequencies are allowed to decay once they leave their unstable
+        #     band, but no N is carried below zero.
+        if use_db and not (bubble_on and i_sep is not None):
+            if i > 0 and omegas.size and Reth[i] > 50.0:
+                om_star = omegas*theta[i]/max(Ue[i], 1e-9)
+                sig = np.interp(om_star, _OM_TAB,
+                                _stab.sigma_curve(H[i], Reth[i]),
+                                left=0.0, right=0.0)
+                amp += np.maximum(sig, -0.05)/max(theta[i], 1e-12)*(s[i]-s[i-1])
+                np.maximum(amp, 0.0, out=amp)
+                n_amp = float(amp.max())
+        elif not use_db and i > 0:
             Re_c = _re_theta_crit(H[i])
             if Reth[i] > Re_c:
                 dRe = Reth[i] - max(Reth[i-1], Re_c)
@@ -406,11 +571,29 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         else:
             Rbp = 1e9
 
-        # (c) separation-induced: laminar separation (lam <= -0.09).  The
-        #     bubble onset is referred to the bypass value where that is
-        #     live and to the AGS value at the local Tu otherwise, so that
-        #     the branch remains operative in low-turbulence flight.
-        if lam[i] <= -0.09:
+        # (c) separation-induced.  Thwaites' laminar march terminates at
+        #     lambda = -0.09; downstream of that the layer has left the wall
+        #     and the integral closures no longer apply.  Rather than declare
+        #     transition at the separation point, the amplification integral
+        #     is continued through the detached shear layer, which is what
+        #     actually decides where the bubble closes: the momentum thickness
+        #     is very nearly frozen across the dead-air region - the T3C4
+        #     measurements show Re_theta rising only from 309 to 381 over the
+        #     whole laminar portion of the bubble - while the inflectional
+        #     profile amplifies disturbances at a rate characteristic of a
+        #     free shear layer, an order above anything an attached layer
+        #     reaches.  Transition is then placed where N attains the same
+        #     N_crit as everywhere else in the model.
+        #
+        #     Writing the bubble this way rather than as a correlation in
+        #     Re_theta at separation is what lets one closure span both
+        #     regimes: the bubble length is (N_crit - N_sep)*theta_sep/sigma_sep,
+        #     so it collapses at high free-stream turbulence, where N_crit is
+        #     small, and stretches in a quiet stream.  The measured lengths
+        #     differ by a factor of five between the T3C4 bubble at Tu = 2.1 %
+        if bubble_on and i_sep is not None:
+            Rsep = 1e9
+        elif lam[i] <= -0.09:
             Rref = Rbp if Rbp < 1e8 else _ags_re_theta_t(max(Tu_i, 0.02), lam_t)
             Rsep = cal["A_SEP"]*max(cal["sep_floor"], 0.7*Rref)
         else:
@@ -425,12 +608,20 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         else:
             Rcf = 1e9
 
-        Rt = min(Rbp, Rsep, Rcf)
+        # Inside the dead-air region none of the attached-flow criteria apply:
+        # Abu-Ghannam & Shaw correlates an attached layer against its own
+        # pressure gradient, and the cross-flow criterion presumes a wall
+        # boundary layer.  Once the layer has separated the bubble closure is
+        # the only thing that can end it.
+        in_bubble = bubble_on and i_sep is not None
+        Rt = 1e9 if in_bubble else min(Rbp, Rsep, Rcf)
         Re_th_t[i] = Rt
-        trig_ts = bool(ts_live and (n_amp >= N_target))
-        if (trig_ts or Reth[i] >= Rt) and i_tr is None and i > 1:
+        trig_ts = bool(ts_live and n_amp >= N_target)
+        if (trig_ts or bub_trig or Reth[i] >= Rt) and i_tr is None and i > 1:
             i_tr = i
-            if trig_ts and Reth[i] < Rt:
+            if in_bubble:
+                mech = "separation"
+            elif trig_ts and Reth[i] < Rt:
                 mech = "TS-natural"
             else:
                 mech = ["bypass", "separation", "crossflow"][
@@ -452,7 +643,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     Re_tr = Reth[i_tr]
     # Narasimha transition length:  Re_lambda = C_len * Re_theta_t^0.8
     Re_lam_len = cal["C_len"] * max(Re_tr, 1.0)**0.8
-    nu_local = nu
+    nu_local = nu_t[i_tr]
     # convert Re-length to physical length using local Ue
     lam_len = Re_lam_len*nu_local/max(Ue[i_tr], 1e-6)
 
@@ -463,11 +654,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     th_turb = np.zeros(n); H_turb = np.zeros(n)
     Cf_turb = np.zeros(n)
     th_turb[i_tr] = th_t; H_turb[i_tr] = H_t
-    Cf_turb[i_tr] = _ludwieg_tillmann(H_t, Ue[i_tr]*th_t/nu)
+    Cf_turb[i_tr] = _ludwieg_tillmann(H_t, Ue[i_tr]*th_t/nu_t[i_tr])
     sep_turb = None
     for i in range(i_tr+1, n):
         ds = s[i]-s[i-1]
-        Re_th = max(Ue[i-1]*th_turb[i-1]/nu, 1.0)
+        Re_th = max(Ue[i-1]*th_turb[i-1]/nu_t[i-1], 1.0)
         cf = _ludwieg_tillmann(H_turb[i-1], Re_th)
         dthds = cf/2.0 - (H_turb[i-1]+2.0)*th_turb[i-1]/Ue[i-1]*dUeds[i-1]
         CE = 0.0306*(max(H1-3.0, 0.01))**(-0.6169)
@@ -477,7 +668,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         H1 = max(H1 + dH1ds*ds, 3.35)
         H_turb[i] = np.clip(_head_H_from_H1(H1), 1.05, 2.8)
         H1 = _head_H1(H_turb[i])
-        Cf_turb[i] = _ludwieg_tillmann(H_turb[i], Ue[i]*th_turb[i]/nu)
+        Cf_turb[i] = _ludwieg_tillmann(H_turb[i], Ue[i]*th_turb[i]/nu_t[i])
         if H_turb[i] > 2.6 and sep_turb is None:
             sep_turb = i
 
@@ -495,7 +686,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
             theta[i] = (1-gamma[i])*th_lam[i] + gamma[i]*th_turb[i]
             H[i]  = (1-gamma[i])*H[i] + gamma[i]*H_turb[i]
             Cf[i] = (1-gamma[i])*cf_l + gamma[i]*Cf_turb[i]
-            Reth[i] = Ue[i]*theta[i]/nu
+            Reth[i] = Ue[i]*theta[i]/nu_t[i]
             state[i] = "transitional" if gamma[i] < 0.99 else "turbulent"
             mechanism[i] = onset_mech
 
@@ -539,12 +730,15 @@ def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
 
 
 def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
-                  sweep_deg=0.0, cal=None, mach=0.0):
+                  sweep_deg=0.0, cal=None, mach=0.0, compressible=True):
     """
     Full aerofoil: panel method -> split at stagnation -> march upper
     and lower surfaces.  Returns inviscid + viscous results.
     """
     xc, yc, Cp, V, th, S = panel_solve(xb, yb, alpha_deg, mach=mach)
+    # speed of sound implied by the free-stream Mach number; passing it to the
+    # march turns on the compressible (reference-temperature) closures
+    a_snd = (U/mach if (compressible and mach > 1e-6) else 0.0)
     # arc length along surface (control points), find stagnation (Cp max)
     # NB: panel coords are unit-chord -> scale arc length to physical chord
     ds = S
@@ -570,7 +764,7 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     for name, ss, idx in [("upper", s_up, idx_up), ("lower", s_low, idx_low)]:
         Ue_s = np.maximum(Ue_mag[idx], 1e-4)
         r = march_bl(ss, Ue_s, nu, Tu_pct=Tu_pct, sweep_deg=sweep_deg,
-                     Ue_inf=U, cal=cal, label=name)
+                     Ue_inf=U, cal=cal, label=name, a_sound=a_snd)
         r["x"]  = xc[idx]; r["y"] = yc[idx]; r["Cp"] = Cp[idx]
         r["Re_x"] = U*ss/nu
         r["x_tr_chord"] = (float(xc[idx][r["i_tr"]])

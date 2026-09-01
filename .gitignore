@@ -3,3 +3,4 @@ __pycache__/
 .DS_Store
 case.docx
 model.equations.docx
+solver/falkner_skan_family.npz

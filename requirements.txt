@@ -1,6 +1,7 @@
-numpy
-pandas
-matplotlib
-python-docx
 latex2mathml
 mathml2omml
+matplotlib
+numpy
+pandas
+python-docx
+scipy
