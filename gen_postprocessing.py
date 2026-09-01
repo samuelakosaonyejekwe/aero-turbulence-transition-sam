@@ -530,17 +530,26 @@ def plot_remaining_csvs():
 
     # --- 7c. universal calibration constants (calibration_constants.csv) ---
     cc=pd.read_csv("03_model_setup/calibration_constants.csv")
+    # N_crit is not a fixed constant any more - it is computed from the
+    # local turbulence intensity - so its "value" is text.  Plot only the
+    # numeric constants and note the rest on the axis label.
+    cc=cc.copy()
+    cc["num"]=pd.to_numeric(cc["value"],errors="coerce")
+    derived=list(cc.loc[cc["num"].isna(),"constant"])
+    cc=cc.dropna(subset=["num"]).reset_index(drop=True)
     fig,ax=new_fig(8.6,5.0)
     yy=np.arange(len(cc))
-    bars=ax.barh(yy,cc["value"],color=PALETTE[4],height=0.6)
+    bars=ax.barh(yy,cc["num"],color=PALETTE[4],height=0.6)
     ax.set_yticks(yy); ax.set_yticklabels(cc["constant"])
-    ax.set_xscale("log"); ax.set_xlabel("constant value (log scale)")
-    for b,v in zip(bars,cc["value"]):
+    ax.set_xscale("log")
+    ax.set_xlabel("constant value (log scale)" + (
+        "   [%s: computed from Tu]"%", ".join(derived) if derived else ""))
+    for b,v in zip(bars,cc["num"]):
         ax.text(v*1.08,b.get_y()+b.get_height()/2,f"{v:g}",va="center",
                 fontsize=9,color=INK)
-    ax.set_xlim(0.5,400)
+    ax.set_xlim(1e-3,400)
     ax.invert_yaxis()
-    ax.set_title("UTSS universal calibration constant set (single set, all cases)")
+    ax.set_title("UTSS calibration constant set (single set, all cases)")
     finish(fig,f"{CSVP}/calibration_constants.png")
 
     # --- 7d. flight conditions comparison (flow_conditions.csv) ---

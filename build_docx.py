@@ -179,13 +179,13 @@ manual_table(["Quantity","Predicted value"],
   ["Lower-surface transition x_tr/c","0.58 (natural / Tollmien–Schlichting)"],
   ["Mean laminar-flow extent","≈ 52 % of chord"],
   ["Section lift coefficient C_l","0.502"],
-  ["Section profile drag C_d","26.9 counts"],
+  ["Section profile drag C_d","27.0 counts"],
   ["Viscous drag reduction vs fully-turbulent","≈ 45 %"],
   ["Climb (Tu=0.9 %) transition x_tr/c (upper)","0.05 (bypass)"]],
  cap="Table 1. Headline predictions.")
 para("Validated against three independent, credible published transition datasets with one "
  "universal calibration set, the solver reproduces the transition-onset Reynolds number Re_θt "
- "across two orders of magnitude in free-stream turbulence intensity. The natural and bypass branches are independent models; the separation and cross-flow branches are carried and calibrated but are not selected at any condition reported here. The remainder of this report sets "
+ "against the Rolls-Royce hot-wire measurements of ERCOFTAC case 020 and the Schubauer-Skramstad experiment. The natural and bypass branches are independent models; the separation and cross-flow branches are carried and calibrated but are not selected at any condition reported here. The remainder of this report sets "
  "out the background, problem, governing equations, the complete input dataset, every generated "
  "engineering output (CSVs, curves, metrics, contours, temperature profiles, 3-D contours and "
  "vectors), the validation and calibration record with all sources, and the contribution to knowledge.")
@@ -445,7 +445,9 @@ h1("12.  Contribution to Knowledge")
 bullet("A single unified transition kernel (Eq. E13) that locally selects the governing "
        "mechanism among natural-TS, bypass, separation-induced and cross-flow transition by a "
        "minimum-effective-onset rule — reproducing all regimes with one calibration set.")
-bullet("Regime coverage: transition-onset Re_θt predicted to within 0.2–8.6 % across "
+bullet("Regime coverage: transition-onset Re_theta_t predicted to within 7-9 % on ERCOFTAC "
+       "T3B and Schubauer-Skramstad, and 45 % on T3A, whose error is traced to the laminar "
+       "closure rather than the transition criterion, across "
        "bypass (T3A/T3B) and natural (Schubauer–Skramstad) transition with no physics re-tuning.")
 bullet("A robust, panel-method-cost (<1 s) 3-D capability via a span-wise strip formulation with "
        "built-in cross-flow, suitable for design-loop use where RANS/LES are impractical.")

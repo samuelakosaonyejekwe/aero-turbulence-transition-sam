@@ -46,6 +46,18 @@ CAL = dict(
     N_crit    = 9.0,    # reference e^N factor; the value actually used is
                         # obtained from Tu by Mack's relation (see _n_crit)
     N_floor   = 0.5,    # lower clamp on N_crit at high Tu
+    K_pt      = 0.0075, # pre-transitional thickening of the laminar layer
+                        # by free-stream turbulence (see march_bl).  Fitted
+                        # to the measured momentum-thickness DISTRIBUTIONS
+                        # of ERCOFTAC T3A and T3B (0.00774 and 0.00712),
+                        # which are a different quantity from the onset
+                        # location used as the validation metric.
+    C_mu      = 0.09,   # k-epsilon constants, used only for the decay of
+    C_eps2    = 1.92,   # free-stream turbulence (see _tu_decay)
+    Tu_TS_max = 1.0,    # Tu [%] above which the envelope e^N branch is
+                        # switched off: Mack's relation is quoted below
+                        # ~1% and the amplification route is not the
+                        # governing one in a bypass-dominated stream
     C_len     = 6.5,    # transition-length scaling (Narasimha)
     CF_C1     = 150.0,  # cross-flow C1 critical Re_theta2 (Arnal)
     CF_ratio  = 0.356,  # theta2/theta surrogate; see _re_theta2()
@@ -56,6 +68,36 @@ CAL = dict(
 # ----------------------------------------------------------------------
 #  Envelope e^N amplification (Drela & Giles, AIAA J. 25(10) 1987)
 # ----------------------------------------------------------------------
+def _tu_decay(Tu0_pct, x, L_turb, U=None, cal=None):
+    """Local free-stream turbulence intensity along a surface.
+
+    Grid turbulence decays downstream, so the intensity that the transition
+    criteria see is not the inlet value.  Rather than leaving the choice
+    between "inlet" and "local" as a convention, the local value is computed
+    from the inlet value by the standard k-epsilon decay of isotropic
+    turbulence,
+
+        k(x) = k0 [1 + a x]^(-1/(C_eps2 - 1)),   Tu ~ sqrt(k),
+
+    so that  Tu(x) = Tu0 [1 + a x]^(-1/(2(C_eps2 - 1))),  with the decay
+    rate set by the inlet turbulence length scale L_turb through
+    a = (C_eps2 - 1) C_mu^(3/4) sqrt(3/2) Tu0 / L_turb.
+
+    L_turb is a property of the oncoming stream, not of the transition
+    model: for grid turbulence it is a few millimetres, and for the free
+    atmosphere it is hundreds of metres, which makes the decay negligible
+    over a wing chord and recovers a constant Tu automatically.
+    """
+    cal = {**CAL, **(cal or {})}
+    Tu0 = max(float(Tu0_pct), 1e-6)/100.0
+    if L_turb is None or L_turb <= 0.0:
+        return np.full_like(np.asarray(x, float), Tu0*100.0)
+    a = ((cal["C_eps2"] - 1.0)*cal["C_mu"]**0.75*np.sqrt(1.5)*Tu0)/L_turb
+    p = 1.0/(2.0*(cal["C_eps2"] - 1.0))
+    xx = np.maximum(np.asarray(x, float), 0.0)
+    return Tu0*100.0*(1.0 + a*xx)**(-p)
+
+
 def _n_crit(Tu_pct, floor=0.5):
     """Critical amplification factor from the free-stream turbulence level.
 
@@ -248,12 +290,23 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
       s    : arc length from stagnation/leading edge [m]  (increasing)
       Ue   : edge velocity magnitude [m/s]
       nu   : kinematic viscosity [m^2/s]
-      Tu_pct: local free-stream turbulence intensity [%]
+      Tu_pct: free-stream turbulence intensity [%].  Either a scalar,
+              or an array of length len(s) giving the LOCAL value at each
+              station.  Grid turbulence decays along a wind-tunnel plate,
+              and both the AGS correlation and Mack's relation are
+              functions of the local level, so passing the measured decay
+              is the correct usage where it is known.  In free flight the
+              ambient level does not decay over a chord and a scalar is
+              appropriate.
       sweep_deg: surface sweep angle (cross-flow mechanism)
     Returns a dict of station arrays describing the full BL state.
     """
     cal = {**CAL, **(cal or {})}
     n = len(s)
+    Tu_arr = (np.full(n, float(Tu_pct)) if np.ndim(Tu_pct) == 0
+              else np.asarray(Tu_pct, float))
+    if len(Tu_arr) != n:
+        raise ValueError("Tu_pct array must match the station count")
     s = np.asarray(s, float); Ue = np.maximum(np.asarray(Ue, float), 1e-6)
     dUeds = np.gradient(Ue, s)
 
@@ -271,6 +324,22 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         I[i] = I[i-1] + 0.5*(Ue[i]**5 + Ue[i-1]**5)*(s[i]-s[i-1])
     th2 = 0.45*nu/np.maximum(Ue**6, 1e-12)*I
     th_lam = np.sqrt(np.maximum(th2, 1e-16))
+
+    # ---- Pre-transitional thickening by free-stream turbulence ----
+    # A laminar layer in a disturbed stream is thicker than the Blasius or
+    # Thwaites value: free-stream turbulence drives Klebanoff modes that
+    # transport momentum across the layer well before breakdown.  Thwaites'
+    # method has no mechanism for this, and without it the momentum-thickness
+    # Reynolds number never reaches the bypass onset threshold before that
+    # threshold itself runs away as the turbulence decays.  The increment is
+    # taken proportional to the turbulence intensity accumulated along the
+    # surface,  d(Re_theta) = K_pt * integral( Tu d(Re_s) ),  which vanishes
+    # in a clean stream and is negligible at free-flight disturbance levels.
+    Re_s = Ue*s/nu
+    tu_f = Tu_arr/100.0
+    I_pt = np.concatenate([[0.0],
+        np.cumsum(0.5*(tu_f[1:] + tu_f[:-1])*np.diff(Re_s))])
+    th_lam = th_lam + cal["K_pt"]*I_pt*nu/np.maximum(Ue, 1e-6)
 
     i_tr = None
     for i in range(n):
@@ -293,13 +362,15 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
                 if dRe > 0.0:
                     n_amp += _dn_dReth(H[i])*dRe
         n_fac[i] = n_amp
-        N_target = (_n_crit(Tu_pct, cal.get("N_floor", 0.5))
-                    / max(cal["A_TS"], 1e-6))
+        ts_live = Tu_arr[i] <= cal.get("Tu_TS_max", 1.0)
+        N_target = ((_n_crit(Tu_arr[i], cal.get("N_floor", 0.5))
+                     / max(cal["A_TS"], 1e-6)) if ts_live else np.inf)
 
         # (b) bypass: free-stream-turbulence driven, meaningful only for
         #     elevated Tu (>~0.1%); below that the natural route governs.
-        if Tu_pct > 0.1:
-            Rbp = cal["A_BP"] * _ags_re_theta_t(Tu_pct, lam_t)
+        Tu_i = Tu_arr[i]
+        if Tu_i > 0.1:
+            Rbp = cal["A_BP"] * _ags_re_theta_t(Tu_i, lam_t)
         else:
             Rbp = 1e9
 
@@ -308,7 +379,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         #     live and to the AGS value at the local Tu otherwise, so that
         #     the branch remains operative in low-turbulence flight.
         if lam[i] <= -0.09:
-            Rref = Rbp if Rbp < 1e8 else _ags_re_theta_t(max(Tu_pct, 0.02), lam_t)
+            Rref = Rbp if Rbp < 1e8 else _ags_re_theta_t(max(Tu_i, 0.02), lam_t)
             Rsep = cal["A_SEP"]*max(cal["sep_floor"], 0.7*Rref)
         else:
             Rsep = 1e9
@@ -324,7 +395,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
 
         Rt = min(Rbp, Rsep, Rcf)
         Re_th_t[i] = Rt
-        trig_ts = (n_amp >= N_target)
+        trig_ts = bool(ts_live and (n_amp >= N_target))
         if (trig_ts or Reth[i] >= Rt) and i_tr is None and i > 1:
             i_tr = i
             if trig_ts and Reth[i] < Rt:
@@ -407,10 +478,22 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
 # ======================================================================
 #  HIGH-LEVEL DRIVERS
 # ======================================================================
-def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0):
-    """Zero (or mild) pressure-gradient flat plate (validation cases)."""
+def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
+                     Tu_decay=None, L_turb=None):
+    """Zero (or mild) pressure-gradient flat plate (validation cases).
+
+    Tu_decay, if given, is a (Re_x, Tu_pct) pair of sequences describing the
+    measured decay of free-stream turbulence along the plate; the local
+    value is then interpolated onto the marching stations and used in place
+    of the scalar Tu_pct."""
     s = np.linspace(1e-4, L, npts)
     Ue = U*(1.0 + dUe*s/L)
+    if L_turb is not None:
+        Tu_pct = _tu_decay(Tu_pct, s, L_turb, cal=cal)
+    elif Tu_decay is not None:
+        rex_m, tu_m = np.asarray(Tu_decay[0], float), np.asarray(Tu_decay[1], float)
+        Tu_pct = np.interp(U*s/nu, rex_m, tu_m,
+                           left=tu_m[0], right=tu_m[-1])
     r = march_bl(s, Ue, nu, Tu_pct=Tu_pct, Ue_inf=U, cal=cal)
     r["Re_x"] = U*s/nu
     r["Cf_lam_ref"] = 0.664/np.sqrt(np.maximum(r["Re_x"], 1.0))
