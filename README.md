@@ -82,16 +82,22 @@ Ablations, everything else held fixed (all 86 aerofoil points):
 | Drela–Giles envelope | −6.6 % | 0.041 c | 52/86 |
 | **full model** | **+5.6 %** | **0.037 c** | **53/86** |
 
-Swept wings — cross-flow: 13.7 % mean error on the 45° NLF(2)-0415 of
-Dagenhart & Saric (on which the one cross-flow coefficient is set), 55.1 % on
-the independent NACA 64(2)A015 of Boltz et al. digitised from NACA TN D-338 (55.1 %).
-Marching each of the ten conditions laminar to its **measured** transition
-station and evaluating the cross-flow criterion there gives a coefficient of
-variation of **21 %** across both facilities — six sweep angles, a 14× range of
-chord Reynolds number, two sections and two eras.  The criterion therefore
-transfers in the quantity it is posed on; the transition *location* is an
-ill-conditioned function of it, which is why 21 % in the criterion becomes
-30–55 % in location.  No single C1 improves the combined result.
+Swept wings — cross-flow: **14.7 %** on the 45° NLF(2)-0415 of Dagenhart &
+Saric (on which the one cross-flow coefficient is set), **51.7 %** on the
+independent NACA 64(2)A015 of Boltz et al. digitised from NACA TN D-338.  The
+branch is closed by an **amplification integral** rather than a local threshold
+— a stationary cross-flow vortex must grow before it breaks down — using the
+computed rate 0.0435 and the same N_crit as every other branch, so it adds no
+constant.
+Six formulations were tried against the two swept-wing experiments and none
+reconciles them; every one that helps the independent set costs more on the
+calibration set.  The two require critical values differing by about half, and
+that difference is in none of the mean-flow quantities the method computes —
+which the exact Falkner–Skan–Cooke similarity solution establishes.  It is a
+**receptivity** difference: stationary cross-flow vortices are seeded by
+leading-edge roughness, and neither report documents the surface finish.  The
+branch is therefore reported with a band: **C1 = 150** fits Dagenhart (14.7 %),
+**C1 = 200** fits Boltz (18.4 %).
 
 Sources recorded in `06_validation/sources_and_references.csv`.
 
