@@ -130,27 +130,51 @@ def falkner_skan(beta, eta_max=_ETA_MAX, n=_ETA_N):
 _H_CACHE = {}
 
 
+def _combined_family():
+    """Attached and reverse-flow branches joined into one monotone H family."""
+    eta, fam = _fs_family()
+    prof = [(m[1], m[2], m[3], m[4]) for m in fam]          # (H, theta, u, u')
+    try:
+        rev = fs_reverse_family()
+        prof += [(m[2], m[3], m[4], m[5]) for m in rev if m[2] > prof[-1][0]]
+    except Exception:
+        pass
+    prof.sort(key=lambda t: t[0])
+    keep = [prof[0]]
+    for p in prof[1:]:
+        if p[0] - keep[-1][0] > 1e-9:
+            keep.append(p)
+    return eta, keep
+
+
+_COMB = None
+
+
 def fs_profile_for_H(H_target):
     """Falkner-Skan profile at a prescribed shape factor.
 
-    H rises monotonically along the family, from about 2.13 in a strong
-    favourable gradient to 4.04 at separation, so the profile at a given H is
-    obtained by interpolating between the two family members that bracket it.
-    The family is resolved finely enough in beta that consecutive members
-    differ by well under 0.01 in H, and linear interpolation of the velocity
-    profile between them is far inside the accuracy of the eigenvalue solution.
+    H rises monotonically along the combined family, from about 2.13 in a
+    strong favourable gradient, through 4.00 at separation, to about 4.99 on
+    the reverse-flow branch, so the profile at a given H is obtained by
+    interpolating between the two members that bracket it.  Continuing past
+    separation is what allows the amplification rate inside a separation
+    bubble to be read from the same table as everywhere else, rather than
+    supplied as a separate constant.
     """
+    global _COMB
     key = round(float(H_target), 5)
     if key in _H_CACHE:
         return _H_CACHE[key]
-    eta, fam = _fs_family()
-    H = np.array([m[1] for m in fam])
+    if _COMB is None:
+        _COMB = _combined_family()
+    eta, prof = _COMB
+    H = np.array([p[0] for p in prof])
     t = float(np.clip(H_target, H[0], H[-1]))
     j = int(np.clip(np.searchsorted(H, t) - 1, 0, H.size - 2))
     w = (t - H[j])/(H[j+1] - H[j])
-    u = (1.0 - w)*fam[j][3] + w*fam[j+1][3]
-    up = (1.0 - w)*fam[j][4] + w*fam[j+1][4]
-    th = (1.0 - w)*fam[j][2] + w*fam[j+1][2]
+    u = (1.0 - w)*prof[j][2] + w*prof[j+1][2]
+    up = (1.0 - w)*prof[j][3] + w*prof[j+1][3]
+    th = (1.0 - w)*prof[j][1] + w*prof[j+1][1]
     pr = (eta, u, up, t, th)
     _H_CACHE[key] = pr
     return pr
@@ -289,8 +313,14 @@ def growth_curve(H_target, Re_theta, alphas, N=110, y_max=60.0, y_half=6.0,
 # Falkner-Skan separation profile (H = 4.04): the eigenvalue problem is stiff
 # there and the separation-induced branch of the transition kernel, not the
 # amplification integral, is what decides transition in a separating layer.
-H_GRID   = np.linspace(2.20, 3.90, 22)
-RET_GRID = np.geomspace(60.0, 6000.0, 32)
+# The shape-factor grid is dense below H = 3.0, where the neutral boundary of
+# the Orr-Sommerfeld problem moves quickly and a coarse grid interpolates
+# across it, and it now runs past separation onto the reverse-flow branch so
+# that a separated shear layer reads its amplification rate from the same
+# table as an attached one.
+H_GRID   = np.concatenate([np.arange(2.15, 3.00, 0.025),
+                           np.arange(3.00, 4.96, 0.095)])
+RET_GRID = np.geomspace(40.0, 8000.0, 40)
 OM_GRID  = np.geomspace(2.0e-3, 1.5e-1, 32)
 ALPHAS   = np.geomspace(8.0e-3, 0.45, 28)
 NCHEB    = 60
@@ -334,23 +364,50 @@ def _sigma_slab(H):
     return out
 
 
-def build_database(path=DB_PATH, nproc=4, verbose=True):
-    """Generate and store the amplification database (runs in a few minutes)."""
+def build_database(path=DB_PATH, nproc=4, verbose=True, resume=True):
+    """Generate and store the amplification database.
+
+    Each shape-factor slab is written to a checkpoint directory as it
+    completes, and a run that is interrupted resumes from what is already
+    there.  The whole table takes a few minutes; losing it to a failure in the
+    last slab, which a single blocking map would do, is not worth the tidier
+    code.
+    """
     from multiprocessing import Pool
+    ck = os.path.join(os.path.dirname(os.path.abspath(path)), "_amp_slabs")
+    os.makedirs(ck, exist_ok=True)
+    todo = []
+    for i, H in enumerate(H_GRID):
+        f = os.path.join(ck, "slab_%03d.npy" % i)
+        if resume and os.path.exists(f):
+            continue
+        todo.append((i, float(H)))
     if verbose:
-        print("building amplification database: %d H x %d Re_theta x %d alpha "
-              "= %d Orr-Sommerfeld solves"
+        print("amplification database: %d H x %d Re_theta x %d alpha = %d "
+              "Orr-Sommerfeld solves; %d of %d slabs still to do"
               % (H_GRID.size, RET_GRID.size, ALPHAS.size,
-                 H_GRID.size*RET_GRID.size*ALPHAS.size))
-    with Pool(nproc) as p:
-        slabs = p.map(_sigma_slab, list(H_GRID))
-    sigma = np.array(slabs)
+                 H_GRID.size*RET_GRID.size*ALPHAS.size, len(todo), H_GRID.size))
+    if todo:
+        with Pool(nproc) as p:
+            for i, slab in p.imap_unordered(_slab_job, todo):
+                np.save(os.path.join(ck, "slab_%03d.npy" % i), slab)
+                if verbose:
+                    done = len([f for f in os.listdir(ck) if f.endswith(".npy")])
+                    print("  slab %3d done (%d/%d)" % (i, done, H_GRID.size),
+                          flush=True)
+    sigma = np.array([np.load(os.path.join(ck, "slab_%03d.npy" % i))
+                      for i in range(H_GRID.size)])
     np.savez_compressed(path, H=H_GRID, Re_theta=RET_GRID, omega=OM_GRID,
                         sigma=sigma)
     if verbose:
         print("wrote %s   sigma range %.4g .. %.4g"
               % (path, float(sigma.min()), float(sigma.max())))
     return sigma
+
+
+def _slab_job(arg):
+    i, H = arg
+    return i, _sigma_slab(H)
 
 
 _DB = None
@@ -395,6 +452,11 @@ def sigma_lookup(H, Re_theta, omega):
     return float(c)
 
 
+H_REVERSE = 4.90      # developed reverse-flow profile: the aft end of the
+                      # tabulated Falkner-Skan branch, where the separated
+                      # shear layer's amplification rate is evaluated
+
+
 def sigma_curve(H, Re_theta):
     """Amplification rate against dimensionless frequency at one (H, Re_theta).
 
@@ -417,3 +479,326 @@ def omega_grid_bounds():
     """Tabulated range of the dimensionless frequency omega*theta/U_e."""
     _, _, Os, _ = load_database()
     return float(Os[0]), float(Os[-1])
+
+
+# ----------------------------------------------------------------------
+# Exact laminar closure from the Falkner-Skan family
+# ----------------------------------------------------------------------
+# Thwaites' method needs two closure functions, the shape factor H(lambda) and
+# the shear function l(lambda) = Re_theta*C_f/2.  Both are usually taken from
+# the algebraic fits Thwaites published in 1949.  They are fits to the
+# Falkner-Skan family, which is computed here anyway, so the fits can be
+# dispensed with and the family used directly.  In similarity variables
+#
+#     lambda = beta * theta_eta^2 ,      l = theta_eta * f''(0) ,
+#
+# with theta_eta the momentum thickness in similarity units.  The relations
+# reproduce Thwaites' own values where his fit is good - l = 0.2205 against
+# 0.220 at lambda = 0 - and depart from it where it is not.  The important
+# departure is near separation: the fit returns H = 3.10 at its separation
+# value lambda = -0.090, whereas the exact family reaches H = 4.00 there, and
+# separation itself occurs at lambda = -0.0681.  That matters because the
+# amplification rate of Sec. sigma_lookup rises by a factor of seven between
+# the Blasius profile and H = 3.9, so a shape factor short by 0.9 near
+# separation starves the amplification integral in exactly the adverse
+# gradients where transition is decided.
+_CLOSURE = None
+
+
+def thwaites_closure():
+    """Exact (lambda, H, l) closure table, ordered by increasing lambda."""
+    global _CLOSURE
+    if _CLOSURE is None:
+        eta, fam = _fs_family()
+        lam = np.array([b*th*th for b, H, th, u, up in fam])
+        H = np.array([m[1] for m in fam])
+        l = np.array([m[2]*m[4][0] for m in fam])
+        k = np.argsort(lam)
+        lam, H, l = lam[k], H[k], l[k]
+        keep = np.concatenate([[True], np.diff(lam) > 1e-12])
+        _CLOSURE = (lam[keep], H[keep], l[keep])
+    return _CLOSURE
+
+
+def lambda_sep():
+    """Value of the Thwaites parameter at which the exact family separates."""
+    return float(thwaites_closure()[0][0])
+
+
+def closure_HL(lam):
+    """Shape factor and shear function at a given Thwaites parameter."""
+    L, H, l = thwaites_closure()
+    x = float(np.clip(lam, L[0], L[-1]))
+    return float(np.interp(x, L, H)), float(np.interp(x, L, l))
+
+
+# ----------------------------------------------------------------------
+# Reverse-flow (lower) branch of the Falkner-Skan family
+# ----------------------------------------------------------------------
+# For -0.198838 < beta < 0 the similarity equation has two solutions: the
+# attached upper branch, with positive wall shear, and a lower branch carrying
+# a region of reverse flow next to the wall.  The lower branch is the profile
+# family of the interior of a laminar separation bubble, and it is what the
+# amplification rate inside a bubble should be read from.  Parametrising by
+# beta cannot reach it, because the two branches meet at a fold; the family is
+# therefore continued in the wall shear f''(0) instead, with beta carried as an
+# unknown eigenvalue of the boundary-value problem.  Driving f''(0) from
+# positive values through zero and negative continues smoothly around the fold
+# and onto the reverse-flow branch.
+def _fs_solve_shear(fw, eta, guess, beta_guess):
+    """Falkner-Skan solution with the wall shear prescribed and beta unknown."""
+    def rhs(t, y, p):
+        b = p[0]
+        return np.vstack([y[1], y[2], -y[0]*y[2] - b*(1.0 - y[1]**2)])
+
+    def bc(ya, yb, p):
+        return np.array([ya[0], ya[1], yb[1] - 1.0, ya[2] - fw])
+
+    return solve_bvp(rhs, bc, eta, guess, p=[beta_guess], tol=1e-9,
+                     max_nodes=200000)
+
+
+_FS_REVERSE = None
+
+
+def fs_reverse_family(fw_min=-0.075, n=90):
+    """Profiles from separation into reverse flow, ordered by decreasing shear.
+
+    Returns a list of (f''(0), beta, H, theta_eta, u, u') with u the streamwise
+    velocity in similarity units; on this branch u is negative near the wall.
+    """
+    global _FS_REVERSE
+    if _FS_REVERSE is not None:
+        return _FS_REVERSE
+    cache = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "falkner_skan_reverse.npz")
+    eta = np.linspace(0.0, _ETA_MAX, _ETA_N)
+    if os.path.exists(cache):
+        d = np.load(cache)
+        _FS_REVERSE = [(float(a), float(b), float(h), float(t), uu, pp)
+                       for a, b, h, t, uu, pp in zip(d["fw"], d["beta"], d["H"],
+                                                     d["theta"], d["u"], d["up"])]
+        return _FS_REVERSE
+    _, fam = _fs_family()
+    k = int(np.argmin([m[4][0] for m in fam]))       # nearest to separation
+    g = np.vstack([np.zeros_like(eta), fam[k][3], fam[k][4]])
+    g[0] = np.concatenate([[0.0],
+                           np.cumsum(0.5*(g[1][1:] + g[1][:-1])*np.diff(eta))])
+    beta = fam[k][0]
+    out = []
+    for fw in np.linspace(fam[k][4][0], fw_min, n):
+        sol = _fs_solve_shear(fw, eta, g, beta)
+        if not sol.success:
+            continue
+        beta = float(sol.p[0])
+        g = sol.sol(eta)
+        f, u, up = g
+        ds = np.trapz(1.0 - u, eta); th = np.trapz(u*(1.0 - u), eta)
+        out.append((float(fw), beta, float(ds/th), float(th),
+                    u.copy(), up.copy()))
+    np.savez_compressed(cache, fw=np.array([m[0] for m in out]),
+                        beta=np.array([m[1] for m in out]),
+                        H=np.array([m[2] for m in out]),
+                        theta=np.array([m[3] for m in out]),
+                        u=np.array([m[4] for m in out]),
+                        up=np.array([m[5] for m in out]), eta=eta)
+    _FS_REVERSE = out
+    return _FS_REVERSE
+
+
+# ----------------------------------------------------------------------
+# Falkner-Skan-Cooke: the swept-wing similarity family and its cross-flow
+# ----------------------------------------------------------------------
+# On a swept surface the external flow has a chordwise component U_e = C x^m
+# and a span-wise component W_e that is constant along the chord.  The
+# similarity solution splits: the chordwise momentum equation is the ordinary
+# Falkner-Skan equation, and the span-wise component satisfies a linear
+# equation driven by the same f,
+#
+#     f''' + f f'' + beta (1 - f'^2) = 0 ,      g'' + f g' = 0 ,
+#     f(0) = f'(0) = 0 , f'(inf) = 1 , g(0) = 0 , g(inf) = 1 .
+#
+# Resolving the boundary-layer velocity (U_e f', W_e g) into components along
+# and across the external streamline gives the cross-flow profile
+#
+#     w_cf = U_e W_e (f' - g) / sqrt(U_e^2 + W_e^2),
+#
+# which vanishes at the wall and in the free stream and is therefore
+# inflectional - the profile whose instability drives cross-flow transition.
+# Its shape depends on the pressure gradient through beta and on the local
+# sweep through W_e/U_e.  The algebraic surrogate this replaces,
+# Re_theta2 = k_cf Re_theta sin(L) cos(L), carries the sweep dependence but no
+# dependence on beta at all, which is why it cannot transfer between two wings
+# whose pressure distributions differ.
+def fsc_profile(beta, sweep_deg, eta_max=_ETA_MAX, n=_ETA_N):
+    """Falkner-Skan-Cooke solution and its cross-flow profile."""
+    eta, fam = _fs_family()
+    k = int(np.argmin([abs(m[0] - beta) for m in fam]))
+    u0, up0 = fam[k][3], fam[k][4]
+    f0 = np.concatenate([[0.0], np.cumsum(0.5*(u0[1:] + u0[:-1])*np.diff(eta))])
+    sol = _fs_solve(beta, eta, np.vstack([f0, u0, up0]))
+    if not sol.success:
+        raise RuntimeError("FSC chordwise solve failed at beta=%.5f" % beta)
+    f, fp, fpp = sol.sol(eta)
+
+    # span-wise equation g'' + f g' = 0 integrates in closed form:
+    #   g'(eta) = g'(0) exp(-int_0^eta f),  g normalised to 1 in the free stream
+    F = np.concatenate([[0.0], np.cumsum(0.5*(f[1:] + f[:-1])*np.diff(eta))])
+    gp = np.exp(-F)
+    G = np.concatenate([[0.0], np.cumsum(0.5*(gp[1:] + gp[:-1])*np.diff(eta))])
+    g = G/G[-1]
+
+    L = np.radians(sweep_deg)
+    w = np.abs(fp - g)*np.sin(L)*np.cos(L)      # cross-flow, in units of Q_e
+    return eta, fp, g, w
+
+
+def crossflow_reynolds(beta, sweep_deg, Re_theta):
+    """Cross-flow Reynolds number of the Falkner-Skan-Cooke profile.
+
+    Returns Re_cf = w_max * delta_10 / nu formed on the streamwise momentum
+    thickness that the boundary-layer march already carries, where delta_10 is
+    the distance from the wall to the point at which the cross-flow velocity
+    has fallen back to a tenth of its peak.  That is Arnal's cross-flow
+    Reynolds number, and it is computed here from the similarity solution
+    rather than estimated from an algebraic surrogate.
+    """
+    eta, fp, g, w = fsc_profile(beta, sweep_deg)
+    if w.max() <= 1e-12:
+        return 0.0
+    i = int(np.argmax(w))
+    wmax = w[i]
+    outer = np.where(w[i:] <= 0.1*wmax)[0]
+    eta10 = eta[i + outer[0]] if len(outer) else eta[-1]
+    th_eta = np.trapz(fp*(1.0 - fp), eta)        # streamwise theta, similarity
+    # Re_theta = U_e theta / nu and theta = th_eta * scale, so the scale cancels
+    return float(wmax*eta10/th_eta*Re_theta)
+
+
+# ----------------------------------------------------------------------
+# True spatial eigenvalue problem
+# ----------------------------------------------------------------------
+# Gaster's transformation converts a temporal growth rate into a spatial one to
+# first order in the growth rate.  It is convenient, because the temporal
+# problem is linear in the phase speed and can be solved as a generalised
+# eigenvalue problem, but it is an approximation, and it under-predicts the
+# spatial rate by several per cent where the growth is not small.  Integrated
+# over a whole plate that becomes an eight per cent error in the transition
+# Reynolds number, which is large compared with everything else in the model.
+#
+# The spatial problem is recovered exactly by allowing alpha to be complex and
+# requiring the resulting frequency to be real and equal to the target.  The
+# Orr-Sommerfeld operator is analytic in alpha, so Newton's method on the
+# complex plane converges quadratically from the Gaster estimate; the
+# derivative needed is the group velocity, which the temporal sweep already
+# provides.  Two or three iterations suffice.
+def spatial_alpha(y, D1, U, Upp, Re, omega, alpha0, cg, itmax=6, tol=1e-10):
+    """Complex alpha whose Orr-Sommerfeld frequency equals the real omega.
+
+    Returns (alpha, converged).  alpha.imag < 0 is an amplified wave, so the
+    spatial amplification rate is sigma = -alpha.imag (in units of 1/theta).
+    """
+    a = complex(alpha0, 0.0) if np.isreal(alpha0) else complex(alpha0)
+    if abs(cg) < 1e-6:
+        return a, False
+    a = a + 0.0j
+    for _ in range(itmax):
+        c = os_temporal(y, D1, U, Upp, a, Re)
+        if c is None:
+            return a, False
+        w = a*c
+        r = w - omega
+        if abs(r) < tol:
+            return a, True
+        # group velocity re-estimated locally by a small complex step
+        da = 1e-5*max(abs(a), 1e-3)
+        c2 = os_temporal(y, D1, U, Upp, a + da, Re)
+        if c2 is None:
+            return a, False
+        dwda = ((a + da)*c2 - w)/da
+        if abs(dwda) < 1e-9:
+            return a, False
+        a = a - r/dwda
+        if not np.isfinite(a):
+            return a, False
+    c = os_temporal(y, D1, U, Upp, a, Re)
+    return a, (c is not None and abs(a*c - omega) < 1e-6)
+
+
+def closure_F(lam):
+    """Right-hand side of the laminar momentum integral, F = 2l - 2(2+H)lambda.
+
+    Writing the momentum-integral equation in terms of Z = theta^2 gives
+    dZ/dx = (nu/U_e) F(lambda) with lambda = (Z/nu) dU_e/dx.  Thwaites replaced
+    F by the straight line 0.45 - 6 lambda, which is what makes his method
+    integrable in closed form and is the approximation that his separation
+    value lambda = -0.090 was chosen to compensate.  Using the exact F removes
+    both: the march is then consistent with the exact closure functions, and
+    separation occurs at the exact Falkner-Skan value.
+    """
+    L, H, l = thwaites_closure()
+    x = float(np.clip(lam, L[0], L[-1]))
+    Hh = float(np.interp(x, L, H)); ll = float(np.interp(x, L, l))
+    return 2.0*ll - 2.0*(2.0 + Hh)*x
+
+
+# ----------------------------------------------------------------------
+# Cross-flow factor from the Falkner-Skan-Cooke family
+# ----------------------------------------------------------------------
+# The cross-flow velocity is w = U_e W_e (f' - g)/Q, so the sweep enters only
+# through sin(L)cos(L) and factors out exactly.  What remains,
+#
+#     K = max|f' - g| * eta_10 / theta_eta ,
+#
+# depends on the pressure gradient alone, and the cross-flow Reynolds number is
+#
+#     Re_cf = Re_theta * sin(L) cos(L) * K(lambda) .
+#
+# The algebraic surrogate this replaces used a constant in place of K.  K is
+# not remotely constant: it falls to 0.44 in a mild adverse gradient and rises
+# to 4.6 in a strong favourable one, a factor of ten, because a favourable
+# gradient thins the streamwise profile without thinning the cross-flow one and
+# so raises the cross-flow Reynolds number for the same Re_theta.  Two swept
+# wings with different pressure distributions therefore cannot share a single
+# constant, which is why the criterion did not transfer between the two
+# experiments used here.
+#
+# The span-wise equation g'' + f g' = 0 integrates in closed form given f, so
+# the whole table follows from the Falkner-Skan family already computed and
+# costs nothing beyond quadrature.
+_CF_TABLE = None
+
+
+def crossflow_table():
+    """(lambda, K) table for the cross-flow factor, ordered by lambda."""
+    global _CF_TABLE
+    if _CF_TABLE is None:
+        eta, fam = _fs_family()
+        lam, K = [], []
+        for b, H, th, u, upp in fam:
+            f = np.concatenate([[0.0],
+                                np.cumsum(0.5*(u[1:] + u[:-1])*np.diff(eta))])
+            F = np.concatenate([[0.0],
+                                np.cumsum(0.5*(f[1:] + f[:-1])*np.diff(eta))])
+            gp = np.exp(-F)
+            G = np.concatenate([[0.0],
+                                np.cumsum(0.5*(gp[1:] + gp[:-1])*np.diff(eta))])
+            g = G/G[-1]
+            w = np.abs(u - g)
+            i = int(np.argmax(w)); wmax = w[i]
+            if wmax <= 1e-9:
+                continue
+            o = np.where(w[i:] <= 0.1*wmax)[0]
+            e10 = eta[i + o[0]] if len(o) else eta[-1]
+            lam.append(b*th*th); K.append(wmax*e10/th)
+        lam = np.array(lam); K = np.array(K)
+        k = np.argsort(lam); lam, K = lam[k], K[k]
+        keep = np.concatenate([[True], np.diff(lam) > 1e-12])
+        _CF_TABLE = (lam[keep], K[keep])
+    return _CF_TABLE
+
+
+def crossflow_factor(lam):
+    """K(lambda): cross-flow Reynolds number per unit Re_theta sin(L)cos(L)."""
+    L, K = crossflow_table()
+    return float(np.interp(float(np.clip(lam, L[0], L[-1])), L, K))
