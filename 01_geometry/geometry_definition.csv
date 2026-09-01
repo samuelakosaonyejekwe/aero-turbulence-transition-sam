@@ -13,4 +13,4 @@ Tip washout (twist),-3.0,deg
 Section,UTSS-NLF16,-
 Section max thickness,16.0,% chord
 Max-thickness location,42.2,% chord
-Section design Cl,0.45,-
+"Section c_l at cruise design incidence (alpha = 1.5 deg, M = 0.42)",0.517,-

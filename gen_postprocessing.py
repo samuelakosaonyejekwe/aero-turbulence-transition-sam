@@ -12,7 +12,6 @@ from utss_solver import solve_airfoil
 from uplot import (apply_style, INK, INK_SOFT, PALETTE, FIELD_CMAP, CF_CMAP,
                    GAMMA_CMAP, new_fig, finish)
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 
@@ -274,7 +273,7 @@ def plot_nlf_vs_turb():
     for b,v in zip(bars,cd):
         ax.text(b.get_x()+b.get_width()/2,v+0.5,f"{v:.1f} cts",ha="center",
                 color=INK,fontsize=10,fontweight="normal")
-    sav=d["Cd_counts"].iloc[2]
+    sav=d["viscous_drag_reduction_pct"].iloc[0]
     ax.set_ylabel("profile drag C_d [counts]")
     ax.set_title(f"NLF benefit: UTSS-predicted transition vs fully turbulent\n"
                  f"viscous drag reduction = {sav:.1f}%")

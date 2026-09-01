@@ -15,7 +15,6 @@ from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import parse_xml
-from docx.oxml.ns import qn
 
 INK   = RGBColor(0x1d,0x2f,0x45)   # navy ink  (never black)
 BLUE  = RGBColor(0x1b,0x49,0x65)

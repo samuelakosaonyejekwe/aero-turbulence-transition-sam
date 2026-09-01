@@ -10,9 +10,7 @@ overlaps the curves/contours.
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib import cm
 from matplotlib.colors import LinearSegmentedColormap
-import numpy as np
 import os
 
 # ----------------------------------------------------------------------

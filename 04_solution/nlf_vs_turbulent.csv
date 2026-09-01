@@ -1,4 +1,3 @@
-configuration,Cd_counts,mean_laminar_pct
-NLF (UTSS predicted transition),43.8,58.3
-Fully turbulent (LE trip),88.4,0.0
-Viscous drag reduction,50.4,
+configuration,Cd_counts,mean_laminar_pct,viscous_drag_reduction_pct
+NLF (UTSS predicted transition),43.8,56.6,50.4
+Fully turbulent (LE trip),88.4,0.0,0.0

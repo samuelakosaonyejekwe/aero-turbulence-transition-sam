@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="AETHER-NLF 25 — Laminar to Turbulent Boundary-Layer Transition over a 3-D NLF Wing" width="100%">
+</p>
+
 # AETHER-NLF 25 — Turbulence-Transition Case Study (UTSS Universal Solver)
 
 **Author: Akosa Samuel Onyejekwe**  ·  Document UTSS-CASE-2026
@@ -31,8 +35,9 @@ Two elements are not correlations:
   collocation, Gaster transformation), continued past separation onto the
   reverse-flow branch so that a separated profile has a computed rate too. The
   march carries one amplification factor per physical frequency. The stability
-  solver returns the Blasius neutral point at Re_θ = 200 against the accepted
-  200.5. Regenerate with
+  solver puts the Blasius neutral point at Re_θ = 201 against the accepted
+  200.5; the tabulated database resolves it to the nearest node of its
+  Reynolds-number grid, Re_θ = 210.  Regenerate with
   `python3 -c "import sys; sys.path.insert(0,'solver'); import stability;
   stability.build_database()"` (~4 min on 4 cores); the build is checkpointed
   per shape factor, so an interrupted run resumes rather than restarting.
@@ -49,6 +54,57 @@ Two elements are not correlations:
   H = 3.997 — it cannot be continued past the fold, where H*(H) turns and the
   inversion the march needs ceases to exist. Only the amplification rate, which
   needs no inversion, is read beyond separation.
+
+## Results figures
+
+A selection of generated outputs. The full set of curves, contours, profiles
+and 3-D renders lives in [`05_postprocessing/`](05_postprocessing/) and
+[`06_validation/plots/`](06_validation/plots/).
+
+<table>
+  <tr>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/cruise_Cp.png" width="100%"><br>
+      <sub><b>Pressure distribution (cruise).</b> Upper/lower-surface C<sub>p</sub> over the UTSS-NLF16 section.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/cruise_Cf.png" width="100%"><br>
+      <sub><b>Skin friction &amp; BL state.</b> Laminar run shaded; the C<sub>f</sub> jump marks transition onset.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/contours/contour_Cp_cruise.png" width="100%"><br>
+      <sub><b>C<sub>p</sub> contour field (cruise).</b> Inviscid panel solution around the aerofoil.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/nlf_vs_turbulent.png" width="100%"><br>
+      <sub><b>NLF benefit.</b> Profile drag of the predicted-transition wing against a fully turbulent one; the figure carries the current number.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/aero_polar.png" width="100%"><br>
+      <sub><b>Aerodynamic polar.</b> Lift curve, drag polar, L/D and transition location against incidence.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/csv_plots/spanwise_transition.png" width="100%"><br>
+      <sub><b>Span-wise transition.</b> Chordwise transition location swept across the span.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/profiles/bl_velocity_profiles.png" width="100%"><br>
+      <sub><b>Boundary-layer velocity profiles.</b> Laminar, transitional and turbulent stations on the cruise upper surface.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="05_postprocessing/three_d/td_Cp.png" width="100%"><br>
+      <sub><b>3-D surface C<sub>p</sub>.</b> Pressure mapped over the lofted 3-D wing.</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="06_validation/plots/val_combined_Re_theta_t.png" width="100%"><br>
+      <sub><b>Validation.</b> Transition-onset Re<sub>&theta;t</sub> across all five flat plates, one calibration set.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Validation (one frozen constant set)
 
@@ -178,3 +234,12 @@ python3 build_docx.py          # assemble case.docx
 
 Plot rule enforced throughout: **no black** (navy ink + contrasting healthy
 palette); text never overlaps the data.
+
+## License & attribution
+
+© 2026 Akosa Samuel Onyejekwe. Two licences apply, both non-commercial:
+
+- **Source code** (`solver/`, `run_solution.py`, `gen_*.py`, `build_docx.py`) — [PolyForm Noncommercial 1.0.0](LICENSE-CODE). A software licence: it grants a patent licence and disclaims warranty, which a Creative Commons licence does not.
+- **Data, figures and the report** — [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](LICENSE)
+
+Under both, you may use, share and adapt this work for non-commercial purposes — including academic research, teaching and study — with appropriate credit to the author. For commercial use, please contact the author. Please credit the author when citing the method, data, or figures.
