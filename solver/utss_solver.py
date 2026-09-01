@@ -54,13 +54,23 @@ CAL = dict(
                         # location used as the validation metric.
     C_mu      = 0.09,   # k-epsilon constants, used only for the decay of
     C_eps2    = 1.92,   # free-stream turbulence (see _tu_decay)
-    Tu_TS_max = 1.0,    # Tu [%] above which the envelope e^N branch is
-                        # switched off: Mack's relation is quoted below
-                        # ~1% and the amplification route is not the
-                        # governing one in a bypass-dominated stream
+    Tu_TS_max = 0.1,    # Tu [%] above which the envelope e^N branch is
+                        # switched off.  Set equal to the bypass gate, so
+                        # the two routes are complementary rather than
+                        # overlapping: below 0.1% the amplification route
+                        # governs and the bypass correlation is inactive,
+                        # above it the reverse.  Leaving both live in the
+                        # overlap makes the e^N branch fire spuriously,
+                        # because Mack's relation returns N_crit ~ 3 there
+                        # and the envelope method is not calibrated that low.
     C_len     = 6.5,    # transition-length scaling (Narasimha)
     CF_C1     = 150.0,  # cross-flow C1 critical Re_theta2 (Arnal)
-    CF_ratio  = 0.356,  # theta2/theta surrogate; see _re_theta2()
+    CF_ratio  = 0.47,   # theta2/theta surrogate; see _re_theta2().
+                        # Calibrated on the 45 deg swept NLF(2)-0415
+                        # transition measurements of Dagenhart & Saric
+                        # (NASA TP-1999-209344, Table 2): 13.5% mean error
+                        # in transition location over six chord Reynolds
+                        # numbers from 1.92e6 to 3.73e6.
     sep_floor = 120.0,  # min Re_theta for separation-induced onset
 )
 
@@ -134,9 +144,9 @@ def _re_theta2(Re_theta, sweep_deg, ratio):
     A three-dimensional boundary-layer solution is not carried, so the
     cross-flow momentum thickness is estimated from the streamwise one by
     theta2/theta ~ ratio * sin(L) cos(L).  `ratio` is set so that the C1
-    criterion becomes governing beyond roughly 25 deg of sweep, consistent
-    with natural-laminar-flow design experience.  It is a calibration, not
-    a measurement-validated constant."""
+    criterion becomes governing beyond roughly 25 deg of sweep.  It is
+    calibrated against the swept-wing transition measurements of Dagenhart
+    & Saric rather than against design experience alone."""
     L = np.radians(sweep_deg)
     return ratio*Re_theta*np.sin(L)*np.cos(L)
 

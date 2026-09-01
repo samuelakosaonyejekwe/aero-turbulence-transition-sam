@@ -1,4 +1,5 @@
 case,Tu_inlet_pct,L_turb_mm,Re_theta_t_exp,Re_theta_t_pred,Re_theta_t_err_pct,Re_x_tr_exp,Re_x_tr_pred,mean_Cf_err_pct,Re_theta_meas_over_blasius,mechanism
 ERCOFTAC T3A flat plate (bypass transition),3.043,1.5299999999999998,272.3,394.5,44.9,1.348e+05,2.771e+05,20.4,1.117,bypass
+ERCOFTAC T3A- flat plate (low-Tu bypass),0.874,0.98,818.8,740.6,-9.5,1.443e+06,1.050e+06,213.5,1.027,bypass
 ERCOFTAC T3B flat plate (high-Tu bypass),5.952,3.83,181.3,168.4,-7.1,5.910e+04,4.865e+04,14.5,1.123,bypass
 Schubauer & Skramstad flat plate (natural transition),0.03,,1100.0,1194.1,8.6,2.800e+06,3.132e+06,,,TS-natural

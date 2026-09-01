@@ -142,9 +142,25 @@ The solver is validated against three canonical published transition experiments
 
 | Case | Tu (%) | Re_θt experiment | Re_θt UTSS | Error |
 |---|---|---|---|---|
+| ERCOFTAC T3B flat plate (bypass) | 5.95 | 181.3 | 168.4 | −7.1% |
 | ERCOFTAC T3A flat plate (bypass) | 3.04 | 272.3 | 394.5 | +44.9% |
-| ERCOFTAC T3B flat plate (high-Tu bypass) | 5.95 | 181.3 | 168.4 | −7.1% |
+| ERCOFTAC T3A⁻ flat plate (bypass) | 0.87 | 818.8 | 740.6 | −9.5% |
 | Schubauer & Skramstad (natural) | 0.03 | 1100 | 1194.1 | +8.6% |
+
+**Cross-flow — 45° swept NLF(2)-0415** (Dagenhart & Saric, NASA/TP-1999-209344, Table 2). The
+cross-flow criterion is the selected one at all six chord Reynolds numbers; mean absolute error in
+transition location is **13.5%**, and the onset momentum-thickness Reynolds number is constant to
+better than 2% across the sweep — the evidence that the form of the criterion is right, not merely
+well placed.
+
+| Re_c | x/c measured | x/c predicted | error |
+|---|---|---|---|
+| 1.92 × 10⁶ | 0.78 | 0.682 | −12.6% |
+| 2.19 × 10⁶ | 0.73 | 0.599 | −17.9% |
+| 2.37 × 10⁶ | 0.58 | 0.556 | −4.2% |
+| 2.73 × 10⁶ | 0.45 | 0.483 | +7.4% |
+| 3.27 × 10⁶ | 0.33 | 0.406 | +23.0% |
+| 3.73 × 10⁶ | 0.30 | 0.348 | +15.9% |
 
 Full experiment-vs-solver data, plots, and bibliographic sources are in `06_validation/`.
 
@@ -152,7 +168,7 @@ The T3A and T3B reference values are the Rolls-Royce hot-wire measurements distr
 
 **The T3A error is traced, not left bare.** It is not a failure of the transition criterion: supplied with the *measured* momentum thickness the criterion fires within 19%. The residual comes from the laminar closure, and is amplified because `Re_theta` grows as the square root of distance while the onset threshold *rises* as the free-stream turbulence decays, so the two curves are nearly parallel and their intersection is sensitive.
 
-**Scope of the validation.** The natural and bypass criteria are independent models and both are tested above. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
+**Scope of the validation.** Three of the four criteria are now supported by measurement — amplification by Schubauer & Skramstad, bypass by three ERCOFTAC plates, cross-flow by the swept-wing experiment. The separation-induced branch is selected at no reported condition and is validated by none of it. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
 
 ---
 

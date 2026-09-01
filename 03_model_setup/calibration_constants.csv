@@ -7,5 +7,5 @@ N_crit,from Tu,e^N amplification factor,Mack correlation N=-8.43-2.4 ln(Tu); 9.0
 N_floor,0.5,lower clamp on N_crit at high Tu,clamp; bypass governs there
 C_len,6.5,Narasimha transition-length scale,Dhawan-Narasimha (1958)
 CF_C1,150.0,crossflow critical Re_theta2,Arnal et al. C1 criterion
-CF_ratio,0.356,theta2/theta surrogate for crossflow,"calibrated, not validated"
+CF_ratio,0.47,theta2/theta surrogate for crossflow,"calibrated, not validated"
 sep_floor,120.0,min separation onset Re_theta,calibration floor

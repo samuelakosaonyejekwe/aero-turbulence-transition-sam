@@ -107,7 +107,31 @@ VALIDATION = dict(
                U=9.4, Tu_pct=5.952, nu=1.5e-5, L=1.7, dUe=0.0, L_turb=3.83e-3,
                source="Roach & Brierley (1990), ERCOFTAC T3B; "
                       "Langtry & Menter, AIAA J. 47(12) 2009."),
+    T3AM= dict(name="ERCOFTAC T3A- flat plate (low-Tu bypass)",
+               U=19.5, Tu_pct=0.874, nu=1.5e-5, L=1.7, dUe=0.0, L_turb=0.98e-3,
+               source="Roach & Brierley (1990), ERCOFTAC T3A-; "
+                      "ERCOFTAC Classic Collection Case 020."),
     SS  = dict(name="Schubauer & Skramstad flat plate (natural transition)",
                U=27.0, Tu_pct=0.03, nu=1.5e-5, L=4.0, dUe=0.0, L_turb=None,
                source="Schubauer & Skramstad (1948), NACA Report 909."),
+)
+
+# ---- Swept-wing cross-flow validation (Dagenhart & Saric) --------------
+# 45 deg swept NLF(2)-0415, alpha = -4 deg, ASU Unsteady Wind Tunnel.
+# Transition locations from naphthalene flow visualisation, Table 2 of
+# NASA/TP-1999-209344.  This is the only case in which the cross-flow
+# criterion is the selected one, and the only measurement against which
+# it is calibrated.
+SWEPT = dict(
+    name      = "Dagenhart & Saric 45 deg swept NLF(2)-0415 (cross-flow)",
+    sweep_deg = 45.0,
+    alpha_deg = -4.0,
+    chord_m   = 1.83,
+    nu        = 1.5e-5,
+    Tu_pct    = 0.02,
+    Re_c      = [1.92e6, 2.19e6, 2.37e6, 2.73e6, 3.27e6, 3.73e6],
+    x_tr_c    = [0.78,   0.73,   0.58,   0.45,   0.33,   0.30],
+    source    = "Dagenhart J.R. & Saric W.S. (1999), 'Crossflow Stability and "
+                "Transition Experiments in Swept-Wing Flow', NASA/TP-1999-209344, "
+                "Table 2.",
 )

@@ -12,7 +12,7 @@ import os, sys
 import numpy as np, pandas as pd
 sys.path.insert(0,"solver")
 import case_config as C
-from utss_solver import solve_flat_plate
+from utss_solver import solve_flat_plate, solve_airfoil
 from uplot import apply_style, INK, INK_SOFT, PALETTE, new_fig, finish
 import matplotlib.pyplot as plt
 
@@ -48,6 +48,12 @@ EXP = {
    Re_theta=[82.9, 114.1, 146, 181.3, 243.4, 337.4, 502.1, 659.4, 848.5, 977.2, 1096, 1432, 1623, 1912, 2073],
    Tu_local=[5.952, 5.635, 5.442, 5.244, 5.019, 4.714, 4.334, 4.031, 3.724, 3.484, 3.276, 2.965, 2.749, 2.548, 2.4],
    Re_theta_t=181.3, Re_x_t=5.91e+04),
+ "T3AM": dict(
+   Re_x=[1.225e+05, 2.541e+05, 3.855e+05, 5.078e+05, 6.422e+05, 7.72e+05, 9.003e+05, 1.038e+06, 1.173e+06, 1.306e+06, 1.443e+06, 1.561e+06, 1.698e+06, 1.828e+06, 1.959e+06, 2.022e+06],
+   Cf=[0.00188, 0.00125, 0.001027, 0.000901, 0.00078, 0.000733, 0.000661, 0.000624, 0.000603, 0.000565, 0.000535, 0.000557, 0.000583, 0.000735, 0.001193, 0.001514],
+   Re_theta=[219.4, 326.9, 401.5, 466.6, 539.2, 579.4, 630.9, 684.8, 734.3, 784.8, 818.8, 861.5, 930.7, 999.7, 1131, 1192],
+   Tu_local=[0.874, 0.793, 0.738, 0.685, 0.651, 0.61, 0.585, 0.564, 0.545, 0.525, 0.512, 0.498, 0.486, 0.478, 0.483, 0.469],
+   Re_theta_t=818.8, Re_x_t=1.443e+06),
  "SS": dict(
    # NACA Report 909 presents its transition results as figures in a 1948
    # scan and no reliable digitisation was available to the author, so only
@@ -64,7 +70,7 @@ def run_validation():
     free-stream turbulence intensity is computed from the inlet value and the
     measured integral length scale of each rig by the k-epsilon decay law."""
     summ=[]; sources=[]
-    for key in ["T3A","T3B","SS"]:
+    for key in ["T3A","T3AM","T3B","SS"]:
         v=C.VALIDATION[key]; ex=EXP[key]
         r=solve_flat_plate(v["L"],v["U"],v["nu"],v["Tu_pct"],npts=900,
                            dUe=v["dUe"],L_turb=v.get("L_turb"))
@@ -136,6 +142,60 @@ def run_validation():
         f"{VAL}/sources_and_references.csv",index=False)
     return df_sum
 
+
+# ----------------------------------------------------------------------
+#  Swept-wing cross-flow validation (Dagenhart & Saric, NASA TP-1999-209344)
+# ----------------------------------------------------------------------
+NLF415 = "01_geometry/nlf2_0415.dat"
+
+def _nlf415_points():
+    """NLF(2)-0415 coordinates, returned TE -> lower -> LE -> upper -> TE."""
+    pts=[]
+    for line in open(NLF415):
+        q=line.split()
+        if len(q)==2:
+            try: pts.append((float(q[0]),float(q[1])))
+            except ValueError: pass
+    a=np.array(pts)
+    return a[::-1,0], a[::-1,1]
+
+def run_swept():
+    """The only case in which the cross-flow criterion is the selected one."""
+    v=C.SWEPT
+    X,Y=_nlf415_points()
+    rows=[]
+    for Rec,xm in zip(v["Re_c"], v["x_tr_c"]):
+        U=Rec*v["nu"]/v["chord_m"]
+        r=solve_airfoil(X,Y,v["alpha_deg"],U,v["nu"],v["chord_m"],v["Tu_pct"],
+                        sweep_deg=v["sweep_deg"])
+        u=r["surfaces"]["upper"]
+        xp=u["x_tr_chord"]; xp=1.0 if xp!=xp else float(xp)
+        rows.append(dict(Re_c=f"{Rec:.3e}", x_tr_c_exp=xm,
+                         x_tr_c_pred=round(xp,3),
+                         err_pct=round((xp-xm)/xm*100,1),
+                         Re_theta_at_onset=round(float(u["Re_theta"][u["i_tr"]]),1),
+                         mechanism=u["onset_mech"]))
+    df=pd.DataFrame(rows); df.to_csv(f"{VAL}/swept_wing_crossflow.csv",index=False)
+    pd.DataFrame([dict(dataset=v["name"], source=v["source"])]).to_csv(
+        f"{VAL}/swept_wing_source.csv", index=False)
+    # plot
+    fig,ax=new_fig(8.4,5.4)
+    rc=[float(x) for x in v["Re_c"]]
+    ax.plot(rc, v["x_tr_c"], "o", ms=9, color=PALETTE[1], mec=INK_SOFT,
+            label="measured (naphthalene flow visualisation)")
+    ax.plot(rc, df["x_tr_c_pred"], "-s", ms=7, lw=2.2, color=PALETTE[0],
+            label="UTSS, cross-flow criterion")
+    ax.set_xlabel("chord Reynolds number  Re_c")
+    ax.set_ylabel("transition location  x/c")
+    ax.set_ylim(0,1.0)
+    ax.set_title("Cross-flow validation: 45° swept NLF(2)-0415, α = −4°")
+    ax.legend(loc="upper right",fontsize=10)
+    finish(fig,f"{VP}/val_swept_crossflow.png",
+           caption="Source: "+v["source"][:95]+"...")
+    print("swept-wing cross-flow: mean |err| = %.1f%%"
+          % float(np.mean(np.abs(df["err_pct"]))))
+    return df
+
 def plot_case(key):
     v=C.VALIDATION[key]; ex=EXP[key]
     r=solve_flat_plate(v["L"],v["U"],v["nu"],v["Tu_pct"],npts=900,
@@ -163,10 +223,10 @@ def plot_case(key):
 
 def plot_combined(df_sum):
     fig,ax=new_fig(8.6,5.4)
-    cases=["T3A","T3B","SS"]
+    cases=["T3A","T3AM","T3B","SS"]
     x=np.arange(len(cases)); w=0.36
     exp=[EXP[k]["Re_theta_t"] for k in cases]
-    pred=[df_sum.iloc[i]["Re_theta_t_pred"] for i in range(3)]
+    pred=[df_sum.iloc[i]["Re_theta_t_pred"] for i in range(len(cases))]
     ax.bar(x-w/2,exp,w,color=PALETTE[1],label="experiment Re_θt")
     ax.bar(x+w/2,pred,w,color=PALETTE[0],label="UTSS predicted Re_θt")
     for xi,(e,p) in enumerate(zip(exp,pred)):
@@ -180,7 +240,9 @@ def plot_combined(df_sum):
 
 if __name__=="__main__":
     df=run_validation()
-    for k in ["T3A","T3B","SS"]: plot_case(k)
+    for k in ["T3A","T3AM","T3B","SS"]: plot_case(k)
     plot_combined(df)
+    df_sw=run_swept()
+    print(df_sw.to_string(index=False))
     print(df.to_string(index=False))
     print("validation files:",sorted([f for f in os.listdir(VAL) if f.endswith('.csv')]))
