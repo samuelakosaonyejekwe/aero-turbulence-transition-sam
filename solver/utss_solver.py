@@ -10,21 +10,31 @@ Architecture
  1. Inviscid edge solution   : constant-strength vortex-panel method
                                (Kuethe & Chow formulation) -> Cp, Ue,
                                with a Karman-Tsien correction.
- 2. Laminar boundary layer    : Thwaites' integral method.
+ 2. Laminar boundary layer    : two-equation integral march (momentum
+                               and kinetic energy) closed on the
+                               Falkner-Skan family, so the shape factor
+                               carries its own history.  Thwaites'
+                               one-equation method is retained behind
+                               cal["two_eq"] = False for comparison.
  3. UNIFIED TRANSITION KERNEL : the novel contribution. A single
        onset is taken as the minimum effective transition-Re across
        FOUR co-resident mechanisms, each with a calibration weight:
-         (a) Tollmien-Schlichting / natural   (envelope e^N, Drela-Giles)
+         (a) Tollmien-Schlichting / natural   (e^N per frequency, from
+             the tabulated Orr-Sommerfeld rates of stability.py; the
+             Drela-Giles envelope fit is retained behind
+             cal["use_os_db"] = False)
          (b) Bypass (free-stream turbulence)   (Abu-Ghannam & Shaw)
-         (c) Laminar-separation-induced        (short-bubble criterion)
-         (d) Cross-flow (swept-wing)           (C1 cross-flow Re crit.)
+         (c) Laminar-separation-induced        (bubble closed by the
+             amplification integral across the dead-air region)
+         (d) Cross-flow (swept-wing)           (C1 threshold followed by
+             a cross-flow amplification integral)
  4. Transitional region       : Narasimha universal-intermittency
        closure; properties blended Cf = (1-g)Cf_lam + g Cf_turb.
  5. Turbulent boundary layer  : Head's entrainment method with the
        Ludwieg-Tillmann skin-friction law.
  6. Drag                      : Squire-Young far-wake formula.
 
-The natural and bypass branches are independent models - an envelope
+The natural and bypass branches are independent models - an
 e^N amplification integral and the Abu-Ghannam & Shaw correlation
 respectively - and the SAME constant set reproduces zero-pressure-
 gradient bypass plates (ERCOFTAC T3A/T3B) and low-turbulence natural
@@ -473,8 +483,7 @@ def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True):
     return Tstar_Te**(1.0 + omega)
 
 
-def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
-             cal=None, label="", a_sound=0.0):
+def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
     """
     March the boundary layer along one surface.
       s    : arc length from stagnation/leading edge [m]  (increasing)
@@ -519,14 +528,6 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     mechanism = np.array(["-"] * n, dtype=object)
 
     two_eq = bool(cal.get("two_eq", True))
-    # With the shape factor solved rather than slaved to the local gradient,
-    # separation is detected where it physically occurs - the wall shear
-    # vanishes as H approaches the Falkner-Skan separation value of 3.997 -
-    # rather than through the Thwaites parameter.  The two are not equivalent:
-    # lambda reaches its separation value wherever the local gradient is steep
-    # enough, whatever the layer's history, whereas a layer that has just come
-    # off a favourable run is fuller and resists separation.
-    H_SEP = 3.95
 
     # ---- Laminar branch via Thwaites (integral form) ----
     I = np.zeros(n)
@@ -1062,7 +1063,7 @@ def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
         rex_m, tu_m = np.asarray(Tu_decay[0], float), np.asarray(Tu_decay[1], float)
         Tu_pct = np.interp(U*s/nu, rex_m, tu_m,
                            left=tu_m[0], right=tu_m[-1])
-    r = march_bl(s, Ue, nu, Tu_pct=Tu_pct, Ue_inf=U, cal=cal)
+    r = march_bl(s, Ue, nu, Tu_pct=Tu_pct, cal=cal)
     # Re_x is formed on the LOCAL edge velocity, which is the convention of the
     # ERCOFTAC tabulations these cases are compared against: on T3C4 the edge
     # velocity rises from 1.51 to 2.02 m/s, so forming Re_x on the reference
@@ -1108,7 +1109,7 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     for name, ss, idx in [("upper", s_up, idx_up), ("lower", s_low, idx_low)]:
         Ue_s = np.maximum(Ue_mag[idx], 1e-4)
         r = march_bl(ss, Ue_s, nu, Tu_pct=Tu_pct, sweep_deg=sweep_deg,
-                     Ue_inf=U, cal=cal, label=name, a_sound=a_snd)
+                     cal=cal, a_sound=a_snd)
         r["x"]  = xc[idx]; r["y"] = yc[idx]; r["Cp"] = Cp[idx]
         r["Re_x"] = U*ss/nu
         r["x_tr_chord"] = (float(xc[idx][r["i_tr"]])

@@ -13,6 +13,12 @@ CF_ratio,0.47,theta2/theta surrogate for crossflow,FITTED on Dagenhart & Saric; 
 sigma_sep,from table,shear-layer amplification rate in a bubble,"computed on the reverse-flow Falkner-Skan branch; 0.0435, not fitted"
 two_eq,True,two-equation laminar march (momentum + kinetic energy),closures from the Falkner-Skan family; no fitted constant
 N_anchor,0.5,offset on Mack's N_crit,unit conversion to the present amplification rates; set jointly on S&S and the 86 NLF(1)-0416 conditions
+C_mu,0.09,k-epsilon constant in the free-stream turbulence decay,"standard value 0.09; with C_eps2 it fixes Tu(x) from the rig's integral length scale, and neither is fitted here"
+C_eps2,1.92,k-epsilon constant in the free-stream turbulence decay,standard value 1.92; sets the decay exponent of isotropic grid turbulence
+bubble,True,separation branch closed by marching the detached shear layer,True is the model; False is the 'no bubble closure' ablation
+use_os_db,True,amplification rates read from the tabulated Orr-Sommerfeld solutions,"True is the model; False selects the Drela-Giles envelope fit, the third ablation"
+cf_exact,False,exact Falkner-Skan-Cooke K(lambda) in place of the constant surrogate (ablation path only),"False is the model; True was tried and is reported in Sec. IV.C, where it makes the two swept wings agree less, not more"
+H_sep,0.0,declare laminar separation on the solved shape factor instead of on lambda (ablation path only),0 = use lam_sep; the shape-factor test is the more principled statement but the aerofoil measurements reject it - see the note in march_bl
 tu_hist,0.6,"weight on the flow-history average of Tu, Tu_eff = Tu_avg^w Tu_local^(1-w)",FITTED on the three ERCOFTAC plates; no effect where Tu does not decay
 lam_sep,-0.09,Thwaites parameter at laminar separation,Thwaites (1949) published value; not fitted
 sep_floor,120.0,min separation-induced onset Re_theta (ablation path only),superseded by the bubble closure; reachable only with bubble=False

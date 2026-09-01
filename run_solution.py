@@ -7,7 +7,7 @@ import os, sys
 import numpy as np, pandas as pd
 sys.path.insert(0,"solver")
 import case_config as C
-from utss_solver import solve_airfoil, velocity_field, march_bl, CAL
+from utss_solver import solve_airfoil, velocity_field, CAL
 
 SOL="04_solution"; os.makedirs(SOL,exist_ok=True)
 W=C.WING; cr=C.CRUISE; cl=C.CLIMB
@@ -155,11 +155,27 @@ def nlf_vs_turbulent(rc):
                      mach=cr["mach"])
     Cd_nlf=rc["Cd"]; Cd_turb=rt["Cd"]
     u=rc["surfaces"]["upper"]; l=rc["surfaces"]["lower"]
-    lam=0.5*((u["x_tr"]+l["x_tr"])/W["MAC"])
-    rows=[("NLF (UTSS predicted transition)",round(Cd_nlf*1e4,1),round(lam*100,1)),
-          ("Fully turbulent (LE trip)",round(Cd_turb*1e4,1),0.0),
-          ("Viscous drag reduction",round((Cd_turb-Cd_nlf)/Cd_turb*100,1),None)]
-    df=pd.DataFrame(rows,columns=["configuration","Cd_counts","mean_laminar_pct"])
+    # Laminar extent is a CHORDWISE fraction, the same quantity the transition
+    # summary, the polar and the span-wise sweep report.  An earlier version
+    # formed it from x_tr, which is the arc length from the stagnation point,
+    # and divided that by the chord: on the cruise section that reads 58.3 %
+    # against the 56.6 % the chordwise stations give, and Table 1 of the report
+    # then quoted the two next to each other.  A surface that stays laminar to
+    # the trailing edge counts as 1.0, as it does everywhere else.
+    def _xtr(sf):
+        x=sf["x_tr_chord"]
+        return 1.0 if x!=x else float(x)
+    lam=0.5*(_xtr(u)+_xtr(l))
+    saving=(Cd_turb-Cd_nlf)/Cd_turb*100.0
+    # The drag saving is a percentage and gets its own column.  It used to be
+    # written into the third row of Cd_counts, so every consumer read a
+    # percentage out of a column headed "counts".
+    rows=[("NLF (UTSS predicted transition)",round(Cd_nlf*1e4,1),
+           round(lam*100,1),round(saving,1)),
+          ("Fully turbulent (LE trip)",round(Cd_turb*1e4,1),0.0,0.0)]
+    df=pd.DataFrame(rows,columns=["configuration","Cd_counts",
+                                  "mean_laminar_pct",
+                                  "viscous_drag_reduction_pct"])
     df.to_csv(f"{SOL}/nlf_vs_turbulent.csv",index=False)
     return df,Cd_nlf,Cd_turb
 

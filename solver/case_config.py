@@ -41,7 +41,9 @@ CRUISE = dict(
     mu_inf      = 1.422e-5,   # Pa.s (Sutherland)
     a_sound     = 295.07,     # m/s
     Tu_pct      = 0.07,       # free-atmosphere turbulence intensity
-    alpha_deg   = 1.5,        # design incidence (~ design Cl 0.4)
+    alpha_deg   = 1.5,        # design incidence; the section c_l it produces
+                              # is computed, not asserted - see
+                              # 01_geometry/geometry_definition.csv
     gamma_air   = 1.4,
     R_air       = 287.05,
     Pr          = 0.72,
@@ -63,18 +65,26 @@ CLIMB["Re_MAC"]=CLIMB["U_inf"]*WING["MAC"]/CLIMB["nu_inf"]
 
 # ----------------------------------------------------------------------
 # UTSS-NLF16 : designed natural-laminar-flow section
-#   16% thick, max thickness pushed aft to ~0.42c (favourable gradient),
-#   mild aft camber for design Cl ~ 0.4.
+#   16% thick, max thickness at 0.422c (favourable gradient over the
+#   forward half), mild aft camber.
 # ----------------------------------------------------------------------
-def nlf16_coords(n=130, t=0.16, xt=0.42, camber=0.030):
+def nlf16_coords(n=130, t=0.16, camber=0.030):
+    """UTSS-NLF16 section coordinates.
+
+    The thickness form is sqrt(x)(1-x) - a rounded leading edge and a closed
+    trailing edge - multiplied by the quadratic bias `shift`, whose two
+    coefficients place the maximum thickness at 0.422c.  That location is a
+    property of the shape function and is not a free parameter of this call:
+    an earlier signature carried an `xt` argument that read as though it set
+    the location while nothing in the body used it.
+    """
     beta = np.linspace(0.0, np.pi, n+1)
     x = 0.5*(1.0 - np.cos(beta))               # cosine clustering
-    # thickness: rounded LE (sqrt), peak shifted aft, closed TE
+    # thickness: rounded LE (sqrt), peak shifted aft to 0.422c, closed TE
     base = np.sqrt(x)*(1.0 - x)
     shift = 1.0 + 1.6*x - 0.9*x**2             # bias the peak rearward
     yt = base*shift
     yt = yt/np.max(yt)*(t/2.0)                  # scale to half-thickness
-    yt = yt*(1.0 - 0.0*x)                        # (closed TE already ~0)
     # aft-loaded camber line (cubic, loaded behind mid-chord)
     yc = camber*(1.6*x*(1-x) + 1.1*x**2*(1-x))
     dyc = np.gradient(yc, x)
@@ -163,7 +173,7 @@ SWEPT = dict(
 # range TN D-338 actually tested - and those have been discarded.
 #
 # The four points retained are the ones with an unambiguous physical
-# definition: at each sweep angle beyond 20 deg the measured transition
+# definition: at each sweep angle from 20 deg upwards the measured transition
 # location breaks away from the common low-Reynolds-number curve and jumps
 # forward to a chordwise station that barely moves with sweep, which is
 # cross-flow transition setting in.  Reading them independently gives x/c =
@@ -220,7 +230,7 @@ SWEPT2 = dict(
 # cent is adopted here, with the 0.02-0.05 per cent spread carried through as a
 # sensitivity band rather than treated as a tuned constant.
 NLF0416 = dict(
-    name      = "McGhee et al. NLF(1)-0416 aerofoil, Langley LTPT",
+    name      = "Somers NLF(1)-0416 aerofoil, Langley LTPT",
     section   = "01_geometry/nlf1_0416.dat",
     chord_m   = 0.60902,          # 23.977 in., the tested model chord
     mach      = 0.10,

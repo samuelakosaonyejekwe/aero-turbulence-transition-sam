@@ -427,11 +427,16 @@ def load_database(path=DB_PATH):
 def sigma_lookup(H, Re_theta, omega):
     """Trilinear interpolation of sigma = -alpha_i*theta.
 
-    H and Re_theta are clamped to the tabulated range: below H = 2.2 the layer
-    is strongly accelerated and effectively stable, above H = 3.9 it is close
-    to separating and the separation branch governs.  omega outside the
+    H and Re_theta are clamped to the tabulated range, which runs from H = 2.15
+    - strongly accelerated and effectively stable - past the separation profile
+    and onto the reverse-flow branch at H = 4.96, so that a detached shear layer
+    reads its rate from the same table as an attached one.  omega outside the
     tabulated band returns zero, which is correct - those frequencies are not
     amplified.
+
+    sigma_curve() returns the whole frequency curve at one (H, Re_theta) in a
+    single table access and is what the boundary-layer march uses; this
+    single-frequency form is kept for interrogating the table directly.
     """
     Hs, Rs, Os, S3 = load_database()
     H = float(np.clip(H, Hs[0], Hs[-1]))
@@ -660,8 +665,13 @@ def crossflow_reynolds(beta, sweep_deg, Re_theta):
     thickness that the boundary-layer march already carries, where delta_10 is
     the distance from the wall to the point at which the cross-flow velocity
     has fallen back to a tenth of its peak.  That is Arnal's cross-flow
-    Reynolds number, and it is computed here from the similarity solution
-    rather than estimated from an algebraic surrogate.
+    Reynolds number, computed from the similarity solution rather than
+    estimated from an algebraic surrogate.
+
+    This is the per-case form, one boundary-value solve per beta.  The march
+    reaches the same quantity through the tabulated crossflow_factor(lambda)
+    below, since the sweep factors out exactly; this form is kept for checking
+    that table against a direct solve.
     """
     eta, fp, g, w = fsc_profile(beta, sweep_deg)
     if w.max() <= 1e-12:
@@ -678,13 +688,12 @@ def crossflow_reynolds(beta, sweep_deg, Re_theta):
 # ----------------------------------------------------------------------
 # True spatial eigenvalue problem
 # ----------------------------------------------------------------------
-# Gaster's transformation converts a temporal growth rate into a spatial one to
-# first order in the growth rate.  It is convenient, because the temporal
-# problem is linear in the phase speed and can be solved as a generalised
-# eigenvalue problem, but it is an approximation, and it under-predicts the
-# spatial rate by several per cent where the growth is not small.  Integrated
-# over a whole plate that becomes an eight per cent error in the transition
-# Reynolds number, which is large compared with everything else in the model.
+# The tabulated database above is built with Gaster's transformation, which
+# converts a temporal growth rate into a spatial one to first order in the
+# growth rate.  That is what makes the table affordable: the temporal problem
+# is linear in the phase speed and solves as a generalised eigenvalue problem,
+# whereas the spatial problem is nonlinear in alpha and needs a Newton solve
+# per frequency.
 #
 # The spatial problem is recovered exactly by allowing alpha to be complex and
 # requiring the resulting frequency to be real and equal to the target.  The
@@ -692,6 +701,20 @@ def crossflow_reynolds(beta, sweep_deg, Re_theta):
 # complex plane converges quadratically from the Gaster estimate; the
 # derivative needed is the group velocity, which the temporal sweep already
 # provides.  Two or three iterations suffice.
+#
+# spatial_alpha is not used to build the table; it is used to measure what
+# using Gaster costs, which gaster_residual() below does and the module
+# self-test reports.  Measured over the tabulated family at the peak-amplified
+# frequency, Gaster under-predicts the spatial rate by 0.2 per cent on the
+# Blasius profile at Re_theta = 300, rising to about 4 per cent in the adverse
+# gradients near separation - not the "several per cent everywhere" an earlier
+# version of this comment asserted, and not an eight per cent error in the
+# transition Reynolds number.  It also does not propagate as one: the
+# amplification factor is compared against N_crit through the fixed offset
+# `anchor` of utss_solver._n_crit, which is set on measurement against these
+# same rates, so a systematic scale error in sigma is absorbed there.  What is
+# NOT absorbed is the variation of the deficit across the family, which is the
+# 0.2-to-4 per cent spread above.
 def spatial_alpha(y, D1, U, Upp, Re, omega, alpha0, cg, itmax=6, tol=1e-10):
     """Complex alpha whose Orr-Sommerfeld frequency equals the real omega.
 
@@ -723,6 +746,80 @@ def spatial_alpha(y, D1, U, Upp, Re, omega, alpha0, cg, itmax=6, tol=1e-10):
             return a, False
     c = os_temporal(y, D1, U, Upp, a, Re)
     return a, (c is not None and abs(a*c - omega) < 1e-6)
+
+
+def neutral_Re_theta(H=2.59129, lo=120.0, hi=400.0, tol=0.25, N=110,
+                     alphas=None):
+    """Momentum-thickness Reynolds number at which the profile first amplifies.
+
+    Bisected on max_omega sigma(Re_theta) from a direct temporal sweep, so it
+    measures the eigenvalue solver rather than the resolution of the tabulated
+    Reynolds-number grid.  On the Blasius profile it returns 201 against the
+    accepted 200.5.  What the boundary-layer march sees is the interpolated
+    table, which first turns positive at Re_theta = 210 because the node below
+    the crossing holds an exact zero; that offset is the resolution of
+    RET_GRID, not an error in the eigenvalue solver.
+    """
+    if alphas is None:
+        alphas = np.geomspace(0.03, 0.35, 26)
+    pr = fs_profile_for_H(H)
+
+    def peak(Re):
+        wr, sg = growth_curve(H, Re, alphas, N=N, profile=pr)
+        return float(sg.max()) if sg.size else -1.0
+
+    if peak(lo) > 0.0 or peak(hi) < 0.0:
+        return float("nan")
+    while hi - lo > tol:
+        mid = 0.5*(lo + hi)
+        if peak(mid) > 0.0:
+            hi = mid
+        else:
+            lo = mid
+    return 0.5*(lo + hi)
+
+
+def gaster_residual(cases=((2.5913, 300.0), (2.5913, 800.0),
+                            (3.0, 300.0), (3.5, 300.0), (3.5, 800.0)),
+                    N=110, y_max=60.0, y_half=6.0):
+    """What Gaster's transformation costs, measured rather than asserted.
+
+    At each (H, Re_theta) the temporal sweep is run, the peak-amplified
+    frequency identified, and the exact spatial eigenvalue found by Newton
+    continuation from the Gaster estimate.  Returns a list of
+    (H, Re_theta, sigma_gaster, sigma_exact, percentage deficit); rows whose
+    Newton solve leaves the mode it started on are dropped rather than
+    reported, since they measure the continuation and not the transformation.
+    """
+    out = []
+    alphas = np.geomspace(8.0e-3, 0.35, 24)
+    for H, Re in cases:
+        pr = fs_profile_for_H(H)
+        eta, u, up, Hh, th = pr
+        y, D1 = _grid(N, y_max, y_half)
+        eta_y = np.clip(y*th, 0.0, eta[-1])
+        U = np.interp(eta_y, eta, u)
+        dU = np.interp(eta_y, eta, up)*th
+        Upp = D1 @ dU
+        U[y > eta[-1]/th] = 1.0
+        wr, sig = growth_curve(H, Re, alphas, N=N, y_max=y_max,
+                               y_half=y_half, profile=pr)
+        if not sig.size or sig.max() <= 0.0:
+            continue
+        k = int(np.argmax(sig))
+        om = float(wr[k]); sg = float(sig[k])
+        a0 = float(np.interp(om, wr, alphas[:wr.size]))
+        j = int(np.clip(k, 1, wr.size - 2))
+        cg = (wr[j+1] - wr[j-1])/(alphas[j+1] - alphas[j-1])
+        a, ok = spatial_alpha(y, D1, U, Upp, Re, om, a0, cg)
+        se = -float(a.imag)
+        # a Newton step that has landed on a different mode shows up as a
+        # sign change or an order-of-magnitude jump; that is not a measure
+        # of Gaster's error
+        if not ok or se <= 0.0 or not (0.5 < sg/se < 2.0):
+            continue
+        out.append((H, Re, sg, se, 100.0*(sg - se)/se))
+    return out
 
 
 def closure_F(lam):
@@ -866,3 +963,40 @@ def H_from_Hstar(Hstar):
     o = np.argsort(Hs)
     return float(np.interp(float(np.clip(Hstar, Hs[o][0], Hs[o][-1])),
                            Hs[o], Hg[o]))
+
+
+if __name__ == "__main__":
+    # ---- self-tests -------------------------------------------------------
+    # 1. the family reproduces the Blasius profile
+    _e, _u, _up, _H, _th = falkner_skan(0.0)
+    print("Blasius from the Falkner-Skan family: H = %.5f (2.59129), "
+          "f''(0) = %.5f (0.46960)  %s"
+          % (_H, _up[0],
+             "OK" if abs(_H - 2.59129) < 2e-4 and abs(_up[0] - 0.4696) < 2e-4
+             else "FAIL"))
+
+    # 2. the exact closure agrees with Thwaites where his fit is good, and
+    #    separates at the exact family value rather than at his fitted -0.090
+    print("exact Thwaites closure: l(0) = %.4f (Thwaites 0.220), "
+          "lambda_sep = %.4f" % (closure_HL(0.0)[1], lambda_sep()))
+    print("shape-factor range of the attached family: %.3f .. %.3f"
+          % fs_H_range())
+
+    # 3. the Blasius neutral point, from the solver and from the table
+    _n = neutral_Re_theta()
+    # what the march actually sees: the bilinearly interpolated table
+    _tab = next((float(R) for R in np.arange(RET_GRID[0], 400.0, 1.0)
+                 if sigma_curve(2.59129, float(R)).max() > 0.0), float("nan"))
+    print("Blasius neutral point: solver Re_theta = %.0f (accepted 200.5), "
+          "tabulated grid Re_theta = %.0f  %s"
+          % (_n, _tab, "OK" if abs(_n - 200.5) < 5.0 else "FAIL"))
+
+    # 4. what building the table with Gaster's transformation costs
+    _g = gaster_residual()
+    if _g:
+        print("Gaster vs exact spatial rate at the peak-amplified frequency:")
+        for _H, _Re, _sg, _se, _d in _g:
+            print("   H = %.3f  Re_theta = %6.0f   gaster %.5f   exact %.5f"
+                  "   %+.1f %%" % (_H, _Re, _sg, _se, _d))
+        print("   worst deficit over the sample: %.1f %%"
+              % max(abs(d) for *_, d in _g))

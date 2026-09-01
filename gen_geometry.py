@@ -13,9 +13,9 @@ import numpy as np
 import pandas as pd
 sys.path.insert(0, "solver")
 import case_config as C
+from utss_solver import panel_solve
 from uplot import apply_style, INK, INK_SOFT, PALETTE, finish
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrowPatch, Rectangle
 
 apply_style()
 # Engineering drawings: clean WHITE sheet, NO data grid (drafting standard)
@@ -28,6 +28,24 @@ DIM   = "#b5651d"   # dimension lines (sienna) - clearly not black
 OUT   = "#1b4965"   # object outline (deep teal-blue)
 CTR   = "#7b4ea3"   # centre lines (violet)
 HID   = "#9aa7b4"   # hidden lines (grey-blue)
+
+
+def section_cl():
+    """Inviscid section lift coefficient at the cruise design incidence.
+
+    The section c_l was typed into the geometry table and onto the drawing as
+    a design target, and the two disagreed with each other and with the
+    solution the rest of the report tabulates.  It is computed here from the
+    same panel method, at the same incidence and Mach number as the cruise
+    case, so the drawing, the geometry table and 04_solution cannot disagree.
+    """
+    X, Y = C.nlf16_panel_points(130)
+    a = C.CRUISE["alpha_deg"]
+    xc, yc, Cp, V, th, S = panel_solve(X, Y, a, mach=C.CRUISE["mach"])
+    nx = -np.sin(th); ny = np.cos(th)
+    Cn = -np.sum(Cp*ny*S); Ca = -np.sum(Cp*nx*S)
+    al = np.radians(a)
+    return float(Cn*np.cos(al) - Ca*np.sin(al))
 
 # ----------------------------------------------------------------------
 # Drafting primitives  (ISO/ASME dimensioning style)
@@ -160,7 +178,9 @@ def build_geometry():
         ("Section", W["section"], "-"),
         ("Section max thickness", f"{tmax*100:.1f}", "% chord"),
         ("Max-thickness location", f"{xtmax*100:.1f}", "% chord"),
-        ("Section design Cl", "0.45", "-"),
+        (f"Section c_l at cruise design incidence "
+         f"(alpha = {C.CRUISE['alpha_deg']:.1f} deg, M = {C.CRUISE['mach']:.2f})",
+         f"{section_cl():.3f}", "-"),
     ]
     pd.DataFrame(defs, columns=["parameter","value","unit"]).to_csv(
         f"{GEO}/geometry_definition.csv", index=False)
@@ -199,7 +219,7 @@ def draw_airfoil_section(co):
                 xytext=(xt+0.085,-0.135), color=DIM, fontsize=10, ha="left",
                 va="center", arrowprops=dict(arrowstyle="->", color=DIM, lw=0.9))
     # --- leading & trailing edge callouts (clear of geometry) ---
-    ax.annotate("rounded NLF leading edge\nr_LE ≈ 0.015 c  ·  favourable\ngradient to ~0.45 c",
+    ax.annotate("rounded NLF leading edge\nr_LE ≈ 0.015 c  ·  favourable\ngradient to ~0.40 c",
                 xy=(0.012,0.004), xytext=(0.15,0.125), color=INK_SOFT, fontsize=10,
                 ha="left", arrowprops=dict(arrowstyle="->", color=INK_SOFT))
     ax.annotate("cusped, aft-loaded\ntrailing edge", xy=(0.985, co["yc"][-3]),
@@ -207,7 +227,8 @@ def draw_airfoil_section(co):
                 arrowprops=dict(arrowstyle="->", color=INK_SOFT))
     # --- specification box (clear lower-left corner) ---
     spec=("UTSS-NLF16  natural-laminar-flow section\n"
-          "t/c = 0.160 @ 0.42 c   ·   design C_l = 0.45\n"
+          f"t/c = {tmax:.3f} @ {xt:.2f} c   ·   c_l = {section_cl():.2f} "
+          f"at α = {C.CRUISE['alpha_deg']:.1f}°, M = {C.CRUISE['mach']:.2f}\n"
           "aft-loaded camber   ·   sharp T.E.")
     ax.text(0.015, -0.205, spec, fontsize=10, color=INK,
             va="bottom", ha="left",

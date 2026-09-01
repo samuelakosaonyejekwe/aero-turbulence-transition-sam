@@ -1,12 +1,27 @@
 """
 gen_validation.py
-Validate the UTSS universal transition solver against three credible,
-independent, published flat-plate transition datasets, with ONE universal
-calibration set (no per-case physics re-tuning).  Records all sources.
+Validate the UTSS universal transition solver against every credible,
+independent, published dataset the four branches of the kernel reach, with ONE
+universal calibration set (no per-case physics re-tuning).  Records all
+sources.
 
-  ERCOFTAC T3A  - bypass transition, Tu=3.3%   (Roach & Brierley 1990)
-  ERCOFTAC T3B  - bypass transition, Tu=6.0%   (Roach & Brierley 1990)
-  Schubauer&Skramstad - natural transition, Tu=0.03% (NACA Rep.909, 1948)
+  Flat plates (transition-onset Re_theta_t)
+    ERCOFTAC T3A   - bypass,     Tu = 3.04 %  (Roach & Brierley 1990)
+    ERCOFTAC T3A-  - bypass,     Tu = 0.87 %  (Roach & Brierley 1990)
+    ERCOFTAC T3B   - bypass,     Tu = 5.95 %  (Roach & Brierley 1990)
+    ERCOFTAC T3C4  - separation bubble, Tu = 2.11 %  (Coupland 1990)
+    Schubauer & Skramstad - natural, Tu = 0.03 %  (NACA Rep. 909, 1948)
+
+  Aerofoil (transition location x_tr/c)
+    NLF(1)-0416, 86 conditions from NASA TP-1861 Fig. 9 - nothing calibrated
+    on this set
+
+  Swept wings (cross-flow branch)
+    Dagenhart & Saric 45 deg NLF(2)-0415 - the calibration set
+    Boltz, Kenyon & Allen NACA 64(2)A015 - independent, nothing calibrated
+
+  Ablations: bubble closure, two-equation laminar march and tabulated
+  amplification rates switched off one at a time.
 """
 import os, sys
 import numpy as np, pandas as pd

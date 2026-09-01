@@ -12,9 +12,8 @@ import os, sys
 import numpy as np, pandas as pd
 sys.path.insert(0, "solver")
 import case_config as C
-from utss_solver import solve_airfoil, CAL
-from uplot import apply_style, INK, INK_SOFT, PALETTE, FIELD_CMAP, new_fig, finish
-import matplotlib.pyplot as plt
+from utss_solver import solve_airfoil, CAL, _n_crit
+from uplot import apply_style, INK, PALETTE, new_fig, finish
 
 apply_style()
 MESH="02_mesh"; MP=os.path.join(MESH,"plots"); SET="03_model_setup"
@@ -224,13 +223,24 @@ def setup_tables():
     pd.DataFrame(ss,columns=["setting","value"]).to_csv(
         f"{SET}/solver_settings.csv",index=False)
 
-    # calibration constants
+    # ---- universal calibration constant set (Table 7 of the report) ----
+    # The report calls this "the single constant set", so it has to be the
+    # whole of it.  The table listed some of the closure switches and not
+    # others, and omitted the two k-epsilon constants that fix the free-stream
+    # turbulence decay - which is what the ERCOFTAC plate results depend on.
+    # Every key of CAL is now accounted for, and the assertion below fails the
+    # build if one is added to the solver without being declared here.
+    import inspect
+    N_anchor = inspect.signature(_n_crit).parameters["anchor"].default
     calrows=[
         ("A_TS",CAL["A_TS"],"TS/natural onset weight","unity; validated on Schubauer-Skramstad and NLF(1)-0416 upper surface"),
         ("A_BP",CAL["A_BP"],"bypass onset weight","unity; validated on ERCOFTAC T3A/T3A-/T3B"),
         ("A_SEP",CAL["A_SEP"],"separation-induced weight","unity; validated on T3C4 and NLF(1)-0416 lower surface"),
         ("A_CF",CAL["A_CF"],"crossflow weight","unity; Arnal C1 criterion"),
-        ("N_crit","from Tu","e^N amplification factor","Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored -0.50 (FITTED jointly on S&S and 86 aerofoil pts); 8.18 for Tu<0.08%"),
+        ("N_crit","from Tu","e^N amplification factor",
+         "Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored "
+         "-%.2f (FITTED jointly on S&S and 86 aerofoil pts); %.2f for Tu<0.08%%"
+         % (N_anchor, _n_crit(0.05))),
         ("N_floor",CAL["N_floor"],"lower clamp on N_crit at high Tu","clamp; bypass governs there"),
         ("Tu_TS_max",CAL["Tu_TS_max"],"upper Tu for the attached-flow TS branch","complement of the bypass gate"),
         ("C_len",CAL["C_len"],"Narasimha transition-length scale","Dhawan-Narasimha (1958)"),
@@ -241,7 +251,19 @@ def setup_tables():
         ("CF_ratio",CAL["CF_ratio"],"theta2/theta surrogate for crossflow","FITTED on Dagenhart & Saric; independent check in Sec. IV.C"),
         ("sigma_sep","from table","shear-layer amplification rate in a bubble","computed on the reverse-flow Falkner-Skan branch; 0.0435, not fitted"),
         ("two_eq",CAL["two_eq"],"two-equation laminar march (momentum + kinetic energy)","closures from the Falkner-Skan family; no fitted constant"),
-        ("N_anchor",0.50,"offset on Mack's N_crit","unit conversion to the present amplification rates; set jointly on S&S and the 86 NLF(1)-0416 conditions"),
+        ("N_anchor",N_anchor,"offset on Mack's N_crit","unit conversion to the present amplification rates; set jointly on S&S and the 86 NLF(1)-0416 conditions"),
+        ("C_mu",CAL["C_mu"],"k-epsilon constant in the free-stream turbulence decay",
+         "standard value 0.09; with C_eps2 it fixes Tu(x) from the rig's integral length scale, and neither is fitted here"),
+        ("C_eps2",CAL["C_eps2"],"k-epsilon constant in the free-stream turbulence decay",
+         "standard value 1.92; sets the decay exponent of isotropic grid turbulence"),
+        ("bubble",CAL["bubble"],"separation branch closed by marching the detached shear layer",
+         "True is the model; False is the 'no bubble closure' ablation"),
+        ("use_os_db",CAL["use_os_db"],"amplification rates read from the tabulated Orr-Sommerfeld solutions",
+         "True is the model; False selects the Drela-Giles envelope fit, the third ablation"),
+        ("cf_exact",CAL["cf_exact"],"exact Falkner-Skan-Cooke K(lambda) in place of the constant surrogate (ablation path only)",
+         "False is the model; True was tried and is reported in Sec. IV.C, where it makes the two swept wings agree less, not more"),
+        ("H_sep",CAL["H_sep"],"declare laminar separation on the solved shape factor instead of on lambda (ablation path only)",
+         "0 = use lam_sep; the shape-factor test is the more principled statement but the aerofoil measurements reject it - see the note in march_bl"),
         ("tu_hist",CAL["tu_hist"],"weight on the flow-history average of Tu, Tu_eff = Tu_avg^w Tu_local^(1-w)",
          "FITTED on the three ERCOFTAC plates; no effect where Tu does not decay"),
         ("lam_sep",CAL["lam_sep"],"Thwaites parameter at laminar separation","Thwaites (1949) published value; not fitted"),
@@ -253,6 +275,10 @@ def setup_tables():
          "roughness-seeded branch needs its own threshold, and it does not - see "
          "06_validation/crossflow_criticals_summary.csv"),
     ]
+    declared={r[0] for r in calrows}
+    missing=set(CAL) - declared
+    assert not missing, ("calibration_constants.csv does not declare %s"
+                         % sorted(missing))
     pd.DataFrame(calrows,columns=["constant","value","role","calibration_source"]).to_csv(
         f"{SET}/calibration_constants.csv",index=False)
 
