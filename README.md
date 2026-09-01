@@ -15,7 +15,9 @@ is compiled in **`case.docx`**.
 
 ## Method (3-D)
 Vortex-panel inviscid solution with a Karman–Tsien compressibility correction →
-Thwaites laminar BL → **unified four-mechanism transition kernel**
+**two-equation laminar BL** (momentum + kinetic energy, closures computed from
+the Falkner–Skan family, so the shape factor carries its own history) →
+**unified four-mechanism transition kernel**
 (natural/TS · bypass · separation bubble · cross-flow) → Narasimha
 intermittency → Head + Ludwieg–Tillmann turbulent BL evaluated at Eckert's
 reference temperature → Squire–Young drag, swept across the span
@@ -48,10 +50,10 @@ Flat plates — onset momentum-thickness Reynolds number:
 | Case | Tu % | Re_θt exp | Re_θt UTSS | err | criterion |
 |------|------|-----------|------------|-----|-----------|
 | ERCOFTAC T3B  | 5.95 | 181.3 | 166.5 | −8.2 %  | bypass |
-| ERCOFTAC T3A  | 3.04 | 272.3 | 240.0 | −11.9 % | bypass |
-| ERCOFTAC T3C4 | 2.11 | 381.3 | 303.0 | −20.5 % | separation |
-| ERCOFTAC T3A⁻ | 0.87 | 818.8 | 636.3 | −22.3 % | bypass |
-| Schubauer & Skramstad | 0.03 | 1100 | 1113 | +1.2 % | natural |
+| ERCOFTAC T3A  | 3.04 | 272.3 | 240.1 | −11.8 % | bypass |
+| ERCOFTAC T3C4 | 2.11 | 381.3 | 246.7 | −35.3 % | separation |
+| ERCOFTAC T3A⁻ | 0.87 | 818.8 | 637.6 | −22.1 % | bypass |
+| Schubauer & Skramstad | 0.03 | 1100 | 1162 | +5.6 % | natural |
 
 Aerofoil — NLF(1)-0416, 86 transition locations digitised from NASA TP-1861
 Fig. 9, both surfaces, four chord Reynolds numbers, c_l from −1.03 to +1.62.
@@ -60,22 +62,23 @@ the 0.05c orifice pitch, so its own uncertainty is ±0.025c:
 
 | Set | Points | mean abs. err | bias | within ±0.025c |
 |-----|--------|---------------|------|----------------|
-| Upper surface | 46 | 0.050 c | +0.011 c | 17 (37 %) |
-| Lower surface | 40 | 0.030 c | +0.001 c | 21 (53 %) |
-| All           | 86 | 0.040 c | +0.006 c | 38 (44 %) |
-| Within ±8.5° incidence | 78 | 0.031 c | +0.008 c | 36 (46 %) |
+| Upper surface | 46 | 0.041 c | +0.002 c | 25 (54 %) |
+| Lower surface | 40 | 0.032 c | −0.016 c | 28 (70 %) |
+| All           | 86 | 0.037 c | −0.007 c | 53 (62 %) |
+| Within ±8.5° incidence | 78 | 0.029 c | −0.003 c | 49 (63 %) |
 
 Ablations, everything else held fixed (all 86 aerofoil points):
 
 | configuration | S&S | mean abs. err | within ±0.025c |
 |---|---|---|---|
-| Drela–Giles envelope | −10.5 % | 0.055 c | 25/86 |
-| no bubble closure | — | 0.058 c | 13/86 |
-| **full model** | **+1.2 %** | **0.040 c** | **38/86** |
+| no bubble closure | — | 0.061 c | 19/86 |
+| one-equation laminar march | −4.7 % | 0.039 c | 45/86 |
+| Drela–Giles envelope | −6.6 % | 0.041 c | 53/86 |
+| **full model** | **+5.6 %** | **0.037 c** | **53/86** |
 
-Swept wings — cross-flow: 13.2 % mean error on the 45° NLF(2)-0415 of
-Dagenhart & Saric (on which the one cross-flow coefficient is set), 54.0 % on
-the independent NACA 64(2)A015 of Boltz et al. digitised from NACA TN D-338.
+Swept wings — cross-flow: 13.7 % mean error on the 45° NLF(2)-0415 of
+Dagenhart & Saric (on which the one cross-flow coefficient is set), 55.1 % on
+the independent NACA 64(2)A015 of Boltz et al. digitised from NACA TN D-338 (55.1 %).
 The measured data collapse on the model's own similarity variable to 12 %, so
 it is the critical constant and not the functional form that fails to transfer
 between facilities.

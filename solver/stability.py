@@ -802,3 +802,67 @@ def crossflow_factor(lam):
     """K(lambda): cross-flow Reynolds number per unit Re_theta sin(L)cos(L)."""
     L, K = crossflow_table()
     return float(np.interp(float(np.clip(lam, L[0], L[-1])), L, K))
+
+
+# ----------------------------------------------------------------------
+# Two-equation laminar closure from the Falkner-Skan family
+# ----------------------------------------------------------------------
+# A one-parameter method slaves the shape factor to the local pressure
+# gradient, H = H(lambda), so the layer carries no memory of how it arrived.
+# That is the deepest approximation in the present formulation: two layers with
+# the same local gradient but different histories are assigned the same profile
+# and therefore the same amplification rate, and the error shows up wherever a
+# favourable run is followed by a mild adverse one, which is the whole forward
+# half of a natural-laminar-flow aerofoil.
+#
+# Carrying a second equation removes it.  The momentum and kinetic-energy
+# integrals are
+#
+#   dtheta/dx = C_f/2 - (2+H) (theta/U_e) dU_e/dx
+#   theta dH*/dx = 2 C_D - H* C_f/2 - H*(1-H)(theta/U_e) dU_e/dx
+#
+# and they close on three functions of the shape factor, all of them properties
+# of the Falkner-Skan family and none of them fitted:
+#
+#   H*(H)          = theta*/theta , the kinetic-energy shape parameter
+#   l(H)           = Re_theta C_f/2
+#   d(H)           = Re_theta C_D
+#
+# with theta* = int u(1-u^2) dy and C_D the dissipation integral.  In
+# similarity variables l = theta_eta f''(0) and d = theta_eta int f''^2 deta.
+_TWOEQ = None
+
+
+def twoeq_closure():
+    """(H, Hstar, l, d) closure table for the two-equation laminar method."""
+    global _TWOEQ
+    if _TWOEQ is None:
+        eta, fam = _fs_family()
+        H, Hs, L, D = [], [], [], []
+        for b, h, th, u, up in fam:
+            ths = np.trapz(u*(1.0 - u*u), eta)          # energy thickness
+            H.append(h); Hs.append(ths/th)
+            L.append(th*up[0])
+            D.append(th*np.trapz(up*up, eta))
+        H = np.array(H); Hs = np.array(Hs)
+        L = np.array(L); D = np.array(D)
+        k = np.argsort(H); H, Hs, L, D = H[k], Hs[k], L[k], D[k]
+        keep = np.concatenate([[True], np.diff(H) > 1e-9])
+        _TWOEQ = (H[keep], Hs[keep], L[keep], D[keep])
+    return _TWOEQ
+
+
+def twoeq_HL(H):
+    """H*, l and d at a given shape factor."""
+    Hg, Hs, L, D = twoeq_closure()
+    x = float(np.clip(H, Hg[0], Hg[-1]))
+    return (float(np.interp(x, Hg, Hs)), float(np.interp(x, Hg, L)),
+            float(np.interp(x, Hg, D)))
+
+
+def H_from_Hstar(Hstar):
+    """Invert H*(H).  H* falls monotonically with H across the family."""
+    Hg, Hs, L, D = twoeq_closure()
+    o = np.argsort(Hs)
+    return float(np.interp(float(np.clip(Hstar, Hs[o][0], Hs[o][-1])),
+                           Hs[o], Hg[o]))

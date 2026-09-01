@@ -1,5 +1,5 @@
 sweep_deg,alpha_deg,Re_c,x_tr_c_exp,x_tr_c_pred,err_pct,mechanism
-20.0,0.0,2.700e+07,0.207,0.093,-55.0,crossflow
-30.0,0.0,1.500e+07,0.213,0.093,-56.2,crossflow
+20.0,0.0,2.700e+07,0.207,0.089,-57.2,crossflow
+30.0,0.0,1.500e+07,0.213,0.089,-58.4,crossflow
 40.0,0.0,1.200e+07,0.2,0.089,-55.7,crossflow
 50.0,0.0,9.500e+06,0.211,0.107,-49.1,crossflow
