@@ -80,6 +80,16 @@ CAL = dict(
     bubble    = True,   # close the separation branch by continuing the
                         # amplification integral through the detached shear
                         # layer instead of transitioning at separation itself
+    H_sep     = 0.0,    # if positive, laminar separation is declared where the
+                        # solved shape factor reaches this value instead of
+                        # where the Thwaites parameter reaches lam_sep.  With
+                        # H carrying its own history the shape factor is the
+                        # physically meaningful indicator; lam is a local
+                        # quantity and its threshold belongs to the
+                        # one-parameter method it was fitted for.
+    cf_exact  = False,  # form the cross-flow Reynolds number from the exact
+                        # Falkner-Skan-Cooke factor K(lambda) instead of the
+                        # constant surrogate k_cf
     tu_hist   = 0.60,   # weight given to the flow-history average of Tu in
                         # the bypass correlation, the remainder going to the
                         # local value: Tu_eff = Tu_avg^w Tu_local^(1-w).
@@ -97,20 +107,20 @@ CAL = dict(
                         # that does not decay the two are identical and the
                         # weight has no effect, so no aerofoil or wing result
                         # depends on it.
-    lam_sep   = -0.100, # Thwaites parameter at which laminar separation is
-                        # declared.  Thwaites' own value, -0.090, belongs to
-                        # his one-parameter method: it was chosen to make that
-                        # method separate in the right place given the momentum
-                        # thickness it produces.  The two-equation march of
-                        # Sec. II.B returns a larger and more accurate momentum
-                        # thickness, so lambda reaches any given value sooner,
-                        # and the pair has to be re-established.  The value is
-                        # set jointly on the T3C4 bubble and the 86 NLF(1)-0416
-                        # conditions: -0.100 takes T3C4 from -35.3 to -15.3 per
-                        # cent for five of the 86 aerofoil points, and -0.090
-                        # leaves T3C4 the worst case in the whole validation.
-                        # It replaces a fitted constant with a fitted constant,
-                        # and is declared as such.
+    lam_sep   = -0.090, # Thwaites parameter at which laminar separation is
+                        # declared.  This is Thwaites' own published value and
+                        # it is not fitted here.  An earlier version of this
+                        # work re-fitted it to -0.100, on the grounds that the
+                        # two-equation march returns a larger momentum
+                        # thickness so lambda reaches any given value sooner.
+                        # That was compensating for something else: the
+                        # tabulated edge velocities of the T3C4 rig are quoted
+                        # to 0.01 m/s, and interpolating exactly through them
+                        # put a spurious local minimum of lambda a quarter of a
+                        # metre upstream of the measured separation.  With the
+                        # smoothing fit of solve_flat_plate that minimum is
+                        # gone and the published value serves, so the constant
+                        # has been returned to the literature.
     two_eq    = True,   # march the laminar layer with the momentum AND
                         # kinetic-energy integrals, so that the shape factor is
                         # a solved variable carrying its own history rather
@@ -668,7 +678,8 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         # never fires where the measurements say it governs, and the number of
         # predictions inside the experimental bracket falls from 28 of 40 to 4.
         # The Thwaites value is retained on that evidence.
-        sep_now = lam[i] <= cal["lam_sep"]
+        _hs = cal.get("H_sep", 0.0)
+        sep_now = (H[i] >= _hs) if _hs > 0.0 else (lam[i] <= cal["lam_sep"])
         if bubble_on and (sep_now or i_sep is not None):
             if i_sep is None:
                 i_sep = i; s_sep = s[i]
@@ -786,9 +797,16 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         #     profile to a single Reynolds number, and not the surrogate for
         #     the cross-flow thickness.  See Sec. VI.
         if sweep_deg > 1.0:
-            Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"])
-            Rcf = (Reth[i]*cal["CF_C1"]/max(Re_th2, 1e-9)/cal["A_CF"]
-                   if Re_th2 > 0 else 1e9)
+            if cal.get("cf_exact", False):
+                L_r = np.radians(sweep_deg)
+                fac = (np.sin(L_r)*np.cos(L_r)
+                       * _stab.crossflow_factor(lam[i]))
+                Rcf = (cal["CF_C1"]/max(fac, 1e-12)/cal["A_CF"]
+                       if fac > 1e-12 else 1e9)
+            else:
+                Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"])
+                Rcf = (Reth[i]*cal["CF_C1"]/max(Re_th2, 1e-9)/cal["A_CF"]
+                       if Re_th2 > 0 else 1e9)
         else:
             Rcf = 1e9
 
@@ -908,9 +926,24 @@ def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
         # order of magnitude finer than the data spacing.  Since lambda is
         # proportional to that gradient, the staircase moves the station at
         # which the layer separates.
-        from scipy.interpolate import PchipInterpolator
+        from scipy.interpolate import UnivariateSpline
         xm, um = np.asarray(Ue_dist[0], float), np.asarray(Ue_dist[1], float)
-        Ue = PchipInterpolator(xm, um, extrapolate=True)(np.clip(s, xm[0], xm[-1]))
+        # A smoothing spline, not an interpolant.  The tabulated edge velocities
+        # are quoted to 0.01 m/s and the differences between adjacent stations
+        # are 0.02 to 0.07, so the gradient formed from them carries about
+        # fifty per cent quantisation noise - and lambda, which is what decides
+        # separation, is proportional to that gradient.  Passing a curve exactly
+        # through quantised data propagates the quantisation into the
+        # derivative: on T3C4 it puts a spurious local minimum of lambda at
+        # x = 1.16 m, a quarter of a metre upstream of the measured separation,
+        # deep enough to trigger the bubble there.  The spline is instead
+        # allowed to depart from each point by the quotation precision, which
+        # is the most that can be claimed for it, and the resulting deceleration
+        # is monotone.
+        w = np.full(um.size, 1.0/max(0.5*0.01, 1e-9))     # 1/sigma, sigma = half a count
+        k = min(3, max(1, um.size - 1))
+        sp = UnivariateSpline(xm, um, w=w, k=k, s=float(um.size), ext=3)
+        Ue = sp(np.clip(s, xm[0], xm[-1]))
     else:
         Ue = U*(1.0 + dUe*s/L)
     if L_turb is not None:

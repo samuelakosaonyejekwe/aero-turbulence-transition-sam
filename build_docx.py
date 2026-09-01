@@ -481,15 +481,15 @@ bullet("A separation-bubble closure that predicts a length rather than a point: 
        "elsewhere, so the length scales with the disturbance environment.")
 bullet("A two-equation laminar march whose closures are computed from the Falkner-Skan family "
        "rather than fitted, giving the shape factor a history. On the 86 aerofoil conditions it "
-       "raises the number of predictions inside the experimental bracket from 40 to 48, improving "
+       "raises the number of predictions inside the experimental bracket from 45 to 53, improving "
        "both surfaces at once.")
 bullet("Regime coverage with one constant set: transition-onset Re_theta_t predicted to -7.3 % "
-       "on T3B, +3.6 % on T3A, -10.4 % on T3C4, -16.5 % on T3A- and +5.6 % on "
+       "on T3B, +3.6 % on T3A, -28.2 % on T3C4, -16.5 % on T3A- and +5.6 % on "
        "Schubauer-Skramstad, spanning 0.03-6 % free-stream turbulence intensity.")
 bullet("An aerofoil validation built for this work: 86 transition locations digitised from Fig. 9 "
        "of NASA TP-1861 for the NLF(1)-0416 section, both surfaces, four chord Reynolds numbers "
        "and lift coefficients from -1.03 to +1.62, with nothing calibrated on them. Mean error "
-       "0.039 chord, and 48 of the 86 predictions fall inside the +/-0.025c bracket within which "
+       "0.037 chord, and 53 of the 86 predictions fall inside the +/-0.025c bracket within which "
        "the experiment itself localises transition.")
 bullet("A robust, panel-method-cost (<1 s) 3-D capability via a span-wise strip formulation with "
        "built-in cross-flow, suitable for design-loop use where RANS/LES are impractical.")
