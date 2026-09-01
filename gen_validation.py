@@ -344,7 +344,7 @@ def _trim(X, Y, coef, cl_target, mach, tol=1e-3):
     return a, cl
 
 
-def run_nlf0416(Tu_pct=None, quiet=False):
+def run_nlf0416(Tu_pct=None, quiet=False, write=True):
     """Aerofoil transition validation against NASA TP-1861, Fig. 9.
 
     86 transition locations on the NLF(1)-0416 section, both surfaces, at four
@@ -369,13 +369,22 @@ def run_nlf0416(Tu_pct=None, quiet=False):
                                   mach=v["mach"])
                 s = r["surfaces"][surf]
                 xp = s["x_tr_chord"]
+                # The solver now states when it has no transition location to
+                # give, instead of returning the last station it reached.  Two
+                # such verdicts are possible and both are recorded rather than
+                # silently averaged in: a bubble that has not reattached by the
+                # trailing edge has burst, and the short-bubble closure
+                # presumes a reattachment that does not exist; and a layer that
+                # separates within two per cent of chord has a leading-edge
+                # bubble, ahead of which there is no attached run for the
+                # closure to start from.  The remaining check, a prediction
+                # pressed against either end of the surface, catches a march
+                # that simply never reached onset.
+                xsep = s.get("x_sep_chord", float("nan"))
+                burst = bool(s.get("bubble_burst", False))
+                le_sep = bool(xsep == xsep and xsep < 0.02)
                 xp = 1.0 if xp != xp else float(xp)
-                # A prediction at either end of the surface is not a transition
-                # location: it means the march either separated at the nose or
-                # never reached onset.  Such points are kept in the table but
-                # flagged, so that they are visible rather than averaged in as
-                # though they were ordinary errors.
-                degenerate = bool(xp < 0.02 or xp > 0.93)
+                degenerate = bool(burst or le_sep or xp < 0.02 or xp > 0.93)
                 rows.append(dict(
                     Re_c=f"{Rec:.1e}", surface=surf, c_l_exp=cl_m,
                     alpha_deg=round(al, 3), c_l_solver=round(cl_got, 4),
@@ -383,10 +392,16 @@ def run_nlf0416(Tu_pct=None, quiet=False):
                     err_c=round(xp-x_m, 3),
                     err_pct=round((xp-x_m)/x_m*100, 1),
                     within_bracket=bool(abs(xp-x_m) <= half),
-                    degenerate=degenerate,
+                    degenerate=degenerate, burst=burst, le_sep=le_sep,
+                    x_sep_c=(round(float(xsep), 3) if xsep == xsep else None),
                     mechanism=s["onset_mech"]))
     df = pd.DataFrame(rows)
-    if Tu_pct is None:
+    # Only a run at the shipped settings may overwrite the committed results.
+    # An earlier ablation sweep, which switches closures off one at a time, was
+    # allowed to write here and left the repository holding the no-bubble
+    # result in place of the model's.  Callers exploring variants must pass
+    # write=False.
+    if Tu_pct is None and write:
         df.to_csv(f"{VAL}/aerofoil_nlf0416.csv", index=False)
         pd.DataFrame([dict(dataset=v["name"], source=v["source"],
                            n_points=len(df), Tu_pct=Tu,
