@@ -94,9 +94,18 @@ Ablations, everything else held fixed (all 86 aerofoil points):
 Reproduced by `python3 gen_validation.py`, which writes `06_validation/ablations.csv`;
 pass `--no-ablations` to skip the sweep.
 
-Swept wings — cross-flow: **14.7 %** on the 45° NLF(2)-0415 of Dagenhart &
-Saric (on which the one cross-flow coefficient is set), **51.7 %** on the
-independent NACA 64(2)A015 of Boltz et al. digitised from NACA TN D-338.  The
+Swept wings — cross-flow, on the 45° NLF(2)-0415 of Dagenhart & Saric (on which
+the one cross-flow coefficient is set) and the independent NACA 64(2)A015 of
+Boltz et al. digitised from NACA TN D-338:
+
+| set | C1 = 150 (frozen constant) | C1 = 200 |
+|---|---|---|
+| Dagenhart & Saric — calibration | **14.7 %** | — |
+| Boltz et al. — independent | 51.7 % | **18.4 %** |
+
+Both columns of the independent set are computed and tabulated by
+`gen_validation.py` into `06_validation/swept_wing_independent.csv`; the spread
+between them is the limitation, not a choice to be made per case.  The
 branch is closed by an **amplification integral** rather than a local threshold
 — a stationary cross-flow vortex must grow before it breaks down — using the
 computed rate 0.0435 and the same N_crit as every other branch, so it adds no
@@ -108,8 +117,8 @@ that difference is in none of the mean-flow quantities the method computes —
 which the exact Falkner–Skan–Cooke similarity solution establishes.  It is a
 **receptivity** difference: stationary cross-flow vortices are seeded by
 leading-edge roughness, and neither report documents the surface finish.  The
-branch is therefore reported with a band: **C1 = 150** fits Dagenhart (14.7 %),
-**C1 = 200** fits Boltz (18.4 %).
+branch is therefore reported with a band, **C1 = 150–200**, and every other
+result in this work uses the frozen C1 = 150.
 
 Sources recorded in `06_validation/sources_and_references.csv`.
 

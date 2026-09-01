@@ -128,7 +128,8 @@ def plot_mesh_csvs():
     ax.set_xlabel("surface panels"); ax.set_ylabel("C_d [counts]",color=PALETTE[0])
     ax2=ax.twinx(); ax2.plot(mi["n_surface_panels"],mi["x_tr_upper_c"],"s--",color=PALETTE[1])
     ax2.set_ylabel("x_tr/c upper",color=PALETTE[1])
-    ax.axvline(260,color=PALETTE[2],ls=":"); ax.set_title("Mesh-independence convergence")
+    ax.axvline(260,color=PALETTE[2],ls=":")
+    ax.set_title("Mesh sensitivity: C_d and transition location vs panel count")
     finish(fig,f"{CSVP}/mesh_independence.png")
 
 # ======================================================================
