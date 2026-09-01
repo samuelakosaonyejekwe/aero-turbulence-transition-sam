@@ -17,3 +17,4 @@ tu_hist,0.6,"weight on the flow-history average of Tu, Tu_eff = Tu_avg^w Tu_loca
 lam_sep,-0.09,Thwaites parameter at laminar separation,Thwaites (1949) published value; not fitted
 sep_floor,120.0,min separation-induced onset Re_theta (ablation path only),superseded by the bubble closure; reachable only with bubble=False
 n_freq,40,frequencies carried by the e^N integration,discretisation parameter; onset moves <0.2% over 24-64
+CF_N,0.0,separate amplification threshold for the crossflow branch (ablation path only),"0 = use the same N_crit as every other branch; exposed to test whether a roughness-seeded branch needs its own threshold, and it does not - see 06_validation/crossflow_criticals_summary.csv"
