@@ -196,6 +196,57 @@ def run_swept():
           % float(np.mean(np.abs(df["err_pct"]))))
     return df
 
+
+def _section_points(fn, n=140):
+    """Load a Selig-format section and re-spline it onto cosine spacing,
+    returned TE -> lower -> LE -> upper -> TE."""
+    pts=[]
+    for line in open(fn):
+        q=line.split()
+        if len(q)==2:
+            try: pts.append((float(q[0]),float(q[1])))
+            except ValueError: pass
+    a=np.array(pts); i=int(np.argmin(a[:,0]))
+    up=a[:i+1][::-1]; lo=a[i:]
+    beta=np.linspace(0,np.pi,n+1); xc=0.5*(1.0-np.cos(beta))
+    yu=np.interp(xc, up[:,0], up[:,1]); yl=np.interp(xc, lo[:,0], lo[:,1])
+    return (np.concatenate([xc[::-1],xc[1:]]),
+            np.concatenate([yl[::-1],yu[1:]]))
+
+
+def run_swept2():
+    """Independent swept-wing check.  Nothing is calibrated on this set."""
+    v=C.SWEPT2
+    X,Y=_section_points(v["section"])
+    rows=[]
+    for sw,al,xm,Rec in zip(v["sweep_deg"],v["alpha_deg"],v["x_tr_c"],v["Re_c"]):
+        U=Rec*v["nu"]/v["chord_m"]
+        r=solve_airfoil(X,Y,al,U,v["nu"],v["chord_m"],v["Tu_pct"],sweep_deg=sw)
+        u=r["surfaces"]["upper"]; xp=u["x_tr_chord"]
+        xp=1.0 if xp!=xp else float(xp)
+        rows.append(dict(sweep_deg=sw, alpha_deg=al, Re_c=f"{Rec:.3e}",
+                         x_tr_c_exp=xm, x_tr_c_pred=round(xp,3),
+                         err_pct=round((xp-xm)/xm*100,1),
+                         mechanism=u["onset_mech"]))
+    df=pd.DataFrame(rows); df.to_csv(f"{VAL}/swept_wing_independent.csv",index=False)
+    pd.DataFrame([dict(dataset=v["name"], source=v["source"])]).to_csv(
+        f"{VAL}/swept_wing_independent_source.csv", index=False)
+    fig,ax=new_fig(8.4,5.4)
+    ax.plot(v["sweep_deg"], v["x_tr_c"], "o", ms=9, color=PALETTE[1],
+            mec=INK_SOFT, label="measured (Boltz et al.)")
+    ax.plot(v["sweep_deg"], df["x_tr_c_pred"], "-s", ms=7, lw=2.2,
+            color=PALETTE[0], label="UTSS (nothing calibrated here)")
+    ax.set_xlabel("leading-edge sweep  Λ  [deg]")
+    ax.set_ylabel("transition location  x/c")
+    ax.set_ylim(0,0.6)
+    ax.set_title("Independent swept-wing check: NACA 64(2)A015, Λ = 0–50°")
+    ax.legend(loc="upper right",fontsize=10)
+    finish(fig,f"{VP}/val_swept_independent.png",
+           caption="Source: "+v["source"][:95]+"...")
+    print("independent swept-wing: mean |err| = %.1f%%"
+          % float(np.mean(np.abs(df["err_pct"]))))
+    return df
+
 def plot_case(key):
     v=C.VALIDATION[key]; ex=EXP[key]
     r=solve_flat_plate(v["L"],v["U"],v["nu"],v["Tu_pct"],npts=900,
@@ -244,5 +295,7 @@ if __name__=="__main__":
     plot_combined(df)
     df_sw=run_swept()
     print(df_sw.to_string(index=False))
+    df_sw2=run_swept2()
+    print(df_sw2.to_string(index=False))
     print(df.to_string(index=False))
     print("validation files:",sorted([f for f in os.listdir(VAL) if f.endswith('.csv')]))

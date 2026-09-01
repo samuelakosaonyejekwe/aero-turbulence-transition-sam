@@ -1,0 +1,6 @@
+sweep_deg,alpha_deg,Re_c,x_tr_c_exp,x_tr_c_pred,err_pct,mechanism
+0.0,4.0,6.270e+06,0.21,0.086,-59.1,TS-natural
+10.0,0.0,1.500e+07,0.45,0.383,-14.8,TS-natural
+30.0,-3.0,7.130e+06,0.21,0.258,22.9,crossflow
+40.0,-1.5,6.300e+06,0.35,0.202,-42.4,crossflow
+50.0,-1.0,7.360e+06,0.24,0.159,-33.9,crossflow

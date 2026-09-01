@@ -293,6 +293,33 @@ def _ludwieg_tillmann(H, Re_th):
     return 0.246 * 10**(-0.678*H) * Re_th**(-0.268)
 
 
+def _smooth_gradient(y, x, half=5):
+    """d y / d x from a local weighted least-squares line.
+
+    A panel method returns the edge velocity at control points that are
+    unevenly spaced and carry panel-to-panel scatter, especially near the
+    leading edge where the panels are shortest.  Differencing that scatter
+    directly makes the Thwaites parameter oscillate from station to station,
+    and because the critical Reynolds number of the amplification envelope
+    is exponentially sensitive to the shape factor, the oscillation drives
+    the e^N integral rather than the flow does.  A local fit over a few
+    stations removes the scatter without smearing the real gradient.
+    """
+    y = np.asarray(y, float); x = np.asarray(x, float)
+    n = len(x); g = np.zeros(n)
+    for i in range(n):
+        a = max(0, i - half); b = min(n, i + half + 1)
+        xx = x[a:b] - x[i]; yy = y[a:b]
+        if len(xx) < 2 or np.ptp(xx) <= 0.0:
+            g[i] = 0.0; continue
+        w = np.exp(-(xx/(np.ptp(xx) + 1e-30))**2)
+        sw = w.sum(); sx = (w*xx).sum(); sxx = (w*xx*xx).sum()
+        sy = (w*yy).sum(); sxy = (w*xx*yy).sum()
+        det = sw*sxx - sx*sx
+        g[i] = (sw*sxy - sx*sy)/det if abs(det) > 1e-30 else 0.0
+    return g
+
+
 def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
              cal=None, label=""):
     """
@@ -318,7 +345,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     if len(Tu_arr) != n:
         raise ValueError("Tu_pct array must match the station count")
     s = np.asarray(s, float); Ue = np.maximum(np.asarray(Ue, float), 1e-6)
-    dUeds = np.gradient(Ue, s)
+    dUeds = _smooth_gradient(Ue, s)
 
     theta = np.zeros(n); H = np.zeros(n); Cf = np.zeros(n)
     Reth = np.zeros(n); lam = np.zeros(n); gamma = np.zeros(n)
@@ -558,8 +585,22 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     al = np.radians(alpha_deg)
     Cl = Cn*np.cos(al) - Ca*np.sin(al)
     # profile drag via Squire-Young on each surface
-    def squire_young(r):
-        H_te = r["H"][-1]; th_te = r["theta"][-1]; Ue_te = r["Ue"][-1]
+    def squire_young(r, x_ref=0.98):
+        """Squire-Young profile drag.
+
+        The formula is evaluated at 98% chord rather than at the last panel
+        control point.  A panel method drives the edge velocity towards the
+        stagnation value at a sharp trailing edge, so the final control point
+        sits inside that collapse; since Squire-Young raises Ue/Uinf to the
+        power (H+5)/2, taking the last point makes the drag hypersensitive to
+        the panel distribution.  At 98% chord the boundary-layer solution is
+        still meaningful and the result is insensitive to the discretisation.
+        """
+        xs = np.asarray(r["x"], float)
+        cand = np.where(xs > 0.5)[0]
+        i = (cand[np.argmin(np.abs(xs[cand] - x_ref))] if len(cand)
+             else len(xs) - 1)
+        H_te = r["H"][i]; th_te = r["theta"][i]; Ue_te = r["Ue"][i]
         return 2.0*th_te/chord*(Ue_te/U)**((H_te+5.0)/2.0)
     Cd = squire_young(res["upper"]) + squire_young(res["lower"])
 

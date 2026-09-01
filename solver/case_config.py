@@ -135,3 +135,28 @@ SWEPT = dict(
                 "Transition Experiments in Swept-Wing Flow', NASA/TP-1999-209344, "
                 "Table 2.",
 )
+
+# ---- Second, independent swept-wing dataset -------------------------------
+# Boltz, Kenyon & Allen (NACA TN D-338, 1960), NACA 64(2)A015 untapered wing,
+# Ames 12-Foot Low-Turbulence Pressure Tunnel, sweep 0-50 deg.  Different
+# facility, section, era and measurement technique from the Dagenhart & Saric
+# experiment on which the cross-flow coefficient was set, so this set is used
+# as an independent check and NOTHING is calibrated on it.  The five fully
+# specified points below are those quoted in the text of Beyak, Choudhari, Li
+# & Shankara (AIAA 2024-xxxx / NASA NTRS 20230016659), which cites TN D-338;
+# the original report presents the full database only in figures.
+SWEPT2 = dict(
+    name      = "Boltz, Kenyon & Allen NACA 64(2)A015 untapered wing",
+    section   = "01_geometry/naca642a015.dat",
+    chord_m   = 1.0,
+    nu        = 1.5e-5,
+    Tu_pct    = 0.05,
+    sweep_deg = [0.0,    10.0,  30.0,  40.0,  50.0],
+    alpha_deg = [4.0,     0.0,  -3.0,  -1.5,  -1.0],
+    x_tr_c    = [0.21,   0.45,  0.21,  0.35,  0.24],
+    Re_c      = [6.27e6, 15.0e6, 7.13e6, 6.30e6, 7.36e6],
+    source    = "Boltz F.W., Kenyon G.C. & Allen C.Q. (1960), 'Effects of Sweep "
+                "Angle on the Boundary-Layer Stability Characteristics of an "
+                "Untapered Wing at Low Speeds', NACA TN D-338; values as quoted "
+                "by Beyak, Choudhari, Li & Shankara (NASA NTRS 20230016659).",
+)
