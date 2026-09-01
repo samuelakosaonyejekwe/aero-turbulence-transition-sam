@@ -20,9 +20,22 @@ apply_style()
 VAL="06_validation"; VP=os.path.join(VAL,"plots"); os.makedirs(VP,exist_ok=True)
 
 # ----------------------------------------------------------------------
-# Reference experimental data (digitised from the cited publications).
-# Cf = local skin-friction coefficient vs Re_x.  These are representative
-# published values used widely for transition-model validation.
+# Reference experimental data.  Cf = local skin-friction coefficient vs
+# Re_x, together with the transition-onset momentum-thickness Reynolds
+# number for each case.
+#
+# PROVENANCE - read before quoting these numbers.  They are representative
+# reference values for the three cases, compiled from the transition-
+# modelling literature in which they are widely reproduced.  They have NOT
+# been re-digitised from the original figures of Roach & Brierley (1990)
+# or Schubauer & Skramstad (1948) by the present author.  They are
+# internally consistent with the quoted onset Reynolds numbers - on a flat
+# plate Re_theta = 0.664 sqrt(Re_x), so Re_theta_t of 200, 160 and 1100
+# correspond to Re_x of 9.1e4, 5.8e4 and 2.8e6 respectively, which is where
+# the tabulated Cf minima sit - and they lie inside the range reported in
+# the literature.  That is consistency, not verification.  Before using
+# these data to support a quantitative claim, replace them with values
+# digitised from the source publications.
 # ----------------------------------------------------------------------
 EXP = {
  "T3A": dict(
