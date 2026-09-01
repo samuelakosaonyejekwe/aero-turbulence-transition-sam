@@ -70,18 +70,18 @@ A single, fixed calibration set (see `03_model_setup/calibration_constants.csv`)
 
 | Case | Surface | x_tr/c | Mechanism | Laminar run |
 |---|---|---|---|---|
-| Cruise | upper | 0.409 | TS / natural | 40.9% |
-| Cruise | lower | 0.456 | TS / natural | 45.6% |
-| Climb | upper | 0.047 | bypass | 4.7% |
-| Climb | lower | 0.159 | bypass | 15.9% |
+| Cruise | upper | 0.432 | TS / natural | 43.2% |
+| Cruise | lower | 0.578 | TS / natural | 57.8% |
+| Climb | upper | 0.018 | TS / natural | 1.8% |
+| Climb | lower | 0.157 | bypass | 15.7% |
 
 **Drag benefit of natural laminar flow (cruise)**
 
 | Configuration | Profile drag | Mean laminar extent |
 |---|---|---|
-| NLF (UTSS-predicted transition) | 30.8 counts | 43.2% |
+| NLF (UTSS-predicted transition) | 26.9 counts | 52.2% |
 | Fully turbulent (LE trip) | 48.9 counts | 0% |
-| **Viscous drag reduction** | **≈ 37%** | — |
+| **Viscous drag reduction** | **≈ 45%** | — |
 
 ---
 
@@ -138,15 +138,17 @@ A selection of generated outputs. The full set of curves, contours, profiles, an
 
 ## Validation
 
-The solver is validated against three canonical published transition experiments, using the **one universal calibration set**:
+The solver is validated against three canonical published transition experiments, using **one calibration set**. The critical amplification factor is not among the constants: it is fixed by the free-stream turbulence intensity through Mack's correlation, which returns N_crit = 9.00 at the cruise level of 0.07%.
 
 | Case | Tu (%) | Re_θt experiment | Re_θt UTSS | Error |
 |---|---|---|---|---|
 | ERCOFTAC T3A flat plate (bypass) | 3.3 | 200 | 200.3 | 0.2% |
 | ERCOFTAC T3B flat plate (high-Tu bypass) | 6.0 | 160 | 166.5 | 4.1% |
-| Schubauer & Skramstad (natural) | 0.03 | 1100 | 1135.9 | 3.3% |
+| Schubauer & Skramstad (natural) | 0.03 | 1100 | 1194.6 | 8.6% |
 
 Full experiment-vs-solver data, plots, and bibliographic sources are in `06_validation/`.
+
+**Scope of the validation.** The natural and bypass criteria are independent models and both are tested above. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
 
 ---
 
