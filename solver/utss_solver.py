@@ -629,6 +629,10 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     bubble_on = bool(cal.get("bubble", True))
     i_sep = None; s_sep = 0.0; th_sep = 0.0; H_sep = 0.0; th_b = 0.0; n_bub = 0.0
     n_cf = 0.0
+    H_b = 0.0; Hst_b = 0.0
+    _Hs_tab = _stab.twoeq_closure()[1]
+    _HS_LO, _HS_HI = float(_Hs_tab.min()), float(_Hs_tab.max())
+    _H_MAXTAB = float(_stab.twoeq_closure()[0].max())
     sig_cf = float(_stab.sigma_curve(_stab.H_REVERSE, 400.0).max())
     omegas = np.array([]); amp = np.array([])
     if use_db:
@@ -700,9 +704,27 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
                 i_sep = i; s_sep = s[i]
                 th_sep = max(theta[i], 1e-12); H_sep = H[i]
                 th_b = th_sep; n_bub = 0.0
+                H_b = H_sep; Hst_b = _stab.twoeq_HL(H_sep)[0]
             elif i > 0:
-                th_b = max(th_b - (2.0 + H_sep)*th_b/max(Ue[i], 1e-9)
-                           * dUeds[i]*(s[i] - s[i-1]), 1e-12)
+                # The dead-air region is marched with the same two equations as
+                # the attached layer, with the wall shear set to zero.  Freezing
+                # the shape factor at its separation value, as a first version
+                # did, holds it at 4.0 when the T3C4 hot films record 5.17 by
+                # the end of the plateau; the momentum thickness is then too
+                # small at reattachment and the onset Reynolds number too low.
+                # Letting the kinetic-energy equation run keeps the profile on
+                # the reverse-flow branch of the tabulated family, which is
+                # where a separated shear layer belongs.
+                dx_b = s[i] - s[i-1]
+                Ret_b = max(Ue[i]*th_b/nu_l[i], 10.0)
+                lam_b = th_b*th_b/nu_l[i]*dUeds[i]
+                Hs_b, _l_b, d_b = _stab.twoeq_HL(H_b)
+                th_b = max(th_b - (2.0 + H_b)*th_b/max(Ue[i], 1e-9)*dUeds[i]*dx_b,
+                           1e-12)
+                Hst_b = float(np.clip(
+                    Hst_b + dx_b*(2.0*d_b - Hs_b*(1.0 - H_b)*lam_b)/(th_b*Ret_b),
+                    _HS_LO, _HS_HI))
+                H_b = float(np.clip(_stab.H_from_Hstar(Hst_b), H_sep, _H_MAXTAB))
                 # The amplification rate of the detached shear layer is read
                 # from the same table as everywhere else.  The tabulated
                 # Falkner-Skan family is continued past separation onto its
@@ -718,7 +740,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
                 # independently imply.
                 sig_b = float(_stab.sigma_curve(_stab.H_REVERSE, Reth[i]).max())
                 n_bub += max(sig_b, 0.0)/th_b*(s[i] - s[i-1])
-            theta[i] = th_b; H[i] = H_sep; Cf[i] = 0.0
+            theta[i] = th_b; H[i] = H_b; Cf[i] = 0.0
             Reth[i] = Ue[i]*th_b/nu_l[i]
             n_fac[i] = n_bub
             bub_trig = n_bub >= _n_crit(Tu_eff[i], cal.get("N_floor", 0.5))
