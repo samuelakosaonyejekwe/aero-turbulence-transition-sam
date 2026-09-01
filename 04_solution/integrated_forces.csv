@@ -3,7 +3,16 @@ Section lift coefficient Cl,0.5171,-
 Section profile drag Cd,0.00438,-
 Section Cd (counts),43.8,counts
 Section L/D,118.0,-
-"Wing lift (3-D estimate, C_L = 0.90 C_l)",43114.0,N
+Section lift-curve slope a0 (panel),8.111,1/rad
+Zero-lift incidence a_L0 (panel),-2.185,deg
+Quarter-chord sweep,9.89,deg
+"Wing C_L (lifting line, taper + washout + sweep)",0.2548,-
+Wing C_L / section c_l,0.493,-
+Span efficiency e (lifting line),0.8718,-
+Wing induced drag C_Di (lifting line),0.00272,-
+Wing lift (lifting line),23603.0,N
+Wing C_L for level flight at MTOW,0.8998,-
+Incidence for that C_L (lifting line),7.55,deg
 Dynamic pressure q,2794.6,Pa
 Reynolds number Re_MAC,6.414e+06,-
 Mach number,0.42,-

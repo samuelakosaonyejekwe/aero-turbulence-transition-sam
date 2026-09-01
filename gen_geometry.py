@@ -204,6 +204,11 @@ def draw_airfoil_section(co):
 
     it = np.argmax(co["yt"]); xt = x[it]; tmax = co["yt"][it]*2
     yu_t, yl_t = yuI(xt), ylI(xt)
+    # Leading-edge radius, measured from the section rather than asserted.  The
+    # thickness form is y ~ A sqrt(x) at the nose, whose radius of curvature at
+    # x = 0 is A^2/2.  The drawing used to call this 0.015 c; it is 0.010 c.
+    _m = (x > 1e-6) & (x < 2.0e-3)
+    r_le = float(np.mean(co["yt"][_m]/np.sqrt(x[_m])))**2/2.0
 
     # --- horizontal chord dimension (clear, below everything) ---
     dim_linear(ax, (0,-0.175),(1,-0.175), -0.045,
@@ -219,7 +224,8 @@ def draw_airfoil_section(co):
                 xytext=(xt+0.085,-0.135), color=DIM, fontsize=10, ha="left",
                 va="center", arrowprops=dict(arrowstyle="->", color=DIM, lw=0.9))
     # --- leading & trailing edge callouts (clear of geometry) ---
-    ax.annotate("rounded NLF leading edge\nr_LE ≈ 0.015 c  ·  favourable\ngradient to ~0.40 c",
+    ax.annotate(f"rounded NLF leading edge\nr_LE = {r_le:.3f} c  ·  favourable"
+                "\ngradient to ~0.40 c",
                 xy=(0.012,0.004), xytext=(0.15,0.125), color=INK_SOFT, fontsize=10,
                 ha="left", arrowprops=dict(arrowstyle="->", color=INK_SOFT))
     ax.annotate("cusped, aft-loaded\ntrailing edge", xy=(0.985, co["yc"][-3]),
@@ -451,6 +457,7 @@ def draw_section_BB(df_pl):
 
     # ---- spars : web + top/bottom caps ----
     spars=[(0.20,"FRONT SPAR"),(0.65,"REAR SPAR")]
+    x_fs, x_rs = spars[0][0], spars[1][0]      # box width follows the spars
     capw=0.045*chord
     for xs,lab in spars:
         xp=xs*chord; yui=yU(xp)-tsk; yli=yL(xp)+tsk
@@ -465,14 +472,14 @@ def draw_section_BB(df_pl):
 
     # ---- dimensions : spar stations from LE + chord ----
     ax.plot([0,0],[ -0.05*chord, 0.30*chord], color=CTR, lw=0.8, ls=(0,(6,3)))
-    dim_linear(ax,(0,0.34*chord),(0.20*chord,0.34*chord),0.03*chord,
-               "0.20 c", side=1, fs=10)
-    dim_linear(ax,(0,0.46*chord),(0.65*chord,0.46*chord),0.03*chord,
-               "0.65 c", side=1, fs=10)
+    dim_linear(ax,(0,0.34*chord),(x_fs*chord,0.34*chord),0.03*chord,
+               f"{x_fs:.2f} c", side=1, fs=10)
+    dim_linear(ax,(0,0.46*chord),(x_rs*chord,0.46*chord),0.03*chord,
+               f"{x_rs:.2f} c", side=1, fs=10)
     dim_linear(ax,(0,-0.24*chord),(chord,-0.24*chord),-0.05*chord,
-               f"CHORD  c (y = 3.0 m) = {chord:.3f} m", side=-1, fs=10)
-    dim_linear(ax,(0.20*chord,-0.16*chord),(0.65*chord,-0.16*chord),-0.04*chord,
-               f"integral wing box = {0.45*chord:.3f} m", side=-1, fs=10)
+               f"CHORD  c (y = {yc:.1f} m) = {chord:.3f} m", side=-1, fs=10)
+    dim_linear(ax,(x_fs*chord,-0.16*chord),(x_rs*chord,-0.16*chord),-0.04*chord,
+               f"integral wing box = {(x_rs-x_fs)*chord:.3f} m", side=-1, fs=10)
 
     # ---- material callouts placed at three DISTINCT, non-overlapping spots ----
     ax.annotate("FRONT SPAR\n(Al-Li web + caps)", xy=(0.20*chord, yU(0.20*chord)-tsk),
@@ -494,7 +501,7 @@ def draw_section_BB(df_pl):
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(-0.16, chord+0.16); ax.set_ylim(-0.42*chord, 0.78*chord)
     ax.set_xlabel("x [m]  (chord-wise)"); ax.set_ylabel("z [m]")
-    title_block(ax,"WING STRUCTURAL SECTION  B-B  (y = 3.0 m)",
+    title_block(ax,f"WING STRUCTURAL SECTION  B-B  (y = {yc:.1f} m)",
                 "GEO-006","1:15","SECTION")
     finish_dwg(fig, f"{DWG}/dwg_06_section_BB.png")
 

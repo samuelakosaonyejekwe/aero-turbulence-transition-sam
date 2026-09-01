@@ -424,39 +424,6 @@ def load_database(path=DB_PATH):
     return _DB
 
 
-def sigma_lookup(H, Re_theta, omega):
-    """Trilinear interpolation of sigma = -alpha_i*theta.
-
-    H and Re_theta are clamped to the tabulated range, which runs from H = 2.15
-    - strongly accelerated and effectively stable - past the separation profile
-    and onto the reverse-flow branch at H = 4.96, so that a detached shear layer
-    reads its rate from the same table as an attached one.  omega outside the
-    tabulated band returns zero, which is correct - those frequencies are not
-    amplified.
-
-    sigma_curve() returns the whole frequency curve at one (H, Re_theta) in a
-    single table access and is what the boundary-layer march uses; this
-    single-frequency form is kept for interrogating the table directly.
-    """
-    Hs, Rs, Os, S3 = load_database()
-    H = float(np.clip(H, Hs[0], Hs[-1]))
-    R = float(np.clip(Re_theta, Rs[0], Rs[-1]))
-    if omega < Os[0] or omega > Os[-1]:
-        return 0.0
-    i = int(np.clip(np.searchsorted(Hs, H) - 1, 0, Hs.size - 2))
-    j = int(np.clip(np.searchsorted(Rs, R) - 1, 0, Rs.size - 2))
-    k = int(np.clip(np.searchsorted(Os, omega) - 1, 0, Os.size - 2))
-    th = (H - Hs[i])/(Hs[i+1] - Hs[i])
-    tr = (R - Rs[j])/(Rs[j+1] - Rs[j])
-    to = (omega - Os[k])/(Os[k+1] - Os[k])
-    c = 0.0
-    for di, wi in ((0, 1-th), (1, th)):
-        for dj, wj in ((0, 1-tr), (1, tr)):
-            for dk, wk in ((0, 1-to), (1, to)):
-                c += wi*wj*wk*S3[i+di, j+dj, k+dk]
-    return float(c)
-
-
 H_REVERSE = 4.90      # developed reverse-flow profile: the aft end of the
                       # tabulated Falkner-Skan branch, where the separated
                       # shear layer's amplification rate is evaluated
@@ -478,6 +445,28 @@ def sigma_curve(H, Re_theta):
     tr = (R - Rs[j])/(Rs[j+1] - Rs[j])
     return ((1-th)*(1-tr)*S3[i, j] + th*(1-tr)*S3[i+1, j] +
             (1-th)*tr*S3[i, j+1] + th*tr*S3[i+1, j+1])
+
+
+def sigma_lookup(H, Re_theta, omega):
+    """Trilinear interpolation of sigma = -alpha_i*theta.
+
+    H and Re_theta are clamped to the tabulated range, which runs from H = 2.15
+    - strongly accelerated and effectively stable - past the separation profile
+    and onto the reverse-flow branch at H = 4.96, so that a detached shear layer
+    reads its rate from the same table as an attached one.  omega outside the
+    tabulated band returns zero, which is correct - those frequencies are not
+    amplified.
+
+    This is the single-frequency form, for interrogating the table directly.
+    It is a linear interpolation along the frequency axis of sigma_curve(),
+    which is what the boundary-layer march reads, rather than a second
+    implementation of the same trilinear interpolation - two copies of it were
+    free to drift apart, and the march would have kept the one that was wrong.
+    """
+    _, _, Os, _ = load_database()
+    if omega < Os[0] or omega > Os[-1]:
+        return 0.0
+    return float(np.interp(omega, Os, sigma_curve(H, Re_theta)))
 
 
 def omega_grid_bounds():
@@ -852,13 +841,20 @@ def closure_F(lam):
 #     Re_cf = Re_theta * sin(L) cos(L) * K(lambda) .
 #
 # The algebraic surrogate this replaces used a constant in place of K.  K is
-# not remotely constant: it falls to 0.44 in a mild adverse gradient and rises
-# to 4.6 in a strong favourable one, a factor of ten, because a favourable
-# gradient thins the streamwise profile without thinning the cross-flow one and
-# so raises the cross-flow Reynolds number for the same Re_theta.  Two swept
-# wings with different pressure distributions therefore cannot share a single
-# constant, which is why the criterion did not transfer between the two
-# experiments used here.
+# not remotely constant, and it is not even monotone: it VANISHES at zero
+# pressure gradient, where the chordwise and span-wise similarity equations
+# give f' = g identically and there is no cross-flow at all, and it rises on
+# both sides of that zero - to 4.60 at beta = 3, the strongest favourable
+# member of the family, and to 1.87 at separation.  Across the family K spans
+# 0.023 to 4.60, a factor of two hundred, not the factor of ten an earlier
+# version of this comment claimed by quoting one adverse point (K = 0.46 at
+# beta = -0.10) as though it were the minimum.  A favourable gradient thins the
+# streamwise profile without thinning the cross-flow one, and an adverse one
+# inflects it; either way the two profiles separate.  Two swept wings with
+# different pressure distributions therefore cannot share a single constant,
+# which is why the criterion did not transfer between the two experiments used
+# here.  crossflow_table() is verified against a direct Falkner-Skan-Cooke
+# solve in the module self-test.
 #
 # The span-wise equation g'' + f g' = 0 integrates in closed form given f, so
 # the whole table follows from the Falkner-Skan family already computed and
@@ -991,7 +987,31 @@ if __name__ == "__main__":
           "tabulated grid Re_theta = %.0f  %s"
           % (_n, _tab, "OK" if abs(_n - 200.5) < 5.0 else "FAIL"))
 
-    # 4. what building the table with Gaster's transformation costs
+    # 4. the tabulated cross-flow factor against a direct similarity solve.
+    #    beta = 0 is excluded from the relative comparison and checked on its
+    #    own: the cross-flow vanishes identically there, so a percentage
+    #    against it divides by zero and says nothing about the table.
+    _sc = np.sin(np.radians(45.0))*np.cos(np.radians(45.0))
+    _rows = []
+    for _b in (-0.19, -0.10, -0.05, 0.30, 1.00, 3.00):
+        _lam = _b*falkner_skan(_b)[4]**2
+        _direct = crossflow_reynolds(_b, 45.0, 1000.0)
+        _table = 1000.0*_sc*crossflow_factor(_lam)
+        _rows.append((_b, _lam, _direct, _table,
+                      100.0*(_table - _direct)/_direct))
+    print("cross-flow Reynolds number, tabulated K(lambda) vs a direct "
+          "Falkner-Skan-Cooke solve (45 deg, Re_theta = 1000):")
+    for _b, _lam, _d, _t, _e in _rows:
+        print("   beta = %+5.2f  lambda = %+7.4f   direct %7.1f   table %7.1f"
+              "   %+.2f %%" % (_b, _lam, _d, _t, _e))
+    _worst = max(abs(r[4]) for r in _rows)
+    _zero = 1000.0*_sc*crossflow_factor(0.0)
+    print("   worst discrepancy %.2f %%; at beta = 0 the direct solve gives "
+          "exactly 0 and the table %.1f, against %.0f at beta = 3  %s"
+          % (_worst, _zero, _rows[-1][3],
+             "OK" if _worst < 2.0 and _zero < 0.02*_rows[-1][3] else "FAIL"))
+
+    # 5. what building the table with Gaster's transformation costs
     _g = gaster_residual()
     if _g:
         print("Gaster vs exact spatial rate at the peak-amplified frequency:")
