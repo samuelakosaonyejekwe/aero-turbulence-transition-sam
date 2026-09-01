@@ -241,4 +241,9 @@ A complete, categorised bibliography is in `06_validation/sources_and_references
 
 ## License & attribution
 
-© 2026 Akosa Samuel Onyejekwe. All contents of this repository — the source code as well as the data, figures and report — are licensed under [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](LICENSE) — you may share and adapt this work for non-commercial purposes with appropriate credit to the author. For commercial use, please contact the author. Please credit the author when citing the method, data, or figures.
+© 2026 Akosa Samuel Onyejekwe. Two licences apply, both non-commercial:
+
+- **Source code** (`solver/`, `run_solution.py`, `gen_*.py`, `build_docx.py`) — [PolyForm Noncommercial 1.0.0](LICENSE-CODE). A software licence: it grants a patent licence and disclaims warranty, which a Creative Commons licence does not.
+- **Data, figures and the report** — [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](LICENSE)
+
+Under both, you may use, share and adapt this work for non-commercial purposes — including academic research, teaching and study — with appropriate credit to the author. For commercial use, please contact the author. Please credit the author when citing the method, data, or figures.
