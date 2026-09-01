@@ -2,14 +2,19 @@ setting,value
 Inviscid method,Constant-strength vortex-panel (Kuethe-Chow)
 Kutta condition,Enforced at sharp trailing edge
 Surface panels,260 (cosine-clustered)
-Compressibility,none - incompressible panel solution
-Laminar BL closure,Thwaites integral method
+Compressibility (pressure),Karman-Tsien correction on C_p
+Compressibility (boundary layer),closures evaluated at Eckert's reference temperature
+Laminar BL closure,"two-equation march (momentum + kinetic energy); H*, l and d from the Falkner-Skan family"
 Transition model,UTSS unified 4-mechanism kernel
-  mechanisms,TS/natural(AGS@Tu=0.03%) | bypass(AGS@Tu) | separation | crossflow(C1)
+  TS / natural,"e^N, one factor per physical frequency, growth rates from the tabulated Orr-Sommerfeld database"
+  bypass,Abu-Ghannam & Shaw at the flow-history-averaged Tu
+  separation,laminar bubble closed by the amplification integral across the dead-air region
+  cross-flow,"C1 on Re_theta2, closed by an amplification integral"
 Intermittency closure,Narasimha universal (gamma)
 Turbulent BL closure,Head entrainment + Ludwieg-Tillmann Cf
-Separation criterion,Thwaites lambda<=-0.09 / H>2.6 turbulent
-Drag integration,Squire-Young far-wake
-Marching scheme,"explicit, arc-length stepping"
+Laminar separation criterion,Thwaites lambda <= -0.09
+Turbulent separation flag,H > 2.6
+Drag integration,"Squire-Young far-wake, evaluated at 0.98c"
+Marching scheme,"explicit trapezoidal, arc-length stepping with sub-stepping on the kinetic-energy equation"
 Convergence tol (panel),1e-10 (direct solve)
 Wall y+ target,~1 (reconstruction grid)

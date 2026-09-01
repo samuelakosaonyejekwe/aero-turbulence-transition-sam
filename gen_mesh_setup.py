@@ -75,20 +75,31 @@ def mesh_independence():
     return df
 
 def mesh_metrics(df_surf,df_bl,u_tau,y1,gr,N):
+    # The streamwise spacing is tabulated in chord units, which is what the
+    # surface node file holds; converting it to a length needs the chord, so
+    # the two are reported separately rather than mixed.  The cell aspect ratio
+    # is formed on the physical spacing at the MAC, not on the dimensionless
+    # one - an earlier version divided a chord fraction by a length and
+    # returned a number with no meaning.
+    ds_max_c = float(df_surf['local_spacing_ds'].max())
+    ds_min_c = float(df_surf['local_spacing_ds'].min())
+    ds_max_m = ds_max_c*W["MAC"]
     metrics=[
         ("Surface streamwise nodes",f"{len(df_surf)}","-"),
         ("Wall-normal layers (reconstruction)",f"{N}","-"),
         ("First-cell height y1",f"{y1*1e6:.2f}","micron"),
         ("Target wall y+",f"{(y1*u_tau/cr['nu_inf']):.2f}","-"),
         ("Wall-normal growth ratio",f"{gr:.2f}","-"),
-        ("Min streamwise spacing",f"{df_surf['local_spacing_ds'].min()*1e3:.3f}","mm (xc)"),
-        ("Max streamwise spacing",f"{df_surf['local_spacing_ds'].max()*1e3:.3f}","mm (xc)"),
-        ("LE clustering ratio",f"{df_surf['local_spacing_ds'].max()/df_surf['local_spacing_ds'].min():.1f}","-"),
+        ("Min streamwise spacing",f"{ds_min_c*1e3:.3f}","1e-3 c"),
+        ("Max streamwise spacing",f"{ds_max_c*1e3:.3f}","1e-3 c"),
+        ("Max streamwise spacing at MAC",f"{ds_max_m*1e3:.3f}","mm"),
+        ("LE clustering ratio",f"{ds_max_c/ds_min_c:.1f}","-"),
         ("BL grid outer extent",f"{df_bl['y_m'].max()*1e3:.2f}","mm"),
         ("Friction velocity u_tau (TE)",f"{u_tau:.3f}","m/s"),
-        ("Max cell aspect ratio",f"{(df_surf['local_spacing_ds'].max()/y1):.0f}","-"),
-        ("Grid orthogonality (min)","88.5","deg"),
-        ("Mesh type","structured C-type (surface) + normal reconstruction","-"),
+        ("Max cell aspect ratio (at MAC)",f"{(ds_max_m/y1):.0f}","-"),
+        ("Discretisation type",
+         "surface panel distribution + wall-normal reconstruction stack "
+         "(no volume mesh is generated)","-"),
     ]
     pd.DataFrame(metrics,columns=["metric","value","unit"]).to_csv(
         f"{MESH}/mesh_metrics.csv",index=False)
@@ -180,15 +191,26 @@ def setup_tables():
     ss=[("Inviscid method","Constant-strength vortex-panel (Kuethe-Chow)"),
         ("Kutta condition","Enforced at sharp trailing edge"),
         ("Surface panels","260 (cosine-clustered)"),
-        ("Compressibility","none - incompressible panel solution"),
-        ("Laminar BL closure","Thwaites integral method"),
+        ("Compressibility (pressure)","Karman-Tsien correction on C_p"),
+        ("Compressibility (boundary layer)",
+         "closures evaluated at Eckert's reference temperature"),
+        ("Laminar BL closure",
+         "two-equation march (momentum + kinetic energy); H*, l and d from the "
+         "Falkner-Skan family"),
         ("Transition model","UTSS unified 4-mechanism kernel"),
-        ("  mechanisms","TS/natural(AGS@Tu=0.03%) | bypass(AGS@Tu) | separation | crossflow(C1)"),
+        ("  TS / natural","e^N, one factor per physical frequency, growth rates "
+         "from the tabulated Orr-Sommerfeld database"),
+        ("  bypass","Abu-Ghannam & Shaw at the flow-history-averaged Tu"),
+        ("  separation","laminar bubble closed by the amplification integral "
+         "across the dead-air region"),
+        ("  cross-flow","C1 on Re_theta2, closed by an amplification integral"),
         ("Intermittency closure","Narasimha universal (gamma)"),
         ("Turbulent BL closure","Head entrainment + Ludwieg-Tillmann Cf"),
-        ("Separation criterion","Thwaites lambda<=-0.09 / H>2.6 turbulent"),
-        ("Drag integration","Squire-Young far-wake"),
-        ("Marching scheme","explicit, arc-length stepping"),
+        ("Laminar separation criterion","Thwaites lambda <= -0.09"),
+        ("Turbulent separation flag","H > 2.6"),
+        ("Drag integration","Squire-Young far-wake, evaluated at 0.98c"),
+        ("Marching scheme","explicit trapezoidal, arc-length stepping with "
+         "sub-stepping on the kinetic-energy equation"),
         ("Convergence tol (panel)","1e-10 (direct solve)"),
         ("Wall y+ target","~1 (reconstruction grid)")]
     pd.DataFrame(ss,columns=["setting","value"]).to_csv(

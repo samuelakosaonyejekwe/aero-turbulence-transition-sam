@@ -187,14 +187,15 @@ def draw_airfoil_section(co):
 
     # --- horizontal chord dimension (clear, below everything) ---
     dim_linear(ax, (0,-0.175),(1,-0.175), -0.045,
-               "CHORD  c (reference)   |   MAC = 2.000 m", side=-1, fs=10)
+               "CHORD  c (reference)   |   MAC = %.3f m" % C.WING["MAC"],
+               side=-1, fs=10)
     # --- x(t_max) horizontal dimension (clear, above) ---
     dim_linear(ax, (0,0.150),(xt,0.150), 0.028, f"x(t_max) = {xt:.2f} c", side=1, fs=10)
     # --- t_max vertical thickness arrow + leadered label in clear space ---
     ax.plot([xt,xt],[yl_t,yu_t], color=HID, lw=0.8, ls=(0,(4,3)))
     ax.annotate("", xy=(xt,yu_t), xytext=(xt,yl_t),
                 arrowprops=dict(arrowstyle="<->", color=DIM, lw=1.2))
-    ax.annotate(f"t_max = {tmax:.3f} c\n(16.0 %)", xy=(xt,yl_t),
+    ax.annotate(f"t_max = {tmax:.3f} c\n({tmax*100:.1f} %)", xy=(xt,yl_t),
                 xytext=(xt+0.085,-0.135), color=DIM, fontsize=10, ha="left",
                 va="center", arrowprops=dict(arrowstyle="->", color=DIM, lw=0.9))
     # --- leading & trailing edge callouts (clear of geometry) ---

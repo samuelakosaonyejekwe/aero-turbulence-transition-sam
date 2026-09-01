@@ -77,19 +77,41 @@ EXP = {
    Re_theta_t=1100.0, Re_x_t=2.8e6),
 }
 
+CASES = ["T3A", "T3AM", "T3B", "T3C4", "SS"]
+_SOLVED = {}
+
+
+def solve_case(key):
+    """Solve one flat-plate validation case, once.
+
+    Every caller - the summary table and each plot - goes through here, so the
+    figures cannot drift from the tabulated numbers.  An earlier version
+    re-solved inside plot_case and dropped the imposed dU_e/dx while doing it.
+    """
+    if key in _SOLVED:
+        return _SOLVED[key]
+    v = C.VALIDATION[key]; ex = EXP[key]
+    ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
+    dec = ((ex["Re_x"], ex["Tu_local"]) if v.get("L_turb") is None
+           and ex.get("Tu_local") is not None else None)
+    r = solve_flat_plate(v["L"], v["U"], v["nu"], v["Tu_pct"], npts=900,
+                         dUe=v["dUe"], L_turb=v.get("L_turb"),
+                         Ue_dist=ue, Tu_decay=dec)
+    if r["i_tr"] is None:
+        raise RuntimeError("%s: the march reached the end of the plate without "
+                           "transitioning; there is no onset to validate" % key)
+    _SOLVED[key] = r
+    return r
+
+
 def run_validation():
     """One turbulence treatment, not a choice between conventions: the local
     free-stream turbulence intensity is computed from the inlet value and the
     measured integral length scale of each rig by the k-epsilon decay law."""
     summ=[]; sources=[]
-    for key in ["T3A","T3AM","T3B","T3C4","SS"]:
+    for key in CASES:
         v=C.VALIDATION[key]; ex=EXP[key]
-        ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
-        dec = ((ex["Re_x"], ex["Tu_local"]) if v.get("L_turb") is None
-               and ex.get("Tu_local") is not None else None)
-        r=solve_flat_plate(v["L"],v["U"],v["nu"],v["Tu_pct"],npts=900,
-                           dUe=v["dUe"],L_turb=v.get("L_turb"),
-                           Ue_dist=ue, Tu_decay=dec)
+        r=solve_case(key)
         it=r["i_tr"]; reth=float(r["Re_theta"][it])
         # the ERCOFTAC tables define Re_x on the LOCAL free-stream velocity,
         # so form it the same way; identical to U*x/nu on the ZPG plates
@@ -148,9 +170,28 @@ def run_validation():
       "Narasimha R. (1957); Dhawan S. & Narasimha R. (1958), J. Fluid Mech. 3."),
      ("Calibration","Cross-flow criterion",
       "Arnal D. (1984), C1 cross-flow criterion; Mayle R.E. (1991), J. Turbomachinery 113."),
+     ("Validation","ERCOFTAC T3A- flat plate",
+      "Roach & Brierley (1990), ERCOFTAC T3A- (Tu=0.87%); ERCOFTAC Classic Collection Case 020."),
+     ("Validation","ERCOFTAC T3C4 flat plate (separation bubble)",
+      "Coupland J. (1990), ERCOFTAC T3C4; ERCOFTAC Classic Collection Case 020, "
+      "variable-pressure-gradient series."),
+     ("Validation","NLF(1)-0416 aerofoil transition (86 conditions)",
+      "Somers D.M. (1981), 'Design and Experimental Results for a Natural-Laminar-Flow "
+      "Airfoil for General Aviation Applications', NASA TP-1861, Fig. 9; tunnel turbulence "
+      "level from McGhee R.J., Beasley W.D. & Foster J.M. (1984), NASA TP-2328, Fig. 25."),
+     ("Validation","Swept-wing cross-flow (calibration set)",
+      "Dagenhart J.R. & Saric W.S. (1999), 'Crossflow Stability and Transition Experiments "
+      "in Swept-Wing Flow', NASA/TP-1999-209344, Table 2."),
+     ("Validation","Swept-wing cross-flow (independent set)",
+      "Boltz F.W., Kenyon G.C. & Allen C.Q. (1960), 'Effects of Sweep Angle on the "
+      "Boundary-Layer Stability Characteristics of an Untapered Wing at Low Speeds', "
+      "NACA TN D-338, Fig. 9(g)."),
+     ("Calibration","Linear stability / amplification database",
+      "Orr (1907); Sommerfeld (1908); Gaster M. (1962), JFM 14, 222; Mack L.M. (1977), "
+      "AGARD CP-224; Drela M. & Giles M.B. (1987), AIAA J. 25(10), 1347."),
      ("Case study","NLF aerofoil design reference",
-      "Somers D.M. (1981), 'Design and experimental results for a natural-laminar-flow "
-      "aerofoil for general aviation applications', NASA TP-1861 (NLF(1)-0416)."),
+      "Somers D.M. (1981), 'Design and Experimental Results for a Natural-Laminar-Flow "
+      "Airfoil for General Aviation Applications', NASA TP-1861 (NLF(1)-0416)."),
      ("Case study","Panel method",
       "Kuethe A.M. & Chow C.Y. (1998), 'Foundations of Aerodynamics', 5th ed., Wiley."),
      ("Case study","ISA atmosphere",
@@ -166,16 +207,6 @@ def run_validation():
 # ----------------------------------------------------------------------
 NLF415 = "01_geometry/nlf2_0415.dat"
 
-def _nlf415_points():
-    """NLF(2)-0415 coordinates, returned TE -> lower -> LE -> upper -> TE."""
-    pts=[]
-    for line in open(NLF415):
-        q=line.split()
-        if len(q)==2:
-            try: pts.append((float(q[0]),float(q[1])))
-            except ValueError: pass
-    a=np.array(pts)
-    return a[::-1,0], a[::-1,1]
 
 def run_swept():
     """The only case in which the cross-flow criterion is the selected one."""
@@ -191,7 +222,8 @@ def run_swept():
         rows.append(dict(Re_c=f"{Rec:.3e}", x_tr_c_exp=xm,
                          x_tr_c_pred=round(xp,3),
                          err_pct=round((xp-xm)/xm*100,1),
-                         Re_theta_at_onset=round(float(u["Re_theta"][u["i_tr"]]),1),
+                         Re_theta_at_onset=(round(float(u["Re_theta"][u["i_tr"]]),1)
+                                            if u["i_tr"] is not None else None),
                          mechanism=u["onset_mech"]))
     df=pd.DataFrame(rows); df.to_csv(f"{VAL}/swept_wing_crossflow.csv",index=False)
     pd.DataFrame([dict(dataset=v["name"], source=v["source"])]).to_csv(
@@ -344,7 +376,7 @@ def _trim(X, Y, coef, cl_target, mach, tol=1e-3):
     return a, cl
 
 
-def run_nlf0416(Tu_pct=None, quiet=False, write=True):
+def run_nlf0416(Tu_pct=None, quiet=False, write=True, cal=None):
     """Aerofoil transition validation against NASA TP-1861, Fig. 9.
 
     86 transition locations on the NLF(1)-0416 section, both surfaces, at four
@@ -366,7 +398,7 @@ def run_nlf0416(Tu_pct=None, quiet=False, write=True):
             for cl_m, x_m in v["data"][Rec][surf]:
                 al, cl_got = _trim(X, Y, coef, cl_m, v["mach"])
                 r = solve_airfoil(X, Y, al, U, v["nu"], v["chord_m"], Tu,
-                                  mach=v["mach"])
+                                  mach=v["mach"], cal=cal)
                 s = r["surfaces"][surf]
                 xp = s["x_tr_chord"]
                 # The solver now states when it has no transition location to
@@ -401,7 +433,7 @@ def run_nlf0416(Tu_pct=None, quiet=False, write=True):
     # allowed to write here and left the repository holding the no-bubble
     # result in place of the model's.  Callers exploring variants must pass
     # write=False.
-    if Tu_pct is None and write:
+    if Tu_pct is None and cal is None and write:
         df.to_csv(f"{VAL}/aerofoil_nlf0416.csv", index=False)
         pd.DataFrame([dict(dataset=v["name"], source=v["source"],
                            n_points=len(df), Tu_pct=Tu,
@@ -417,6 +449,80 @@ def run_nlf0416(Tu_pct=None, quiet=False, write=True):
                      int(d.within_bracket.sum()), len(d)))
     return df
 
+
+
+def nlf0416_summary(df, write=True):
+    """Per-surface and pooled statistics for the 86 NLF(1)-0416 conditions.
+
+    These are the numbers quoted for this dataset, and they are written to a
+    CSV rather than left to be re-derived by hand from the point-by-point file.
+    The last row restricts the pool to the conditions the method declares it
+    accepts - it drops the ones on which it has returned a verdict of a burst
+    bubble or a leading-edge bubble instead of a transition location.
+    """
+    half = C.NLF0416["orifice_pitch"]/2.0
+    rows = []
+    sets = [("Upper surface", df[df.surface == "upper"]),
+            ("Lower surface", df[df.surface == "lower"]),
+            ("All", df),
+            ("Conditions the method accepts", df[~df.degenerate])]
+    for name, d in sets:
+        inside = int((d.err_c.abs() <= half).sum())
+        rows.append(dict(
+            set=name, points=len(d),
+            mean_abs_err_c=round(float(np.mean(np.abs(d.err_c))), 4),
+            bias_c=round(float(np.mean(d.err_c)), 4),
+            within_bracket=inside,
+            within_bracket_pct=round(100.0*inside/max(len(d), 1), 1)))
+    out = pd.DataFrame(rows)
+    if write:
+        out.to_csv(f"{VAL}/aerofoil_nlf0416_summary.csv", index=False)
+    return out
+
+
+# ----------------------------------------------------------------------
+#  Ablations: one closure switched off at a time, everything else fixed
+# ----------------------------------------------------------------------
+ABLATIONS = [
+    ("no bubble closure",          dict(bubble=False)),
+    ("one-equation laminar march", dict(two_eq=False)),
+    ("Drela-Giles envelope",       dict(use_os_db=False)),
+    ("full model",                 dict()),
+]
+
+
+def run_ablations(write=True, quiet=False):
+    """Re-run the two datasets the natural branch reaches with one closure
+    switched off at a time.
+
+    Nothing here may overwrite the shipped results: every call passes
+    write=False into run_nlf0416, and the flat plate is solved directly.  The
+    table this writes is the evidence for the claim that each element earns its
+    place, and it is regenerated rather than quoted from memory.
+    """
+    half = C.NLF0416["orifice_pitch"]/2.0
+    ss = C.VALIDATION["SS"]; ss_exp = EXP["SS"]["Re_theta_t"]
+    rows = []
+    for name, cal in ABLATIONS:
+        r = solve_flat_plate(ss["L"], ss["U"], ss["nu"], ss["Tu_pct"], npts=900,
+                             dUe=ss["dUe"], L_turb=ss.get("L_turb"),
+                             cal=(cal or None))
+        ss_err = (100.0*(float(r["Re_theta"][r["i_tr"]]) - ss_exp)/ss_exp
+                  if r["i_tr"] is not None else float("nan"))
+        d = run_nlf0416(quiet=True, write=False, cal=(cal or None))
+        inside = int((d.err_c.abs() <= half).sum())
+        rows.append(dict(configuration=name,
+                         SS_err_pct=round(ss_err, 1),
+                         mean_abs_err_c=round(float(np.mean(np.abs(d.err_c))), 4),
+                         within_bracket=inside, points=len(d),
+                         within_bracket_pct=round(100.0*inside/len(d), 1)))
+        if not quiet:
+            print("ablation %-28s S&S %+5.1f%%  mean |err| %.4fc  %d/%d"
+                  % (name, ss_err, rows[-1]["mean_abs_err_c"], inside, len(d)))
+    out = pd.DataFrame(rows)
+    if write:
+        out.to_csv(f"{VAL}/ablations.csv", index=False)
+    return out
 
 
 def plot_nlf0416(df=None):
@@ -478,11 +584,7 @@ def plot_nlf0416(df=None):
 
 def plot_case(key):
     v=C.VALIDATION[key]; ex=EXP[key]
-    ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
-    dec = ((ex["Re_x"], ex["Tu_local"]) if v.get("L_turb") is None
-           and ex.get("Tu_local") is not None else None)
-    r=solve_flat_plate(v["L"],v["U"],v["nu"],v["Tu_pct"],npts=900,
-                       L_turb=v.get("L_turb"), Ue_dist=ue, Tu_decay=dec)
+    r=solve_case(key)
     fig,ax=new_fig(8.4,5.4)
     ax.loglog(r["Re_x"],r["Cf"],color=PALETTE[0],lw=2.4,label="UTSS solver")
     ax.loglog(r["Re_x"],r["Cf_lam_ref"],ls="--",color=PALETTE[2],lw=1.4,
@@ -495,7 +597,10 @@ def plot_case(key):
     else:
         ax.axvline(ex["Re_x_t"],color=PALETTE[1],ls="--",lw=1.6,
                    label="measured onset (literature value)")
-    ax.axvline(v["U"]*r["x_tr"]/v["nu"],color=PALETTE[4],ls="-.",lw=1.3)
+    # predicted onset, on the LOCAL edge velocity - the same convention as the
+    # summary table and as the ERCOFTAC tabulations
+    ax.axvline(float(r["Ue"][r["i_tr"]])*r["x_tr"]/v["nu"],
+               color=PALETTE[4],ls="-.",lw=1.3,label="UTSS predicted onset")
     ax.set_xlabel("Re_x"); ax.set_ylabel("skin-friction  C_f")
     ax.set_ylim(2e-4,8e-3)
     ax.set_title(f"Validation: {key}  (Tu={v['Tu_pct']}%)  —  "
@@ -506,10 +611,13 @@ def plot_case(key):
 
 def plot_combined(df_sum):
     fig,ax=new_fig(8.6,5.4)
-    cases=["T3A","T3AM","T3B","T3C4","SS"]
+    cases=list(CASES)
     x=np.arange(len(cases)); w=0.36
     exp=[EXP[k]["Re_theta_t"] for k in cases]
-    pred=[df_sum.iloc[i]["Re_theta_t_pred"] for i in range(len(cases))]
+    by_name={C.VALIDATION[k]["name"]: k for k in cases}
+    lookup={by_name[row["case"]]: row["Re_theta_t_pred"]
+            for _,row in df_sum.iterrows()}
+    pred=[lookup[k] for k in cases]
     ax.bar(x-w/2,exp,w,color=PALETTE[1],label="experiment Re_θt")
     ax.bar(x+w/2,pred,w,color=PALETTE[0],label="UTSS predicted Re_θt")
     for xi,(e,p) in enumerate(zip(exp,pred)):
@@ -522,14 +630,22 @@ def plot_combined(df_sum):
     finish(fig,f"{VP}/val_combined_Re_theta_t.png")
 
 if __name__=="__main__":
+    import sys as _sys
+    # The ablation sweep re-runs the 86 aerofoil conditions three more times,
+    # so it roughly triples the runtime; pass --no-ablations to skip it when
+    # only the headline validation is wanted.
+    do_abl = "--no-ablations" not in _sys.argv
     df=run_validation()
-    for k in ["T3A","T3AM","T3B","T3C4","SS"]: plot_case(k)
+    for k in CASES: plot_case(k)
     plot_combined(df)
     df_sw=run_swept()
     print(df_sw.to_string(index=False))
     df_sw2=run_swept2()
     print(df_sw2.to_string(index=False))
     df_nlf=run_nlf0416()
+    print(nlf0416_summary(df_nlf).to_string(index=False))
     plot_nlf0416(df_nlf)
+    if do_abl:
+        run_ablations()
     print(df.to_string(index=False))
     print("validation files:",sorted([f for f in os.listdir(VAL) if f.endswith('.csv')]))

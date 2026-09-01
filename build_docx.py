@@ -43,6 +43,11 @@ for h,sz in [("Title",26),("Heading 1",17),("Heading 2",13.5),("Heading 3",11.5)
 
 EQD="07_equations"; eq_index=pd.read_csv(f"{EQD}/equations_index.csv").set_index("key")
 
+import sys as _sys
+_sys.path.insert(0, "solver")
+import case_config as _C
+C_CLIMB_TU = _C.CLIMB["Tu_pct"]
+
 # ---- page footer with author on every page (no black) ----
 foot=doc.sections[0].footer.paragraphs[0]
 foot.alignment=WD_ALIGN_PARAGRAPH.CENTER
@@ -174,18 +179,47 @@ para("This case study demonstrates the prediction of laminar-to-turbulent bounda
  "vortex-panel inviscid solution to an integral boundary-layer marcher driven by a single, "
  "unified four-mechanism transition kernel.")
 para("Key results at the cruise design point (FL360, M=0.42, Re_MAC ≈ 6.4×10⁶):", bold=True)
-manual_table(["Quantity","Predicted value"],
- [["Upper-surface transition x_tr/c","0.45 (natural / Tollmien–Schlichting)"],
-  ["Lower-surface transition x_tr/c","0.58 (natural / Tollmien–Schlichting)"],
-  ["Mean laminar-flow extent","≈ 58 % of chord"],
-  ["Section lift coefficient C_l","0.517"],
-  ["Section profile drag C_d","43.8 counts"],
-  ["Viscous drag reduction vs fully-turbulent","≈ 50 %"],
-  ["Climb (Tu=0.9 %) transition x_tr/c (upper)","0.05 (bypass)"]],
- cap="Table 1. Headline predictions.")
-para("Validated against three independent, credible published transition datasets with one "
- "universal calibration set, the solver reproduces the transition-onset Reynolds number Re_θt "
- "against the Rolls-Royce hot-wire measurements of ERCOFTAC case 020, the Schubauer-Skramstad experiment, and two independent swept-wing experiments. All four criteria of the kernel are selected somewhere in this study and each is supported by measurement. The remainder of this report sets "
+
+
+def _headline():
+    """Read Table 1 straight out of the generated CSVs.
+
+    These numbers were typed in by hand in an earlier version of this script
+    and had drifted from the solution they describe.  They are now derived, so
+    the summary cannot disagree with section 9.
+    """
+    ts = pd.read_csv("04_solution/transition_summary.csv")
+    nvt = pd.read_csv("04_solution/nlf_vs_turbulent.csv")
+    frc = pd.read_csv("04_solution/integrated_forces.csv").set_index("quantity")
+
+    def row(case, surf):
+        r = ts[(ts.case == case) & (ts.surface == surf)].iloc[0]
+        return float(r.x_tr_c), str(r.mechanism)
+    xu, mu = row("CRUISE", "upper")
+    xl, ml = row("CRUISE", "lower")
+    xcu, mcu = row("CLIMB", "upper")
+    lam_pct = float(nvt.mean_laminar_pct.iloc[0])
+    cd_nlf = float(nvt.Cd_counts.iloc[0])
+    saving = float(nvt.Cd_counts.iloc[2])
+    cl = float(frc.loc["Section lift coefficient Cl", "value"])
+    return [["Upper-surface transition x_tr/c", f"{xu:.3f} ({mu})"],
+            ["Lower-surface transition x_tr/c", f"{xl:.3f} ({ml})"],
+            ["Mean laminar-flow extent", f"{lam_pct:.1f} % of chord"],
+            ["Section lift coefficient C_l", f"{cl:.3f}"],
+            ["Section profile drag C_d", f"{cd_nlf:.1f} counts"],
+            ["Viscous drag reduction vs fully-turbulent", f"{saving:.1f} %"],
+            [f"Climb (Tu={C_CLIMB_TU:g} %) transition x_tr/c (upper)",
+             f"{xcu:.3f} ({mcu})"]]
+
+
+manual_table(["Quantity","Predicted value"], _headline(),
+ cap="Table 1. Headline predictions, read from the generated solution CSVs.")
+para("Validated against eight independent, credible published datasets with one "
+ "universal calibration set — four ERCOFTAC flat plates (case 020), the Schubauer-Skramstad "
+ "plate, the NLF(1)-0416 aerofoil at 86 conditions, and two swept wings — the solver "
+ "reproduces the transition-onset Reynolds number Re_θt and the measured transition location "
+ "without per-case re-tuning of the physics. All four criteria of the kernel are selected "
+ "somewhere in this study and each is supported by measurement. The remainder of this report sets "
  "out the background, problem, governing equations, the complete input dataset, every generated "
  "engineering output (CSVs, curves, metrics, contours, temperature profiles, 3-D contours and "
  "vectors), the validation and calibration record with all sources, and the contribution to knowledge.")
@@ -281,7 +315,7 @@ para("Bypass onset uses the Abu-Ghannam & Shaw correlation evaluated at the flow
  "tabulated Orr-Sommerfeld growth rates and triggers on their envelope at N_crit; "
  "separation-induced onset closes a laminar bubble across the dead-air region; and cross-flow "
  "onset uses the C1 criterion. The kernel takes the minimum effective onset across all four:")
-for k in ["E08","E09","E10","E10b","E10c","E11","E12","E12b","E13","E14"]: equation(k)
+for k in ["E08","E09","E10","E10b","E10c","E11","E11b","E12","E12b","E13","E14"]: equation(k)
 h2("4.4  Transitional region and turbulent closure")
 for k in ["E15","E16","E17","E18","E19"]: equation(k)
 h2("4.5  Drag, temperature and reference quantities")
@@ -309,9 +343,11 @@ para("Novelty. The distinguishing element is the unified transition kernel "
  "mechanisms, each modulated by a calibration weight, and feeds a single intermittency closure. "
  "Unlike e^N codes (TS only) or correlation RANS models (which require case-by-case re-tuning "
  "and a full CFD solve), UTSS reproduces natural, bypass, separation and cross-flow transition "
- "with ONE calibration set at panel-method cost. The separation and cross-flow branches "
- "are carried and calibrated but are not selected at any condition reported here — the "
- "novelty claim.")
+ "with ONE calibration set at panel-method cost. Every one of the four branches is the "
+ "selected mechanism somewhere in this study — natural/TS on the cruise wing, the "
+ "Schubauer-Skramstad plate and the NLF(1)-0416 upper surface; bypass on the climb case and "
+ "the ERCOFTAC plates; separation on T3C4 and the NLF(1)-0416 lower surface; cross-flow on "
+ "both swept wings — and each is checked against measurement in Section 11.")
 
 # ======================================================================
 h1("6.  Case-Study Definition and Input Data")
@@ -434,35 +470,92 @@ para("The full 3-D wing surface is coloured by the predicted fields; the transit
 for f,c in [("td_Cp","Fig. 31. 3-D wing surface contour — pressure C_p."),
             ("td_Cf","Fig. 32. 3-D wing surface contour — skin friction C_f (×10³)."),
             ("td_gamma","Fig. 33. 3-D wing surface contour — intermittency γ (transition front)."),
-            ("td_skinfriction_vectors","Fig. 34. 3-D skin-friction vectors on the upper surface.")]:
+            ("td_skinfriction_vectors","Fig. 34. Upper-surface flow direction coloured by C_f "
+              "(chordwise only — the strip formulation carries no span-wise wall shear).")]:
     image(f"05_postprocessing/three_d/{f}.png", width=6.2, cap=c)
 
 # ======================================================================
 h1("11.  Validation and Calibration")
-para("To qualify as universal, the solver is validated against three independent, credible, "
- "published transition datasets spanning bypass (high free-stream turbulence) and natural "
- "(low-turbulence) transition — using ONE universal calibration set with no per-case re-tuning "
- "of the physics. The transition-onset momentum-thickness Reynolds number Re_θt is the primary "
- "validation metric.")
+para("To qualify as universal, the solver is validated against every published dataset the "
+ "kernel\'s four branches reach — five flat plates spanning 0.03 to 6 per cent free-stream "
+ "turbulence (bypass, natural and separation-induced transition), 86 aerofoil conditions on "
+ "the NLF(1)-0416 section, and two swept wings from different facilities and eras — using ONE "
+ "universal calibration set with no per-case re-tuning of the physics. The transition-onset "
+ "momentum-thickness Reynolds number Re_θt is the metric on the plates and the transition "
+ "location x_tr/c on the aerofoil and the swept wings.")
 table_from_csv("06_validation/validation_summary.csv",
                cap="Table 20. Validation summary — predicted vs published Re_θt.")
-for f,c in [("val_T3A","Fig. 35. Validation — ERCOFTAC T3A flat plate (Tu=3.3 %)."),
-            ("val_T3B","Fig. 36. Validation — ERCOFTAC T3B flat plate (Tu=6.0 %)."),
-            ("val_SS","Fig. 37. Validation — Schubauer & Skramstad natural transition."),
-            ("val_combined_Re_theta_t","Fig. 38. Universal validation — Re_θt across all cases.")]:
+h2("11.1  Flat plates")
+for f,c in [("val_T3A","Fig. 35. Validation — ERCOFTAC T3A flat plate (Tu = 3.0 %, bypass)."),
+            ("val_T3AM","Fig. 36. Validation — ERCOFTAC T3A⁻ flat plate (Tu = 0.87 %, bypass)."),
+            ("val_T3B","Fig. 37. Validation — ERCOFTAC T3B flat plate (Tu = 6.0 %, bypass)."),
+            ("val_T3C4","Fig. 38. Validation — ERCOFTAC T3C4 flat plate (laminar separation bubble)."),
+            ("val_SS","Fig. 39. Validation — Schubauer & Skramstad natural transition (Tu = 0.03 %)."),
+            ("val_combined_Re_theta_t","Fig. 40. Universal validation — Re_θt across all five plates.")]:
     image(f"06_validation/plots/{f}.png", width=5.9, cap=c)
+
+h2("11.2  NLF(1)-0416 aerofoil — 86 transition locations")
+para("The largest single body of evidence in this work, and the one on which nothing is "
+ "calibrated. Transition locations were digitised from Fig. 9 of the source report at four "
+ "chord Reynolds numbers on both surfaces, and each condition is matched by trimming the "
+ "incidence to the measured lift coefficient. The experiment brackets transition between "
+ "adjacent orifices 0.05c apart, so its own uncertainty is ±0.025c and a prediction inside "
+ "that band cannot be distinguished from the measurement. Both the natural (TS) and the "
+ "separation-induced branches are selected on this set.")
+table_from_csv("06_validation/aerofoil_nlf0416_summary.csv",
+               cap="Table 21. NLF(1)-0416 error statistics by surface "
+                   "(aerofoil_nlf0416_summary.csv).")
+image("06_validation/plots/val_aerofoil_nlf0416.png", width=6.4,
+      cap="Fig. 41. Transition location against lift coefficient at four chord "
+          "Reynolds numbers, measurement bars = the ±0.025c orifice bracket.")
+table_from_csv("06_validation/aerofoil_nlf0416.csv", max_rows=30, sample=True,
+               cap="Table 22. NLF(1)-0416 point-by-point comparison "
+                   "(aerofoil_nlf0416.csv, sampled).")
+
+h2("11.3  Swept wings — the cross-flow branch")
+para("The cross-flow coefficient is set on the first of these two experiments and nothing is "
+ "calibrated on the second, which is a different facility, section and era. The branch "
+ "reproduces the calibration set closely and the independent set only in trend: the two "
+ "require critical values differing by about half, and that difference is in none of the "
+ "mean-flow quantities the method computes. It is reported as a band rather than as a single "
+ "constant, and the limitation is restated in Section 13.")
+table_from_csv("06_validation/swept_wing_crossflow.csv",
+               cap="Table 23. Cross-flow validation, 45° swept NLF(2)-0415 "
+                   "(Dagenhart & Saric — the calibration set).")
+image("06_validation/plots/val_swept_crossflow.png", width=5.9,
+      cap="Fig. 42. Transition location against chord Reynolds number, 45° swept "
+          "NLF(2)-0415.")
+table_from_csv("06_validation/swept_wing_independent.csv",
+               cap="Table 24. Independent swept-wing check, NACA 64(2)A015 "
+                   "(Boltz et al. — nothing calibrated here).")
+image("06_validation/plots/val_swept_independent.png", width=5.9,
+      cap="Fig. 43. Transition location against sweep angle, NACA 64(2)A015.")
+
+h2("11.4  Ablations — what each element of the formulation is worth")
+para("Each of the three elements that distinguish this formulation is switched off in turn, "
+ "everything else held fixed, and the same two datasets the natural branch reaches are re-run. "
+ "The table is regenerated by gen_validation.py and is not quoted from memory.")
+table_from_csv("06_validation/ablations.csv",
+               cap="Table 25. Ablation study (ablations.csv): Schubauer-Skramstad onset error "
+                   "and the 86 aerofoil conditions, one closure removed at a time.")
 para("Calibration. The solver is calibrated through the single constant set of Table 7. The "
  "critical amplification factor is not among the constants: it follows from the free-stream "
  "turbulence intensity by Mack's correlation, clamped to the 0.0008-0.0298 range over which "
- "that correlation is quoted, and so returns 8.68 for any stream quieter than 0.08 %. The SAME "
+ "that correlation is quoted, and so returns 8.18 for any stream quieter than 0.08 %. The SAME "
  "constants reproduce every validation dataset — five flat plates, two swept wings and 86 "
  "aerofoil conditions — demonstrating that no case-specific physics tuning is required, which "
  "is the essence of the universality claim.")
-h2("11.1  Sources and references")
+h2("11.5  Sources and references")
 para("All data sources used for validation, for calibration of the closures, and for the "
  "case-study definition are recorded below.")
 table_from_csv("06_validation/sources_and_references.csv", max_rows=40,
-               cap="Table 21. Validation, calibration and case-study sources.")
+               cap="Table 26. Validation, calibration and case-study sources.")
+table_from_csv("06_validation/swept_wing_source.csv",
+               cap="Table 27. Cross-flow calibration dataset provenance.")
+table_from_csv("06_validation/swept_wing_independent_source.csv",
+               cap="Table 28. Independent swept-wing dataset provenance.")
+table_from_csv("06_validation/aerofoil_nlf0416_source.csv",
+               cap="Table 29. Aerofoil dataset provenance.")
 
 # ======================================================================
 h1("12.  Contribution to Knowledge")
@@ -479,25 +572,39 @@ bullet("A separation-bubble closure that predicts a length rather than a point: 
        "step with no fitted constant, which reproduces the growth the T3C4 hot films record — "
        "and reattachment placed where the disturbance has amplified by the same N_crit used "
        "elsewhere, so the length scales with the disturbance environment.")
+# The figures quoted below are read from the generated CSVs, so this section
+# cannot drift from the results it summarises.
+_abl = pd.read_csv("06_validation/ablations.csv").set_index("configuration")
+_nsum = pd.read_csv("06_validation/aerofoil_nlf0416_summary.csv").set_index("set")
+_vsum = pd.read_csv("06_validation/validation_summary.csv")
+_plate_err = ", ".join(
+    "%+.1f %% on %s" % (r.Re_theta_t_err_pct,
+                        r.case.split(" flat plate")[0].replace("ERCOFTAC ", ""))
+    for _, r in _vsum.iterrows())
+_all = _nsum.loc["All"]
 bullet("A two-equation laminar march whose closures are computed from the Falkner-Skan family "
        "rather than fitted, giving the shape factor a history. On the 86 aerofoil conditions it "
-       "raises the number of predictions inside the experimental bracket from 45 to 53, improving "
-       "both surfaces at once.")
-bullet("Regime coverage with one constant set: transition-onset Re_theta_t predicted to -7.3 % "
-       "on T3B, +3.6 % on T3A, -28.2 % on T3C4, -16.5 % on T3A- and +5.6 % on "
-       "Schubauer-Skramstad, spanning 0.03-6 % free-stream turbulence intensity.")
+       "raises the number of predictions inside the experimental bracket from %d to %d, improving "
+       "both surfaces at once."
+       % (_abl.loc["one-equation laminar march", "within_bracket"],
+          _abl.loc["full model", "within_bracket"]))
+bullet("Regime coverage with one constant set: transition-onset Re_theta_t predicted to "
+       "%s, spanning 0.03-6 %% free-stream turbulence intensity." % _plate_err)
 bullet("An aerofoil validation built for this work: 86 transition locations digitised from Fig. 9 "
        "of NASA TP-1861 for the NLF(1)-0416 section, both surfaces, four chord Reynolds numbers "
        "and lift coefficients from -1.03 to +1.62, with nothing calibrated on them. Mean error "
-       "0.037 chord, and 53 of the 86 predictions fall inside the +/-0.025c bracket within which "
-       "the experiment itself localises transition.")
+       "%.3f chord, and %d of the 86 predictions fall inside the +/-0.025c bracket within which "
+       "the experiment itself localises transition."
+       % (_all.mean_abs_err_c, _all.within_bracket))
 bullet("A robust, panel-method-cost (<1 s) 3-D capability via a span-wise strip formulation with "
        "built-in cross-flow, suitable for design-loop use where RANS/LES are impractical.")
 bullet("An end-to-end, auditable workflow (geometry → mesh → setup → solution → post-processing "
        "→ validation) producing a complete engineering output set (CSVs, curves, metrics, "
        "contours, temperature profiles, 3-D contours and vectors).")
-bullet("Quantified NLF benefit for the case vehicle: ≈ 58 % laminar flow and ≈ 50 % viscous "
-       "drag reduction relative to a fully-turbulent wing at the cruise design point.")
+_nvt = pd.read_csv("04_solution/nlf_vs_turbulent.csv")
+bullet("Quantified NLF benefit for the case vehicle: %.0f %% laminar flow and %.0f %% viscous "
+       "drag reduction relative to a fully-turbulent wing at the cruise design point."
+       % (_nvt.mean_laminar_pct.iloc[0], _nvt.Cd_counts.iloc[2]))
 
 # ======================================================================
 h1("13.  Conclusions")
@@ -506,10 +613,11 @@ para("The UTSS universal transition & skin-friction solver predicts boundary-lay
  "quantities (skin friction, laminar extent, boundary-layer growth, separation margin, profile "
  "drag) at panel-method cost. The unified four-mechanism kernel, validated with a single "
  "calibration set against five flat plates, two independent swept-wing experiments and 86 "
- "aerofoil conditions, spans 0.03-6 % free-stream turbulence intensity. At cruise the wing "
- "achieves ≈ 58 % laminar flow and a ≈ 50 % viscous-drag reduction versus a turbulent wing; at "
+ "aerofoil conditions, spans 0.03-6 %% free-stream turbulence intensity. At cruise the wing "
+ "achieves %.0f %% laminar flow and a %.0f %% viscous-drag reduction versus a turbulent wing; at "
  "the higher-turbulence climb condition the solver switches to the bypass route and predicts "
- "early transition, demonstrating regime coverage across the flight envelope.")
+ "early transition, demonstrating regime coverage across the flight envelope."
+ % (_nvt.mean_laminar_pct.iloc[0], _nvt.Cd_counts.iloc[2]))
 para("Two limitations bound that claim and are stated here rather than left to be discovered. "
  "The cross-flow critical constant does not transfer between facilities: the two independent "
  "swept-wing experiments support the functional form of the criterion, and the measured data "

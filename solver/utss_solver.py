@@ -46,10 +46,12 @@ CAL = dict(
     A_BP      = 1.00,   # weight on bypass onset
     A_SEP     = 1.00,   # weight on separation-induced onset
     A_CF      = 1.00,   # weight on cross-flow onset
-    N_crit    = 9.0,    # reference e^N factor; the value actually used is
-                        # obtained from Tu by Mack's relation (see _n_crit),
-                        # which is clamped to its stated validity range and so
-                        # returns 8.68 for any stream quieter than 0.08 %
+    N_crit    = 9.0,    # nominal reference e^N factor, carried for reference
+                        # only: no branch reads it.  The value actually used at
+                        # every station is obtained from the local Tu by Mack's
+                        # relation (see _n_crit), which is clamped to its stated
+                        # validity range and so returns 8.18 for any stream
+                        # quieter than 0.08 %.
     N_floor   = 0.5,    # lower clamp on N_crit at high Tu
     C_mu      = 0.09,   # k-epsilon constants, used only for the decay of
     C_eps2    = 1.92,   # free-stream turbulence (see _tu_decay)
@@ -323,6 +325,8 @@ def velocity_field(xb, yb, alpha_deg, Xg, Yg, U=1.0, mach=0.0):
     vectorised per panel.  Returns Vx,Vy,Cp on the grid."""
     al = np.radians(alpha_deg)
     xc_, yc_, Cp_, V_, th_, S_ = panel_solve(xb, yb, alpha_deg)
+    # (the vortex strengths are the incompressible ones; the compressibility
+    #  correction is applied to C_p below, exactly as in panel_solve)
     gam = panel_solve.last_gamma             # nodal (m+1), normalised by 2*pi*Uinf
     gpan = 0.5*(gam[:-1] + gam[1:]) * U * 2*np.pi   # actual circ. density
     x1 = np.asarray(xb[:-1], float); y1 = np.asarray(yb[:-1], float)
@@ -337,13 +341,26 @@ def velocity_field(xb, yb, alpha_deg, Xg, Yg, U=1.0, mach=0.0):
         r2 = np.hypot(xp - S_[j], zp) + 1e-9
         th1 = np.arctan2(zp, xp)
         th2 = np.arctan2(zp, xp - S_[j])
+        # Katz & Plotkin (2001), Eq. 10.39-10.40: the normal component carries a
+        # minus sign.  It was positive here, so the induced field had the wrong
+        # sign in one of its two components; evaluated just off the surface the
+        # result did not reproduce the panel solution it came from - C_p at the
+        # leading-edge stagnation point came back as -0.50 against the +0.70 of
+        # the surface distribution three millimetres away.  With the sign
+        # corrected the two agree to 0.012 in C_p at that offset, which is the
+        # offset itself.
         up =  gpan[j]/(2*np.pi) * (th2 - th1)
-        wp =  gpan[j]/(2*np.pi) * np.log(r1/r2)
+        wp = -gpan[j]/(2*np.pi) * np.log(r1/r2)
         Vx += up*ct - wp*st
         Vy += up*st + wp*ct
     Cp = 1.0 - (Vx**2 + Vy**2)/U**2
+    # Same Karman-Tsien correction as panel_solve.  An earlier version applied
+    # the linearised Prandtl-Glauert scaling here, so the off-body field and
+    # the surface distribution obeyed different compressibility corrections and
+    # disagreed by six per cent in C_p at the suction peak at M = 0.42.
     if mach > 1e-6:
-        Cp = Cp/np.sqrt(max(1.0 - mach*mach, 1e-6))
+        beta = np.sqrt(max(1.0 - mach*mach, 1e-6))
+        Cp = Cp/(beta + (mach*mach/(1.0 + beta))*0.5*Cp)
     return Vx, Vy, Cp
 
 
@@ -646,19 +663,32 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
                                   int(cal.get("n_freq", 40)))
             amp = np.zeros(omegas.size)
 
+    # ---- laminar-branch state at EVERY station ----
+    # The marching loop below stops at onset, so the loop variables are only
+    # defined up to it.  The intermittency blend downstream of onset needs the
+    # laminar leg at stations the march never reached; taking it from the loop
+    # arrays there, as an earlier version did, blended against the zeros they
+    # were initialised with and returned a shape factor below unity and a
+    # vanishing skin friction immediately behind transition.  The laminar
+    # branch is therefore evaluated for the whole surface here, once.
+    lam_all = th_lam*th_lam/nu_l*dUeds
+    if H_lam is not None:
+        H_all = np.asarray(H_lam, float)
+        l_all = np.array([_stab.twoeq_HL(h)[1] for h in H_all])
+    else:
+        _hl = [_thwaites_HL(v) for v in lam_all]
+        H_all = np.array([h for h, _ in _hl])
+        l_all = np.array([l for _, l in _hl])
+    Cf_all = 2.0*l_all*nu_l/np.maximum(Ue*th_lam, 1e-12)
+
     i_tr = None
     bub_trig = False
     for i in range(n):
         theta[i] = th_lam[i]
-        lam[i] = theta[i]**2/nu_l[i]*dUeds[i]
-        if H_lam is not None:
-            # shape factor from the kinetic-energy equation, carrying history
-            H[i] = H_lam[i]
-            l = _stab.twoeq_HL(H[i])[1]
-        else:
-            H[i], l = _thwaites_HL(lam[i])
+        lam[i] = lam_all[i]
+        H[i] = H_all[i]
         Reth[i] = Ue[i]*theta[i]/nu_l[i]
-        Cf[i] = 2.0*l*nu_l[i]/max(Ue[i]*theta[i], 1e-12)
+        Cf[i] = Cf_all[i]
 
         # ---------- laminar separation bubble ----------
         # Thwaites' march is defined only up to lambda = -0.09; past that the
@@ -709,12 +739,20 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
                 # The dead-air region is marched with the same two equations as
                 # the attached layer, with the wall shear set to zero.  Freezing
                 # the shape factor at its separation value, as a first version
-                # did, holds it at 4.0 when the T3C4 hot films record 5.17 by
-                # the end of the plateau; the momentum thickness is then too
-                # small at reattachment and the onset Reynolds number too low.
-                # Letting the kinetic-energy equation run keeps the profile on
-                # the reverse-flow branch of the tabulated family, which is
-                # where a separated shear layer belongs.
+                # did, holds the profile fixed while the T3C4 hot films record
+                # it thickening through the plateau; the momentum thickness is
+                # then too small at reattachment and the onset Reynolds number
+                # too low.  Letting the kinetic-energy equation run recovers
+                # that growth: on T3C4 the shape factor rises from 3.34 at
+                # separation to 3.44 at reattachment while Re_theta goes from
+                # 255 to 274.
+                #
+                # The march is bounded by the ATTACHED Falkner-Skan branch,
+                # H <= 3.997.  It cannot be continued onto the reverse-flow
+                # branch, because H*(H) turns there - H* rises again with H past
+                # the fold - so the inversion H = H(H*) the march depends on
+                # ceases to exist.  Only the amplification rate below is read
+                # from the reverse-flow branch, where no inversion is needed.
                 dx_b = s[i] - s[i-1]
                 Ret_b = max(Ue[i]*th_b/nu_l[i], 10.0)
                 lam_b = th_b*th_b/nu_l[i]*dUeds[i]
@@ -733,11 +771,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
                 # is evaluated on the developed reverse-flow profile rather
                 # than on the profile at the separation point: the momentum
                 # thickness is nearly frozen across the dead-air region but the
-                # shape factor is not, rising from 4.0 at separation towards
-                # the 5.17 the T3C4 hot films record, and the amplification is
-                # dominated by the developed layer.  The computed rate there is
-                # 0.045, which is what the T3C4 and NLF(1)-0416 bubble lengths
-                # independently imply.
+                # shape factor is not, and the amplification is dominated by
+                # the developed layer.  The computed rate there is 0.042 to
+                # 0.045 over the Re_theta range these bubbles span, 0.0435 at
+                # Re_theta = 400, which is what the T3C4 and NLF(1)-0416 bubble
+                # lengths independently imply.
                 sig_b = float(_stab.sigma_curve(_stab.H_REVERSE, Reth[i]).max())
                 n_bub += max(sig_b, 0.0)/th_b*(s[i] - s[i-1])
             theta[i] = th_b; H[i] = H_b; Cf[i] = 0.0
@@ -772,7 +810,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
                 dRe = Reth[i] - max(Reth[i-1], Re_c)
                 if dRe > 0.0:
                     n_amp += _dn_dReth(H[i])*dRe
-        n_fac[i] = n_amp
+        if not (bubble_on and i_sep is not None):
+            # inside the dead-air region n_fac already holds the bubble's own
+            # amplification factor, which is what closes it; the attached-layer
+            # integral is frozen there and must not overwrite it
+            n_fac[i] = n_amp
         ts_live = Tu_eff[i] <= cal.get("Tu_TS_max", 1.0)
         N_target = ((_n_crit(Tu_eff[i], cal.get("N_floor", 0.5))
                      / max(cal["A_TS"], 1e-6)) if ts_live else np.inf)
@@ -813,8 +855,6 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         else:
             Rsep = 1e9
 
-        # (d) cross-flow (swept wing): C1 criterion on the cross-flow
-        #     momentum-thickness Reynolds number (algebraic surrogate).
         # (d) cross-flow (swept wing): C1 criterion on the cross-flow
         #     momentum-thickness Reynolds number (algebraic surrogate).
         #
@@ -928,6 +968,15 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
             sep_turb = i
 
     # ---- Blend with intermittency (Narasimha universal) ----
+    # The laminar leg of the blend is the marched state where the march
+    # reached (so a station inside a bubble keeps its dead-air values) and the
+    # laminar branch beyond it.
+    H_leg = H.copy(); Cf_leg = Cf.copy(); th_leg = theta.copy()
+    if i_tr + 1 < n:
+        H_leg[i_tr+1:] = H_all[i_tr+1:]
+        Cf_leg[i_tr+1:] = Cf_all[i_tr+1:]
+        th_leg[i_tr+1:] = th_lam[i_tr+1:]
+        lam[i_tr+1:] = lam_all[i_tr+1:]
     for i in range(n):
         if i < i_tr:
             gamma[i] = 0.0
@@ -937,10 +986,9 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
             g = 1.0 - np.exp(-0.412*xi**2)
             gamma[i] = float(np.clip(g, 0.0, 1.0))
             # blended properties
-            cf_l = Cf[i]
-            theta[i] = (1-gamma[i])*th_lam[i] + gamma[i]*th_turb[i]
-            H[i]  = (1-gamma[i])*H[i] + gamma[i]*H_turb[i]
-            Cf[i] = (1-gamma[i])*cf_l + gamma[i]*Cf_turb[i]
+            theta[i] = (1-gamma[i])*th_leg[i] + gamma[i]*th_turb[i]
+            H[i]  = (1-gamma[i])*H_leg[i] + gamma[i]*H_turb[i]
+            Cf[i] = (1-gamma[i])*Cf_leg[i] + gamma[i]*Cf_turb[i]
             Reth[i] = Ue[i]*theta[i]/nu_t[i]
             state[i] = "transitional" if gamma[i] < 0.99 else "turbulent"
             mechanism[i] = onset_mech
@@ -1098,10 +1146,28 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
 
 
 if __name__ == "__main__":
-    # quick self-test : NACA0012 panel Cl sign and flat-plate transition
-    import numpy as np
-    th = np.linspace(0, 2*np.pi, 121)
-    # circle test of panel routine sanity skipped; run flat plate:
-    r = solve_flat_plate(0.3, 5.4, 1.5e-5, 3.3)
-    print("flat plate T3A-like: x_tr=%.4f m  Re_x_tr=%.3e  mech=%s" %
-          (r["x_tr"], 5.4*r["x_tr"]/1.5e-5, r["onset_mech"]))
+    # ---- self-tests -------------------------------------------------------
+    # 1. the off-body field must reproduce the surface solution it comes from
+    import sys as _sys, os as _os
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    import case_config as _C
+    Xb, Yb = _C.nlf16_panel_points(130)
+    _xc, _yc, _Cp, _V, _th, _S = panel_solve(Xb, Yb, 1.5)
+    _d = 0.003
+    _Px = _xc - np.sin(_th)*_d; _Py = _yc + np.cos(_th)*_d
+    _Cf = velocity_field(Xb, Yb, 1.5, _Px, _Py, U=1.0)[2]
+    _e = float(np.mean(np.abs(_Cf[10:-10] - _Cp[10:-10])))
+    print("off-body field vs surface C_p at %.3fc offset: mean |dCp| = %.4f  %s"
+          % (_d, _e, "OK" if _e < 0.05 else "FAIL"))
+
+    # 2. flat-plate transition
+    r = solve_flat_plate(1.7, 5.4, 1.5e-5, 3.043, npts=900, L_turb=1.53e-3)
+    print("ERCOFTAC T3A: x_tr = %.4f m  Re_x_tr = %.3e  Re_theta_t = %.1f  "
+          "mech = %s" % (r["x_tr"], 5.4*r["x_tr"]/1.5e-5,
+                         r["Re_theta"][r["i_tr"]], r["onset_mech"]))
+
+    # 3. the intermittency blend must not leave the laminar leg at zero
+    _i = r["i_tr"]
+    print("H through transition: %s  %s"
+          % (np.array2string(r["H"][_i:_i+4], precision=3),
+             "OK" if r["H"][_i:_i+4].min() > 1.0 else "FAIL"))
