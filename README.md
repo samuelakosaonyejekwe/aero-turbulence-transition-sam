@@ -215,6 +215,7 @@ Sources recorded in `06_validation/sources_and_references.csv`.
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
 solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld +
                   amplification database), case_config.py, uplot.py (style)
+verify_outputs.py checks the compiled report against the generated CSVs
 case.docx         FULL compiled report
 ```
 
@@ -230,7 +231,28 @@ python3 gen_postprocessing.py  # all plots, contours, profiles, 3D
                               #    run_solution.py)
 python3 gen_equations.py       # build model.equations.docx (native equations)
 python3 build_docx.py          # assemble case.docx
+python3 verify_outputs.py      # check the compiled report against the CSVs
 ```
+
+Self-checks, all of which run on the numbers rather than quoting them:
+
+```bash
+python3 solver/utss_solver.py  # off-body field vs the surface solution;
+                               #   T3A onset; the intermittency blend
+python3 solver/stability.py    # Blasius H, f''(0) and neutral point; the
+                               #   exact Thwaites closure; the tabulated
+                               #   cross-flow factor against a direct
+                               #   Falkner-Skan-Cooke solve; and what
+                               #   Gaster's transformation costs
+python3 verify_outputs.py      # every headline number in the rendered PDF
+                               #   (or case.docx) read back and compared with
+                               #   the CSV it came from
+```
+
+`run_solution.py` additionally asserts the lifting-line solve against the one
+case with a closed-form answer - an elliptic planform, for which it must return
+a span efficiency of exactly 1 and the exact lift-curve slope - before it
+writes anything.
 
 Plot rule enforced throughout: **no black** (navy ink + contrasting healthy
 palette); text never overlaps the data.

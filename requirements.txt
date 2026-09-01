@@ -3,5 +3,6 @@ mathml2omml
 matplotlib
 numpy
 pandas
+pymupdf
 python-docx
 scipy

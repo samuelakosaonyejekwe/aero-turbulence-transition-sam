@@ -872,10 +872,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
         #     gives Re_cf = Re_theta sin(L) cos(L) K(lambda), with the sweep
         #     factoring out exactly and K carrying the pressure-gradient
         #     dependence (stability.crossflow_factor).  K is not constant - it
-        #     spans a factor of ten across the family, and goes to zero at zero
-        #     pressure gradient, where the span-wise and chordwise similarity
-        #     equations give f' = g identically and there is no cross-flow at
-        #     all, whereas the surrogate's constant predicts some.  Replacing
+        #     spans 0.023 to 4.60 across the family, a factor of two hundred,
+        #     and vanishes at zero pressure gradient, where the span-wise and
+        #     chordwise similarity equations give f' = g identically and there
+        #     is no cross-flow at all, whereas the surrogate's constant
+        #     predicts some.  Replacing
         #     the surrogate by K was tried and is not adopted: it does not make
         #     the two swept-wing experiments agree on a critical value, and it
         #     degrades the calibration set from 13.2 to 23.8 per cent.  The
@@ -943,7 +944,9 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
                    n_factor=n_fac, mechanism=mechanism, i_tr=None,
                    i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
                    bubble_burst=bool(i_sep is not None),
-                   x_tr=np.nan, onset_mech="none(laminar)")
+                   x_tr=np.nan, onset_mech="none(laminar)",
+                   H_lam=H.copy(), theta_lam=theta.copy(),
+                   H_turb=np.zeros(n), theta_turb=np.zeros(n))
         return out
 
     s_tr = s[i_tr]; onset_mech = mechanism[i_tr]
@@ -1011,7 +1014,14 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
                lam_len=lam_len, onset_mech=onset_mech,
                i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
                bubble_burst=False,
-               sep_turb=sep_turb)
+               sep_turb=sep_turb,
+               # The two legs the intermittency blends, kept separately.  Every
+               # blended quantity above is (1-g) leg_lam + g leg_turb, and a
+               # wall-normal profile reconstruction has to blend the same way -
+               # from the blended shape factor alone it cannot tell a
+               # half-transitional station from a laminar one at the same H.
+               H_lam=H_leg, theta_lam=th_leg,
+               H_turb=H_turb, theta_turb=th_turb)
     return out
 
 

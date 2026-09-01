@@ -101,7 +101,10 @@ def equation(key, show_title=True):
 def table_from_csv(path, max_rows=40, ncols=None, cap=None, sample=False):
     if not os.path.exists(path):
         para(f"[missing CSV: {path}]", italic=True); return
-    df=pd.read_csv(path)
+    # read as text: the CSVs carry their own formatting (Re_x written as
+    # 1.785e+05, values already rounded to the precision they are claimed to),
+    # and re-parsing them as floats renders 1.785e+05 as 178500.0
+    df=pd.read_csv(path, dtype=str)
     if ncols: df=df.iloc[:,:ncols]
     if len(df)>max_rows:
         if sample:
@@ -116,24 +119,63 @@ def table_from_csv(path, max_rows=40, ncols=None, cap=None, sample=False):
         para(f"(table sampled to {len(df)} rows; full data in {path})",
              italic=True, size=8.5)
 
-def add_table(df, cap=None):
-    df=df.fillna("")
+MAX_TABLE_COLS = 7      # what stays legible across a portrait text column
+
+def _one_table(df, size):
     t=doc.add_table(rows=1, cols=len(df.columns))
     try: t.style="Light Grid Accent 1"
     except Exception: t.style="Table Grid"
     t.alignment=WD_TABLE_ALIGNMENT.CENTER
     hdr=t.rows[0].cells
     for j,c in enumerate(df.columns):
-        hdr[j].text=str(c)
+        # a zero-width space after each underscore gives Word somewhere to
+        # break a header like Re_theta_t_err_pct; without one it breaks
+        # mid-token and the header reads as rubble
+        hdr[j].text=str(c).replace("_", "_\u200b")
         for pp in hdr[j].paragraphs:
-            for r in pp.runs: r.font.bold=True; r.font.size=Pt(8.5); r.font.color.rgb=INK
+            for r in pp.runs: r.font.bold=True; r.font.size=Pt(size); r.font.color.rgb=INK
     for _,rowv in df.iterrows():
         cells=t.add_row().cells
         for j,v in enumerate(rowv):
             cells[j].text=str(v)
             for pp in cells[j].paragraphs:
-                for r in pp.runs: r.font.size=Pt(8.5); r.font.color.rgb=INK
-    if cap: caption(cap)
+                for r in pp.runs: r.font.size=Pt(size); r.font.color.rgb=INK
+    return t
+
+
+def add_table(df, cap=None, max_cols=MAX_TABLE_COLS):
+    """Render a table, splitting a wide one into legible column blocks.
+
+    Word autofits a table to the text width, so a fifteen-column CSV dropped
+    straight in gets under a centimetre per column and breaks every cell into
+    two- and three-character fragments.  Table 20 rendered "ERCOFTAC" as
+    "ER/CO/FT/AC" down four lines and the predicted Re_theta_t of 271.4 as
+    "271./4" - the validation summary, the aerofoil point-by-point comparison
+    and the two surface-state tables were all unreadable in the compiled
+    report.  Beyond max_cols the table is therefore split into blocks that each
+    repeat the first column, the one that identifies the row.
+    """
+    df=df.fillna("")
+    cols=list(df.columns)
+    if len(cols) <= max_cols:
+        _one_table(df, 8.5)
+        if cap: caption(cap)
+        return
+    first, rest = cols[0], cols[1:]
+    per = max_cols - 1
+    blocks = [rest[i:i+per] for i in range(0, len(rest), per)]
+    for k, blk in enumerate(blocks):
+        _one_table(df[[first]+blk], 8.0)
+        tag = "columns %d-%d of %d" % (2+k*per, 1+k*per+len(blk), len(cols))
+        if k < len(blocks)-1:
+            caption("(%s; %s repeated on each block)" % (tag, first))
+            doc.add_paragraph()
+        elif cap:
+            caption("%s  (%s; the table is split across %d blocks so that no "
+                    "cell is compressed to illegibility, with %s repeated on "
+                    "each)" % (cap, tag, len(blocks), first))
+        else:
+            caption("(%s)" % tag)
 
 def manual_table(headers, rows, cap=None):
     add_table(pd.DataFrame(rows, columns=headers), cap)
@@ -427,7 +469,24 @@ table_from_csv("04_solution/transition_summary.csv",
 image("05_postprocessing/csv_plots/transition_summary_bar.png", width=6.0,
       cap="Fig. 12a. Predicted laminar-flow extent by case and surface (transition_summary.csv).")
 h2("9.2  Integrated forces and drag breakdown")
-table_from_csv("04_solution/integrated_forces.csv", cap="Table 13. Integrated forces.")
+para("The wing lift is obtained from Prandtl's lifting-line theory - Glauert's monoplane "
+ "equation solved for the odd Fourier coefficients of the loading - using the section "
+ "lift-curve slope and zero-lift incidence returned by the same panel method, the planform "
+ "chord distribution, the wing's washout, and the section slope reduced by the cosine of "
+ "the quarter-chord sweep. An earlier version of this table asserted C_L = 0.90 c_l; the "
+ "planform actually returns 0.49, because a −3° washout is large relative to the 3.7° by "
+ "which the root exceeds its zero-lift incidence, and because the downwash of an AR = 8.7 "
+ "wing reduces the slope by a quarter. The span efficiency and the induced drag come out of "
+ "the same solve. The implementation is checked against the one case with a closed-form "
+ "answer - an elliptic planform, for which it returns e = 1 and the exact lift-curve slope "
+ "to machine precision - every time the solution is regenerated.")
+para("The incidence in Table 4 is the SECTION design incidence, not the trim point of the "
+ "aircraft the planform belongs to: at 1.5° the wing carries 23.6 kN against an all-up "
+ "weight of 83.4 kN, and level flight at MTOW would need 7.6°. Table 13 reports both, so "
+ "the two are not confused. Every transition result in this study is quoted at the design "
+ "incidence and is unaffected by that distinction.", italic=True, size=10)
+table_from_csv("04_solution/integrated_forces.csv", cap="Table 13. Integrated forces, "
+               "with the wing quantities from the lifting-line solve.")
 table_from_csv("04_solution/nlf_vs_turbulent.csv", cap="Table 14. NLF vs fully-turbulent drag.")
 image("05_postprocessing/csv_plots/nlf_vs_turbulent.png", width=5.4,
       cap="Fig. 12. Drag benefit of predicted laminar flow vs fully-turbulent.")
@@ -467,8 +526,14 @@ for f,c in [("contour_Cp_cruise","Fig. 24. Pressure-coefficient contour — crui
             ("contour_Cp_climb","Fig. 27. Pressure-coefficient contour — climb.")]:
     image(f"05_postprocessing/contours/{f}.png", width=6.2, cap=c)
 h2("10.2  Boundary-layer velocity and temperature profiles")
-para("Temperature profiles are obtained from the compressible Crocco–Busemann relation "
- "(Eq. E21), showing wall-recovery heating through the boundary layer.")
+para("The profiles are reconstructed from the marched state and not from an assumed shape. "
+ "The laminar leg is the Falkner-Skan profile at the shape factor the march solved for, read "
+ "from the same family that supplies the closure functions; the turbulent leg is the power "
+ "law that shape factor implies, H = (n+2)/n; and the two are blended by the same "
+ "intermittency that blends C_f, θ and H, each on its own thickness — δ99 = η99 θ/θ_η for "
+ "the similarity profile and δ = θ(n+1)(n+2)/n for the power law. Temperature profiles then "
+ "follow from the compressible Crocco–Busemann relation (Eq. E21), showing wall-recovery "
+ "heating through the boundary layer.")
 for f,c in [("bl_velocity_profiles","Fig. 28. Boundary-layer velocity profiles."),
             ("bl_temperature_profiles","Fig. 29. Boundary-layer temperature profiles (K)."),
             ("bl_temperature_ratio","Fig. 30. Normalised temperature profiles T/T_e.")]:
