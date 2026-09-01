@@ -5,6 +5,8 @@ E02,4.1  Inviscid panel flow,Vortex-panel surface velocity (Kuethe & Chow),"\fra
 E03,4.1  Inviscid panel flow,Kutta condition (sharp trailing edge),\gamma_{1} + \gamma_{N+1} = 0
 E05,4.2  Laminar boundary layer,Thwaites momentum thickness (laminar),"\theta^{2} = \frac{0.45\,\nu}{U_e^{6}} \int_{0}^{x} U_e^{5}\, dx'"
 E06,4.2  Laminar boundary layer,Thwaites pressure-gradient and momentum-thickness Reynolds number,"\lambda = \frac{\theta^{2}}{\nu}\frac{dU_e}{dx}, \quad Re_\theta = \frac{U_e\,\theta}{\nu}"
+E06b,4.2  Laminar boundary layer,Kinetic-energy integral (two-equation laminar march),\theta\frac{dH^{*}}{dx} = 2C_D - H^{*}\frac{C_f}{2} - H^{*}(1-H)\frac{\theta}{U_e}\frac{dU_e}{dx}
+E06c,4.2  Laminar boundary layer,Laminar closure functions (from the Falkner-Skan family),"H^{*}(H) = \frac{\theta^{*}}{\theta}, \quad l(H) = Re_\theta\frac{C_f}{2} = \theta_\eta f''(0), \quad d(H) = Re_\theta C_D = \theta_\eta\!\int\! f''^{2} d\eta"
 E07,4.2  Laminar boundary layer,Von Karman momentum-integral equation,\frac{d\theta}{dx} + (2+H)\frac{\theta}{U_e}\frac{dU_e}{dx} = \frac{C_f}{2}
 E08,4.3  Unified transition kernel (novel),Abu-Ghannam & Shaw bypass onset,"Re_{\theta t} = 163 + \exp\left[F(\lambda_\theta) - \frac{F(\lambda_\theta)\,Tu}{6.91}\right]"
 E09,4.3  Unified transition kernel (novel),AGS pressure-gradient function,"F(\lambda_\theta) = \begin{cases} 6.91+12.75\lambda_\theta+63.64\lambda_\theta^{2}, & \lambda_\theta \le 0 \\ 6.91+2.48\lambda_\theta-12.27\lambda_\theta^{2}, & \lambda_\theta > 0 \end{cases}"
@@ -13,7 +15,7 @@ E10b,4.3  Unified transition kernel (novel),Orr-Sommerfeld operator (tabulated a
 E10c,4.3  Unified transition kernel (novel),Gaster transformation (temporal to spatial growth rate),"\sigma = -\alpha_i\theta = \frac{\omega_i}{c_g}, \quad c_g = \frac{\partial\omega_r}{\partial\alpha_r}"
 E11,4.3  Unified transition kernel (novel),"Cross-flow criterion (swept wing, C1 on Re_theta2)","Re_{\theta 2} = k_{cf}\,Re_\theta\,\sin\Lambda\,\cos\Lambda \ \ge\ C_1"
 E12,4.3  Unified transition kernel (novel),Separation bubble: dead-air momentum march,"\frac{d\theta}{dx} = -(2+H_s)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad C_f = 0, \quad H = H_s"
-E12b,4.3  Unified transition kernel (novel),Separation bubble: reattachment length,"x_r - x_s = \frac{N_{crit}\,\theta_s}{\sigma_{sep}}, \quad \sigma_{sep} = 0.048"
+E12b,4.3  Unified transition kernel (novel),Separation bubble: reattachment length,"x_r - x_s = \frac{N_{crit}\,\theta_s}{\sigma_{sep}}, \quad \sigma_{sep} = \sigma(H_{rev}) = 0.0435"
 E13,4.3  Unified transition kernel (novel),Unified minimum-onset transition kernel,"Re_{\theta t}^{*} = \min\left(a_{TS}Re_{\theta t}^{TS},\, a_{BP}Re_{\theta t}^{BP},\, a_{SEP}Re_{\theta t}^{SEP},\, a_{CF}Re_{\theta t}^{CF}\right)"
 E14,4.3  Unified transition kernel (novel),Transition trigger,Re_\theta(x_t) \ge Re_{\theta t}^{*}
 E15,4.4  Transitional & turbulent boundary layer,Narasimha universal intermittency,"\gamma(x) = 1 - \exp\left[-0.412\,\xi^{2}\right], \quad \xi = \frac{x-x_t}{\lambda_{tr}}"

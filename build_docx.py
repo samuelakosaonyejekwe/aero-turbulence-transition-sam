@@ -177,10 +177,10 @@ para("Key results at the cruise design point (FL360, M=0.42, Re_MAC ≈ 6.4×10�
 manual_table(["Quantity","Predicted value"],
  [["Upper-surface transition x_tr/c","0.45 (natural / Tollmien–Schlichting)"],
   ["Lower-surface transition x_tr/c","0.58 (natural / Tollmien–Schlichting)"],
-  ["Mean laminar-flow extent","≈ 52 % of chord"],
-  ["Section lift coefficient C_l","0.502"],
-  ["Section profile drag C_d","49.6 counts"],
-  ["Viscous drag reduction vs fully-turbulent","≈ 43 %"],
+  ["Mean laminar-flow extent","≈ 58 % of chord"],
+  ["Section lift coefficient C_l","0.517"],
+  ["Section profile drag C_d","43.8 counts"],
+  ["Viscous drag reduction vs fully-turbulent","≈ 50 %"],
   ["Climb (Tu=0.9 %) transition x_tr/c (upper)","0.05 (bypass)"]],
  cap="Table 1. Headline predictions.")
 para("Validated against three independent, credible published transition datasets with one "
@@ -274,7 +274,7 @@ para("All equations implemented in the solver are listed below as native, editab
 h2("4.1  Inviscid edge solution")
 for k in ["E02","E03","E01","E04"]: equation(k)
 h2("4.2  Laminar boundary layer (Thwaites)")
-for k in ["E05","E06","E07"]: equation(k)
+for k in ["E05","E06","E06b","E06c","E07"]: equation(k)
 h2("4.3  Unified four-mechanism transition kernel (novel contribution)")
 para("Bypass onset uses the Abu-Ghannam & Shaw correlation evaluated at the flow-history-averaged "
  "Tu; natural/TS onset integrates one amplification factor per physical frequency using the "
