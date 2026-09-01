@@ -2,5 +2,5 @@ case,Tu_inlet_pct,L_turb_mm,Re_theta_t_exp,Re_theta_t_pred,Re_theta_t_err_pct,Re
 ERCOFTAC T3A flat plate (bypass transition),3.043,1.5299999999999998,272.3,240.0,-11.9,1.348e+05,1.280e+05,26.2,1.117,bypass
 ERCOFTAC T3A- flat plate (low-Tu bypass),0.874,0.98,818.8,636.3,-22.3,1.443e+06,8.998e+05,247.6,1.027,bypass
 ERCOFTAC T3B flat plate (high-Tu bypass),5.952,3.83,181.3,166.5,-8.2,5.910e+04,6.168e+04,10.4,1.123,bypass
-ERCOFTAC T3C4 flat plate (laminar separation bubble),2.11,,381.3,270.4,-29.1,1.785e+05,1.773e+05,443.5,1.359,separation
-Schubauer & Skramstad flat plate (natural transition),0.03,,1100.0,1194.6,8.6,2.800e+06,3.172e+06,,,TS-natural
+ERCOFTAC T3C4 flat plate (laminar separation bubble),2.11,,381.3,297.9,-21.9,1.785e+05,1.827e+05,453.4,1.359,separation
+Schubauer & Skramstad flat plate (natural transition),0.03,,1100.0,1115.1,1.4,2.800e+06,2.763e+06,,,TS-natural

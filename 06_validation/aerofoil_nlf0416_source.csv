@@ -1,0 +1,2 @@
+dataset,source,n_points,Tu_pct,orifice_pitch
+"McGhee et al. NLF(1)-0416 aerofoil, Langley LTPT","McGhee R.J., Viken J.K., Pfenninger W., Beasley W.D. & Harvey W.D. (1984), 'Experimental Results for a Flapped Natural-Laminar-Flow Airfoil with High Lift/Drag Ratio', NASA TP-1861, Fig. 9 (transition) and Table I (coordinates); turbulence level from McGhee R.J., Beasley W.D. & Foster J.M. (1984), NASA TP-2328, Fig. 25.",86,0.03,0.05

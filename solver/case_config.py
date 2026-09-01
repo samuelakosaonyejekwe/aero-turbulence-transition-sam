@@ -147,25 +147,103 @@ SWEPT = dict(
 
 # ---- Second, independent swept-wing dataset -------------------------------
 # Boltz, Kenyon & Allen (NACA TN D-338, 1960), NACA 64(2)A015 untapered wing,
-# Ames 12-Foot Low-Turbulence Pressure Tunnel, sweep 0-50 deg.  Different
+# Ames 12-Foot Low-Turbulence Pressure Tunnel, sweep 0-50 deg.  A different
 # facility, section, era and measurement technique from the Dagenhart & Saric
-# experiment on which the cross-flow coefficient was set, so this set is used
-# as an independent check and NOTHING is calibrated on it.  The five fully
-# specified points below are those quoted in the text of Beyak, Choudhari, Li
-# & Shankara (AIAA 2024-xxxx / NASA NTRS 20230016659), which cites TN D-338;
-# the original report presents the full database only in figures.
+# experiment on which the cross-flow coefficient was set, so this set is an
+# independent check and NOTHING is calibrated on it.
+#
+# The values below were digitised by the present author from Fig. 9(g) of that
+# report, the panel at alpha = 0 deg.  That figure plots the transition
+# Reynolds number R_trans against the chord Reynolds number R on logarithmic
+# axes, both formed on the streamwise flow, and overlays diagonals of constant
+# x/c_perp; the transition location therefore follows as x/c = R_trans/R and
+# each reading can be checked against the diagonal it falls on.  An earlier
+# version of this file instead used five points quoted in the text of a
+# secondary source, one of them at alpha = 4 deg - outside the -3 to +3 deg
+# range TN D-338 actually tested - and those have been discarded.
+#
+# The four points retained are the ones with an unambiguous physical
+# definition: at each sweep angle beyond 20 deg the measured transition
+# location breaks away from the common low-Reynolds-number curve and jumps
+# forward to a chordwise station that barely moves with sweep, which is
+# cross-flow transition setting in.  Reading them independently gives x/c =
+# 0.207, 0.213, 0.200 and 0.211, a spread of 0.013 that bounds the digitising
+# uncertainty.  The chord Reynolds number at which the break occurs falls by a
+# factor of nearly three between 20 and 50 deg of sweep, and it is that trend
+# the cross-flow criterion has to reproduce.
 SWEPT2 = dict(
     name      = "Boltz, Kenyon & Allen NACA 64(2)A015 untapered wing",
     section   = "01_geometry/naca642a015.dat",
     chord_m   = 1.0,
     nu        = 1.5e-5,
     Tu_pct    = 0.05,
-    sweep_deg = [0.0,    10.0,  30.0,  40.0,  50.0],
-    alpha_deg = [4.0,     0.0,  -3.0,  -1.5,  -1.0],
-    x_tr_c    = [0.21,   0.45,  0.21,  0.35,  0.24],
-    Re_c      = [6.27e6, 15.0e6, 7.13e6, 6.30e6, 7.36e6],
+    sweep_deg = [20.0,   30.0,   40.0,   50.0],
+    alpha_deg = [0.0,     0.0,    0.0,    0.0],
+    x_tr_c    = [0.207,  0.213,  0.200,  0.211],
+    Re_c      = [2.70e7, 1.50e7, 1.20e7, 9.50e6],
+    read_unc  = 0.013,
     source    = "Boltz F.W., Kenyon G.C. & Allen C.Q. (1960), 'Effects of Sweep "
                 "Angle on the Boundary-Layer Stability Characteristics of an "
-                "Untapered Wing at Low Speeds', NACA TN D-338; values as quoted "
-                "by Beyak, Choudhari, Li & Shankara (NASA NTRS 20230016659).",
+                "Untapered Wing at Low Speeds', NACA TN D-338, Fig. 9(g); "
+                "transition locations digitised by the present author as "
+                "x/c = R_trans/R.",
+)
+
+# ---- NLF(1)-0416 aerofoil, Langley LTPT (natural / bubble transition) ------
+# McGhee, Viken, Pfenninger, Beasley & Harvey, NASA TP-1861 (1984).  Transition
+# was located by traversing a microphone from orifice to orifice along the
+# model, so the report states it "can only be determined as lying somewhere
+# between two adjacent orifices"; the orifice pitch is 0.05c, and the tables
+# below give the midpoint of each bracket, uncertainty +/-0.025c.  The values
+# were digitised by the present author from Fig. 9(a)-(d) of that report, in
+# which open symbols mark orifices running laminar and solid symbols orifices
+# running turbulent.  No measurements exist above R = 4.0e6 because the tunnel
+# ambient noise then swamped the microphone.
+#
+# The report identifies the upper-surface transition mechanism at R = 2.0e6 as
+# a laminar separation bubble formed in the slight adverse gradient just behind
+# the pressure minimum - a deliberate design feature - so this case tests the
+# separation-induced branch and the natural (TS) branch on a real aerofoil.
+#
+# Free-stream turbulence is not quoted in TP-1861.  Fig. 25 of the companion
+# calibration report (McGhee, Beasley & Foster, NASA TP-2328, 1984) gives the
+# LTPT test-section level as 0.012-0.016 percent at M = 0.05 and 0.041-0.044
+# percent at M = 0.15, essentially independent of stagnation pressure at fixed
+# Mach number.  All the TP-1861 runs were made at M = 0.10, so Tu = 0.03 per
+# cent is adopted here, with the 0.02-0.05 per cent spread carried through as a
+# sensitivity band rather than treated as a tuned constant.
+NLF0416 = dict(
+    name      = "McGhee et al. NLF(1)-0416 aerofoil, Langley LTPT",
+    section   = "01_geometry/nlf1_0416.dat",
+    chord_m   = 0.60902,          # 23.977 in., the tested model chord
+    mach      = 0.10,
+    nu        = 1.5e-5,
+    Tu_pct    = 0.03,
+    Tu_band   = (0.02, 0.05),
+    orifice_pitch = 0.05,         # -> +/-0.025c reading uncertainty
+    source    = "McGhee R.J., Viken J.K., Pfenninger W., Beasley W.D. & Harvey "
+                "W.D. (1984), 'Experimental Results for a Flapped Natural-"
+                "Laminar-Flow Airfoil with High Lift/Drag Ratio', NASA TP-1861, "
+                "Fig. 9 (transition) and Table I (coordinates); turbulence level "
+                "from McGhee R.J., Beasley W.D. & Foster J.M. (1984), NASA "
+                "TP-2328, Fig. 25.",
+    # Re_c -> surface -> list of (c_l, x_tr/c) digitised from Fig. 9
+    data = {
+        1.0e6: dict(
+            upper=[(+1.350, 0.175), (+1.262, 0.225), (+1.174, 0.275), (+1.077, 0.325), (+0.976, 0.375), (+0.873, 0.375), (+0.765, 0.425), (+0.651, 0.425), (+0.419, 0.475), (+0.076, 0.525), (-0.039, 0.575), (-0.151, 0.575)],
+            lower=[(+1.262, 0.675), (+1.173, 0.675), (+1.075, 0.675), (+0.977, 0.675), (+0.874, 0.675), (+0.764, 0.675), (+0.651, 0.675), (+0.313, 0.625), (+0.197, 0.575), (-0.036, 0.275)],
+        ),
+        2.0e6: dict(
+            upper=[(+1.466, 0.075), (+1.376, 0.125), (+1.089, 0.225), (+0.987, 0.275), (+0.883, 0.325), (+0.662, 0.375), (+0.551, 0.425), (+0.435, 0.425), (+0.198, 0.475), (+0.079, 0.475), (-0.156, 0.525), (-0.382, 0.575), (-0.491, 0.625), (-0.593, 0.675), (-0.807, 0.825)],
+            lower=[(+1.535, 0.675), (+1.469, 0.675), (+1.378, 0.675), (+1.294, 0.675), (+1.195, 0.675), (+1.093, 0.675), (+0.773, 0.625), (+0.663, 0.625), (+0.551, 0.625), (+0.434, 0.625), (+0.317, 0.575)],
+        ),
+        3.0e6: dict(
+            upper=[(+1.094, 0.175), (+0.996, 0.225), (+0.890, 0.275), (+0.780, 0.325), (+0.662, 0.375), (+0.435, 0.425), (+0.202, 0.425), (-0.034, 0.475)],
+            lower=[(+1.623, 0.675), (+1.555, 0.675), (+1.472, 0.675), (+1.388, 0.675), (+0.991, 0.625), (+0.889, 0.625), (+0.776, 0.625), (+0.662, 0.625), (+0.548, 0.625), (+0.433, 0.575)],
+        ),
+        4.0e6: dict(
+            upper=[(+0.555, 0.375), (+0.439, 0.375), (+0.323, 0.425), (+0.206, 0.425), (-0.032, 0.475), (-0.147, 0.475), (-0.382, 0.525), (-0.617, 0.575), (-0.721, 0.625), (-0.926, 0.775), (-1.033, 0.875)],
+            lower=[(+1.310, 0.625), (+1.212, 0.625), (+1.107, 0.625), (+0.999, 0.625), (+0.887, 0.625), (+0.782, 0.625), (+0.673, 0.625), (+0.555, 0.575), (+0.442, 0.525)],
+        ),
+    },
 )
