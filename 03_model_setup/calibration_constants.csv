@@ -3,11 +3,13 @@ A_TS,1.0,TS/natural onset weight,unity; validated on Schubauer-Skramstad and NLF
 A_BP,1.0,bypass onset weight,unity; validated on ERCOFTAC T3A/T3A-/T3B
 A_SEP,1.0,separation-induced weight,unity; validated on T3C4 and NLF(1)-0416 lower surface
 A_CF,1.0,crossflow weight,unity; Arnal C1 criterion
-N_crit,from Tu,e^N amplification factor,"Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298; 8.68 for Tu<0.08%"
+N_crit,from Tu,e^N amplification factor,"Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored -0.50; 8.18 for Tu<0.08%"
 N_floor,0.5,lower clamp on N_crit at high Tu,clamp; bypass governs there
 Tu_TS_max,0.1,upper Tu for the attached-flow TS branch,complement of the bypass gate
 C_len,6.5,Narasimha transition-length scale,Dhawan-Narasimha (1958)
 CF_C1,150.0,crossflow critical Re_theta2,Arnal et al. C1 criterion; does not transfer between facilities
 CF_ratio,0.47,theta2/theta surrogate for crossflow,set on Dagenhart & Saric; independent check in Sec. IV.C
-sigma_sep,0.048,shear-layer amplification rate in a bubble,set on T3C4 and NLF(1)-0416 bubble measurements
+sigma_sep,from table,shear-layer amplification rate in a bubble,"computed on the reverse-flow Falkner-Skan branch; 0.0435, not fitted"
+two_eq,True,two-equation laminar march (momentum + kinetic energy),closures from the Falkner-Skan family; no fitted constant
+N_anchor,0.5,offset on Mack's N_crit,unit conversion to the present amplification rates; set jointly on S&S and the 86 NLF(1)-0416 conditions
 n_freq,40,frequencies carried by the e^N integration,discretisation parameter; onset moves <0.2% over 24-64

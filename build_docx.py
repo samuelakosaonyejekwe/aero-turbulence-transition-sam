@@ -238,10 +238,14 @@ bullet("Inviscid edge flow: a constant-strength vortex-panel method (Kuethe–Ch
        "C_p and the integrated loads. It returns a stagnation pressure coefficient of 1.048 at "
        "M = 0.42 against the exact isentropic 1.045, where the linearised Prandtl-Glauert "
        "scaling gives 1.102, and the two agree to better than half a per cent below M = 0.2.")
-bullet("Laminar boundary layer: Thwaites' integral method advances θ, H and Re_θ from the "
-       "stagnation point along each surface, with the fluid properties evaluated at Eckert's "
-       "reference temperature so that the incompressible closures return the compressible skin "
-       "friction and momentum thickness.")
+bullet("Laminar boundary layer: the momentum AND kinetic-energy integral equations are advanced "
+       "together from the stagnation point along each surface, so the shape factor is a solved "
+       "variable carrying its own history rather than a local function of the pressure gradient. "
+       "The three closure functions - H*(H), Re_theta*Cf/2 and Re_theta*C_D - are properties of "
+       "the Falkner-Skan family, computed from it and not fitted; every similarity solution is an "
+       "exact fixed point of the second equation, and the march returns H = 2.5914 on a flat plate "
+       "against the Blasius 2.5913. Fluid properties are evaluated at Eckert's reference "
+       "temperature so that the incompressible closures return the compressible skin friction.")
 bullet("Unified transition kernel (the novel core): at every station the effective transition "
        "Reynolds number is the minimum across the four mechanisms, each with a calibration weight.")
 bullet("Transitional region: a Narasimha universal-intermittency closure blends laminar and "
@@ -475,20 +479,24 @@ bullet("A separation-bubble closure that predicts a length rather than a point: 
        "step with no fitted constant, which reproduces the growth the T3C4 hot films record — "
        "and reattachment placed where the disturbance has amplified by the same N_crit used "
        "elsewhere, so the length scales with the disturbance environment.")
+bullet("A two-equation laminar march whose closures are computed from the Falkner-Skan family "
+       "rather than fitted, giving the shape factor a history. On the 86 aerofoil conditions it "
+       "raises the number of predictions inside the experimental bracket from 45 to 53, improving "
+       "both surfaces at once.")
 bullet("Regime coverage with one constant set: transition-onset Re_theta_t predicted to -8.2 % "
-       "on T3B, -11.9 % on T3A, -20.5 % on T3C4, -22.3 % on T3A- and +1.2 % on "
+       "on T3B, -11.8 % on T3A, -35.3 % on T3C4, -22.1 % on T3A- and +5.6 % on "
        "Schubauer-Skramstad, spanning 0.03-6 % free-stream turbulence intensity.")
 bullet("An aerofoil validation built for this work: 86 transition locations digitised from Fig. 9 "
        "of NASA TP-1861 for the NLF(1)-0416 section, both surfaces, four chord Reynolds numbers "
        "and lift coefficients from -1.03 to +1.62, with nothing calibrated on them. Mean error "
-       "0.040 chord, and 38 of the 86 predictions fall inside the +/-0.025c bracket within which "
+       "0.037 chord, and 53 of the 86 predictions fall inside the +/-0.025c bracket within which "
        "the experiment itself localises transition.")
 bullet("A robust, panel-method-cost (<1 s) 3-D capability via a span-wise strip formulation with "
        "built-in cross-flow, suitable for design-loop use where RANS/LES are impractical.")
 bullet("An end-to-end, auditable workflow (geometry → mesh → setup → solution → post-processing "
        "→ validation) producing a complete engineering output set (CSVs, curves, metrics, "
        "contours, temperature profiles, 3-D contours and vectors).")
-bullet("Quantified NLF benefit for the case vehicle: ≈ 53 % laminar flow and ≈ 43 % viscous "
+bullet("Quantified NLF benefit for the case vehicle: ≈ 58 % laminar flow and ≈ 50 % viscous "
        "drag reduction relative to a fully-turbulent wing at the cruise design point.")
 
 # ======================================================================
@@ -499,7 +507,7 @@ para("The UTSS universal transition & skin-friction solver predicts boundary-lay
  "drag) at panel-method cost. The unified four-mechanism kernel, validated with a single "
  "calibration set against five flat plates, two independent swept-wing experiments and 86 "
  "aerofoil conditions, spans 0.03-6 % free-stream turbulence intensity. At cruise the wing "
- "achieves ≈ 52 % laminar flow and a ≈ 43 % viscous-drag reduction versus a turbulent wing; at "
+ "achieves ≈ 58 % laminar flow and a ≈ 50 % viscous-drag reduction versus a turbulent wing; at "
  "the higher-turbulence climb condition the solver switches to the bypass route and predicts "
  "early transition, demonstrating regime coverage across the flight envelope.")
 para("Two limitations bound that claim and are stated here rather than left to be discovered. "
