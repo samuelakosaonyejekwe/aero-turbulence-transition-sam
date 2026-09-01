@@ -80,10 +80,6 @@ CAL = dict(
     bubble    = True,   # close the separation branch by continuing the
                         # amplification integral through the detached shear
                         # layer instead of transitioning at separation itself
-    sigma_sep = 0.048,  # amplification rate -alpha_i*theta of the detached
-                        # shear layer; the one constant of the bubble closure,
-                        # and a property of a free shear layer rather than of
-                        # any case.  See the note in march_bl.
     n_freq    = 40,     # number of physical frequencies carried by the e^N
                         # integration.  The amplification factor is the
                         # envelope of the individual N(omega) curves, so this
@@ -525,7 +521,21 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
             elif i > 0:
                 th_b = max(th_b - (2.0 + H_sep)*th_b/max(Ue[i], 1e-9)
                            * dUeds[i]*(s[i] - s[i-1]), 1e-12)
-                n_bub += cal["sigma_sep"]/th_b*(s[i] - s[i-1])
+                # The amplification rate of the detached shear layer is read
+                # from the same table as everywhere else.  The tabulated
+                # Falkner-Skan family is continued past separation onto its
+                # reverse-flow branch, so a separated profile has a computed
+                # rate and the bubble closure carries no fitted constant.  It
+                # is evaluated on the developed reverse-flow profile rather
+                # than on the profile at the separation point: the momentum
+                # thickness is nearly frozen across the dead-air region but the
+                # shape factor is not, rising from 4.0 at separation towards
+                # the 5.17 the T3C4 hot films record, and the amplification is
+                # dominated by the developed layer.  The computed rate there is
+                # 0.045, which is what the T3C4 and NLF(1)-0416 bubble lengths
+                # independently imply.
+                sig_b = float(_stab.sigma_curve(_stab.H_REVERSE, Reth[i]).max())
+                n_bub += max(sig_b, 0.0)/th_b*(s[i] - s[i-1])
             theta[i] = th_b; H[i] = H_sep; Cf[i] = 0.0
             Reth[i] = Ue[i]*th_b/nu_l[i]
             n_fac[i] = n_bub
@@ -601,6 +611,24 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
 
         # (d) cross-flow (swept wing): C1 criterion on the cross-flow
         #     momentum-thickness Reynolds number (algebraic surrogate).
+        # (d) cross-flow (swept wing): C1 criterion on the cross-flow
+        #     momentum-thickness Reynolds number (algebraic surrogate).
+        #
+        #     The exact quantity is available: the Falkner-Skan-Cooke solution
+        #     gives Re_cf = Re_theta sin(L) cos(L) K(lambda), with the sweep
+        #     factoring out exactly and K carrying the pressure-gradient
+        #     dependence (stability.crossflow_factor).  K is not constant - it
+        #     spans a factor of ten across the family, and goes to zero at zero
+        #     pressure gradient, where the span-wise and chordwise similarity
+        #     equations give f' = g identically and there is no cross-flow at
+        #     all, whereas the surrogate's constant predicts some.  Replacing
+        #     the surrogate by K was tried and is not adopted: it does not make
+        #     the two swept-wing experiments agree on a critical value, and it
+        #     degrades the calibration set from 13.2 to 23.8 per cent.  The
+        #     limiting approximation is therefore the C1 criterion itself,
+        #     which reduces the stability of an inflectional three-dimensional
+        #     profile to a single Reynolds number, and not the surrogate for
+        #     the cross-flow thickness.  See Sec. VI.
         if sweep_deg > 1.0:
             Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"])
             Rcf = (Reth[i]*cal["CF_C1"]/max(Re_th2, 1e-9)/cal["A_CF"]
@@ -711,9 +739,18 @@ def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
     of the scalar Tu_pct."""
     s = np.linspace(1e-4, L, npts)
     if Ue_dist is not None:
-        # measured edge-velocity distribution, given as (x [m], Ue [m/s])
+        # Measured edge-velocity distribution, given as (x [m], Ue [m/s]) and
+        # interpolated with a shape-preserving cubic.  Linear interpolation, as
+        # an earlier version used, makes dU_e/dx piecewise constant with a jump
+        # at every measured point; the T3C4 distribution has twelve points over
+        # 1.5 m, so the marching stations see a staircase gradient that the
+        # local least-squares derivative cannot smooth, its window being an
+        # order of magnitude finer than the data spacing.  Since lambda is
+        # proportional to that gradient, the staircase moves the station at
+        # which the layer separates.
+        from scipy.interpolate import PchipInterpolator
         xm, um = np.asarray(Ue_dist[0], float), np.asarray(Ue_dist[1], float)
-        Ue = np.interp(s, xm, um, left=um[0], right=um[-1])
+        Ue = PchipInterpolator(xm, um, extrapolate=True)(np.clip(s, xm[0], xm[-1]))
     else:
         Ue = U*(1.0 + dUe*s/L)
     if L_turb is not None:
@@ -723,7 +760,11 @@ def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
         Tu_pct = np.interp(U*s/nu, rex_m, tu_m,
                            left=tu_m[0], right=tu_m[-1])
     r = march_bl(s, Ue, nu, Tu_pct=Tu_pct, Ue_inf=U, cal=cal)
-    r["Re_x"] = U*s/nu
+    # Re_x is formed on the LOCAL edge velocity, which is the convention of the
+    # ERCOFTAC tabulations these cases are compared against: on T3C4 the edge
+    # velocity rises from 1.51 to 2.02 m/s, so forming Re_x on the reference
+    # speed understates it by up to a fifth at the end of the plate.
+    r["Re_x"] = Ue*s/nu
     r["Cf_lam_ref"] = 0.664/np.sqrt(np.maximum(r["Re_x"], 1.0))
     r["Cf_turb_ref"] = 0.0592/np.maximum(r["Re_x"], 1.0)**0.2
     return r
