@@ -70,18 +70,18 @@ A single, fixed calibration set (see `03_model_setup/calibration_constants.csv`)
 
 | Case | Surface | x_tr/c | Mechanism | Laminar run |
 |---|---|---|---|---|
-| Cruise | upper | 0.432 | TS / natural | 43.2% |
+| Cruise | upper | 0.445 | TS / natural | 44.5% |
 | Cruise | lower | 0.578 | TS / natural | 57.8% |
-| Climb | upper | 0.018 | TS / natural | 1.8% |
+| Climb | upper | 0.022 | bypass | 2.2% |
 | Climb | lower | 0.132 | bypass | 13.2% |
 
 **Drag benefit of natural laminar flow (cruise)**
 
 | Configuration | Profile drag | Mean laminar extent |
 |---|---|---|
-| NLF (UTSS-predicted transition) | 27.0 counts | 52.2% |
-| Fully turbulent (LE trip) | 48.9 counts | 0% |
-| **Viscous drag reduction** | **≈ 45%** | — |
+| NLF (UTSS-predicted transition) | 49.7 counts | 52.8% |
+| Fully turbulent (LE trip) | 87.7 counts | 0% |
+| **Viscous drag reduction** | **≈ 43%** | — |
 
 ---
 
@@ -153,6 +153,20 @@ transition location is **13.5%**, and the onset momentum-thickness Reynolds numb
 better than 2% across the sweep — the evidence that the form of the criterion is right, not merely
 well placed.
 
+**Independent cross-flow check — NACA 64(2)A015, sweep 0–50°** (Boltz, Kenyon & Allen, NACA TN
+D-338, 1960). A different facility, section and era, with the sweep varied rather than fixed, and
+**nothing calibrated on it**. Mean absolute error **34.6%**, and the criterion selection is correct
+in kind at every condition — amplification below 10° of sweep, cross-flow from 30° upwards. This,
+not the 13.5% above, is the accuracy to expect on a new configuration.
+
+| Λ | α | Re_c | x/c measured | x/c predicted | error | criterion |
+|---|---|---|---|---|---|---|
+| 0° | +4.0° | 6.27 × 10⁶ | 0.21 | 0.086 | −59.1% | natural |
+| 10° | 0.0° | 1.50 × 10⁷ | 0.45 | 0.383 | −14.8% | natural |
+| 30° | −3.0° | 7.13 × 10⁶ | 0.21 | 0.258 | +22.9% | cross-flow |
+| 40° | −1.5° | 6.30 × 10⁶ | 0.35 | 0.202 | −42.4% | cross-flow |
+| 50° | −1.0° | 7.36 × 10⁶ | 0.24 | 0.159 | −33.9% | cross-flow |
+
 | Re_c | x/c measured | x/c predicted | error |
 |---|---|---|---|
 | 1.92 × 10⁶ | 0.78 | 0.682 | −12.6% |
@@ -168,7 +182,7 @@ The T3A and T3B reference values are the Rolls-Royce hot-wire measurements distr
 
 **The T3A error is traced, not left bare.** It is not a failure of the transition criterion: supplied with the *measured* momentum thickness the criterion fires within 19%. The residual comes from the laminar closure, and is amplified because `Re_theta` grows as the square root of distance while the onset threshold *rises* as the free-stream turbulence decays, so the two curves are nearly parallel and their intersection is sensitive.
 
-**Scope of the validation.** Three of the four criteria are now supported by measurement — amplification by Schubauer & Skramstad, bypass by three ERCOFTAC plates, cross-flow by the swept-wing experiment. The separation-induced branch is selected at no reported condition and is validated by none of it. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
+**Scope of the validation.** Three of the four criteria are now supported by measurement — amplification by Schubauer & Skramstad, bypass by three ERCOFTAC plates, cross-flow by two swept-wing experiments. The separation-induced branch is selected at no reported condition and is validated by none of it. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
 
 ---
 
