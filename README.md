@@ -72,14 +72,14 @@ A single, fixed calibration set (see `03_model_setup/calibration_constants.csv`)
 |---|---|---|---|---|
 | Cruise | upper | 0.445 | TS / natural | 44.5% |
 | Cruise | lower | 0.578 | TS / natural | 57.8% |
-| Climb | upper | 0.022 | bypass | 2.2% |
-| Climb | lower | 0.132 | bypass | 13.2% |
+| Climb | upper | 0.025 | bypass | 2.5% |
+| Climb | lower | 0.157 | bypass | 15.7% |
 
 **Drag benefit of natural laminar flow (cruise)**
 
 | Configuration | Profile drag | Mean laminar extent |
 |---|---|---|
-| NLF (UTSS-predicted transition) | 49.7 counts | 52.8% |
+| NLF (UTSS-predicted transition) | 49.6 counts | 52.8% |
 | Fully turbulent (LE trip) | 87.7 counts | 0% |
 | **Viscous drag reduction** | **≈ 43%** | — |
 
@@ -142,10 +142,10 @@ The solver is validated against three canonical published transition experiments
 
 | Case | Tu (%) | Re_θt experiment | Re_θt UTSS | Error |
 |---|---|---|---|---|
-| ERCOFTAC T3B flat plate (bypass) | 5.95 | 181.3 | 168.4 | −7.1% |
-| ERCOFTAC T3A flat plate (bypass) | 3.04 | 272.3 | 394.5 | +44.9% |
-| ERCOFTAC T3A⁻ flat plate (bypass) | 0.87 | 818.8 | 740.6 | −9.5% |
-| Schubauer & Skramstad (natural) | 0.03 | 1100 | 1194.1 | +8.6% |
+| ERCOFTAC T3B flat plate (bypass) | 5.95 | 181.3 | 166.5 | −8.2% |
+| ERCOFTAC T3A flat plate (bypass) | 3.04 | 272.3 | 240.0 | −11.9% |
+| ERCOFTAC T3A⁻ flat plate (bypass) | 0.87 | 818.8 | 636.3 | −22.3% |
+| Schubauer & Skramstad (natural) | 0.03 | 1100 | 1194.6 | +8.6% |
 
 **Cross-flow — 45° swept NLF(2)-0415** (Dagenhart & Saric, NASA/TP-1999-209344, Table 2). The
 cross-flow criterion is the selected one at all six chord Reynolds numbers; mean absolute error in
@@ -155,17 +155,17 @@ well placed.
 
 **Independent cross-flow check — NACA 64(2)A015, sweep 0–50°** (Boltz, Kenyon & Allen, NACA TN
 D-338, 1960). A different facility, section and era, with the sweep varied rather than fixed, and
-**nothing calibrated on it**. Mean absolute error **34.6%**, and the criterion selection is correct
+**nothing calibrated on it**. Mean absolute error **33.0%**, and the criterion selection is correct
 in kind at every condition — amplification below 10° of sweep, cross-flow from 30° upwards. This,
 not the 13.5% above, is the accuracy to expect on a new configuration.
 
 | Λ | α | Re_c | x/c measured | x/c predicted | error | criterion |
 |---|---|---|---|---|---|---|
 | 0° | +4.0° | 6.27 × 10⁶ | 0.21 | 0.086 | −59.1% | natural |
-| 10° | 0.0° | 1.50 × 10⁷ | 0.45 | 0.383 | −14.8% | natural |
+| 10° | 0.0° | 1.50 × 10⁷ | 0.45 | 0.405 | −10.0% | natural |
 | 30° | −3.0° | 7.13 × 10⁶ | 0.21 | 0.258 | +22.9% | cross-flow |
 | 40° | −1.5° | 6.30 × 10⁶ | 0.35 | 0.202 | −42.4% | cross-flow |
-| 50° | −1.0° | 7.36 × 10⁶ | 0.24 | 0.159 | −33.9% | cross-flow |
+| 50° | −1.0° | 7.36 × 10⁶ | 0.24 | 0.167 | −30.5% | cross-flow |
 
 | Re_c | x/c measured | x/c predicted | error |
 |---|---|---|---|
@@ -180,7 +180,7 @@ Full experiment-vs-solver data, plots, and bibliographic sources are in `06_vali
 
 The T3A and T3B reference values are the Rolls-Royce hot-wire measurements distributed as **ERCOFTAC Classic Collection Case 020**, with onset taken as the station of minimum measured `C_f`; no digitisation was performed here. For Schubauer & Skramstad only the onset Reynolds number is carried, at the value quoted throughout the literature.
 
-**The T3A error is traced, not left bare.** It is not a failure of the transition criterion: supplied with the *measured* momentum thickness the criterion fires within 19%. The residual comes from the laminar closure, and is amplified because `Re_theta` grows as the square root of distance while the onset threshold *rises* as the free-stream turbulence decays, so the two curves are nearly parallel and their intersection is sensitive.
+**Flow history.** Abu-Ghannam & Shaw correlated onset against turbulence, pressure gradient *and flow history*. In a decaying stream the local intensity is not what the layer has experienced: applied locally the onset threshold outruns `Re_theta` and onset is predicted far downstream; applied at the inlet the decay is ignored and onset comes too early. The effective intensity is the mean of `Tu` over the boundary layer's own development in `Re_theta` — per unit of momentum-thickness growth rather than per unit of distance. It carries no fitted constant and reduces to the local value in a stream that does not decay, such as the free atmosphere.
 
 **Scope of the validation.** Three of the four criteria are now supported by measurement — amplification by Schubauer & Skramstad, bypass by three ERCOFTAC plates, cross-flow by two swept-wing experiments. The separation-induced branch is selected at no reported condition and is validated by none of it. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
 
