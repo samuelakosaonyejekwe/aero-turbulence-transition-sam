@@ -511,7 +511,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
 #  HIGH-LEVEL DRIVERS
 # ======================================================================
 def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
-                     Tu_decay=None, L_turb=None):
+                     Tu_decay=None, L_turb=None, Ue_dist=None):
     """Zero (or mild) pressure-gradient flat plate (validation cases).
 
     Tu_decay, if given, is a (Re_x, Tu_pct) pair of sequences describing the
@@ -519,7 +519,12 @@ def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
     value is then interpolated onto the marching stations and used in place
     of the scalar Tu_pct."""
     s = np.linspace(1e-4, L, npts)
-    Ue = U*(1.0 + dUe*s/L)
+    if Ue_dist is not None:
+        # measured edge-velocity distribution, given as (x [m], Ue [m/s])
+        xm, um = np.asarray(Ue_dist[0], float), np.asarray(Ue_dist[1], float)
+        Ue = np.interp(s, xm, um, left=um[0], right=um[-1])
+    else:
+        Ue = U*(1.0 + dUe*s/L)
     if L_turb is not None:
         Tu_pct = _tu_decay(Tu_pct, s, L_turb, cal=cal)
     elif Tu_decay is not None:

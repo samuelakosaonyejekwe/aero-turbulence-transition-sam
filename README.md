@@ -142,10 +142,20 @@ The solver is validated against three canonical published transition experiments
 
 | Case | Tu (%) | Re_θt experiment | Re_θt UTSS | Error |
 |---|---|---|---|---|
-| ERCOFTAC T3B flat plate (bypass) | 5.95 | 181.3 | 166.5 | −8.2% |
-| ERCOFTAC T3A flat plate (bypass) | 3.04 | 272.3 | 240.0 | −11.9% |
-| ERCOFTAC T3A⁻ flat plate (bypass) | 0.87 | 818.8 | 636.3 | −22.3% |
-| Schubauer & Skramstad (natural) | 0.03 | 1100 | 1194.6 | +8.6% |
+| Case | Tu (%) | criterion | Re_θt err | **x_tr err** |
+|---|---|---|---|---|
+| ERCOFTAC T3B | 5.95 | bypass | −8.2% | +4.4% |
+| ERCOFTAC T3A | 3.04 | bypass | −11.9% | −5.0% |
+| ERCOFTAC T3C4 (separation bubble) | 2.11 | **separation** | −29.1% | **−0.7%** |
+| ERCOFTAC T3A⁻ | 0.87 | bypass | −22.3% | −37.6% |
+| Schubauer & Skramstad | 0.03 | natural | +8.6% | +13.3% |
+
+**T3C4** is the case that exercises the separation-induced branch: its adverse gradient drives the
+shape factor to 5.17 and `Cf` to 1.8 × 10⁻⁴ before the layer reattaches turbulent. The criterion is
+selected there and places the bubble to **−0.7%** in transition location. Its −29.1% in `Re_theta` is
+a different statement — the measured value belongs to a *separated* shear layer while the march
+carries an attached one, so for a bubble it is the location that can be compared. The method locates
+a bubble; it does not resolve one.
 
 **Cross-flow — 45° swept NLF(2)-0415** (Dagenhart & Saric, NASA/TP-1999-209344, Table 2). The
 cross-flow criterion is the selected one at all six chord Reynolds numbers; mean absolute error in
@@ -192,7 +202,7 @@ free-stream velocity distribution were each tested; none improves the result.
 
 **Flow history.** Abu-Ghannam & Shaw correlated onset against turbulence, pressure gradient *and flow history*. In a decaying stream the local intensity is not what the layer has experienced: applied locally the onset threshold outruns `Re_theta` and onset is predicted far downstream; applied at the inlet the decay is ignored and onset comes too early. The effective intensity is the mean of `Tu` over the boundary layer's own development in `Re_theta` — per unit of momentum-thickness growth rather than per unit of distance. It carries no fitted constant and reduces to the local value in a stream that does not decay, such as the free atmosphere.
 
-**Scope of the validation.** Three of the four criteria are now supported by measurement — amplification by Schubauer & Skramstad, bypass by three ERCOFTAC plates, cross-flow by two swept-wing experiments. The separation-induced branch is selected at no reported condition and is validated by none of it. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
+**Scope of the validation.** Three of the four criteria are now supported by measurement — amplification by Schubauer & Skramstad, bypass by three ERCOFTAC plates, separation-induced by the T3C4 bubble, and cross-flow by two swept-wing experiments. All four criteria of the kernel are now selected somewhere and each is supported by measurement. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
 
 ---
 

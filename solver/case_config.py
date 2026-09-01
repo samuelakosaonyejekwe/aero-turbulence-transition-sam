@@ -111,6 +111,15 @@ VALIDATION = dict(
                U=19.5, Tu_pct=0.874, nu=1.5e-5, L=1.7, dUe=0.0, L_turb=0.98e-3,
                source="Roach & Brierley (1990), ERCOFTAC T3A-; "
                       "ERCOFTAC Classic Collection Case 020."),
+    # T3C4 is the only case in this set that separates: the adverse gradient
+    # at the lowest tunnel speed drives the shape factor to 5.17 and the skin
+    # friction to 1.8e-4 before the layer reattaches turbulent.  It is the
+    # only measurement against which the separation-induced branch is tested.
+    T3C4= dict(name="ERCOFTAC T3C4 flat plate (laminar separation bubble)",
+               U=1.51, Tu_pct=2.11, nu=1.5e-5, L=1.5, dUe=0.0, L_turb=None,
+               separation=True,
+               source="Coupland J. (1990), ERCOFTAC T3C4; ERCOFTAC Classic "
+                      "Collection Case 020, variable-pressure-gradient series."),
     SS  = dict(name="Schubauer & Skramstad flat plate (natural transition)",
                U=27.0, Tu_pct=0.03, nu=1.5e-5, L=4.0, dUe=0.0, L_turb=None,
                source="Schubauer & Skramstad (1948), NACA Report 909."),

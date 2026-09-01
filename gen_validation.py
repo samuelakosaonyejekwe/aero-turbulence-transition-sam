@@ -41,19 +41,30 @@ EXP = {
    Cf=[0.005203, 0.003723, 0.002645, 0.002272, 0.002098, 0.002209, 0.002703, 0.003801, 0.004849, 0.004861, 0.004722, 0.004553, 0.004418, 0.004292, 0.004207, 0.004079],
    Re_theta=[79.7, 117.4, 176.5, 224.9, 272.3, 322.8, 384.5, 456.3, 538.9, 627.5, 710.5, 796.5, 897, 980.2, 1055, 1137],
    Tu_local=[3.043, 2.793, 2.434, 2.197, 2.001, 1.882, 1.76, 1.647, 1.538, 1.451, 1.361, 1.295, 1.227, 1.206, 1.141, 1.101],
+   x_m=None, Ue=None,
    Re_theta_t=272.3, Re_x_t=1.348e+05),
  "T3B": dict(
    Re_x=[1.51e+04, 2.77e+04, 4.31e+04, 5.91e+04, 8.93e+04, 1.245e+05, 1.885e+05, 2.53e+05, 3.181e+05, 3.822e+05, 4.469e+05, 5.794e+05, 7.018e+05, 8.31e+05, 9.57e+05],
    Cf=[0.005574, 0.004503, 0.003573, 0.00343, 0.00433, 0.005732, 0.005414, 0.00497, 0.004625, 0.004474, 0.004297, 0.004007, 0.0039, 0.003746, 0.003639],
    Re_theta=[82.9, 114.1, 146, 181.3, 243.4, 337.4, 502.1, 659.4, 848.5, 977.2, 1096, 1432, 1623, 1912, 2073],
    Tu_local=[5.952, 5.635, 5.442, 5.244, 5.019, 4.714, 4.334, 4.031, 3.724, 3.484, 3.276, 2.965, 2.749, 2.548, 2.4],
+   x_m=None, Ue=None,
    Re_theta_t=181.3, Re_x_t=5.91e+04),
  "T3AM": dict(
    Re_x=[1.225e+05, 2.541e+05, 3.855e+05, 5.078e+05, 6.422e+05, 7.72e+05, 9.003e+05, 1.038e+06, 1.173e+06, 1.306e+06, 1.443e+06, 1.561e+06, 1.698e+06, 1.828e+06, 1.959e+06, 2.022e+06],
    Cf=[0.00188, 0.00125, 0.001027, 0.000901, 0.00078, 0.000733, 0.000661, 0.000624, 0.000603, 0.000565, 0.000535, 0.000557, 0.000583, 0.000735, 0.001193, 0.001514],
    Re_theta=[219.4, 326.9, 401.5, 466.6, 539.2, 579.4, 630.9, 684.8, 734.3, 784.8, 818.8, 861.5, 930.7, 999.7, 1131, 1192],
    Tu_local=[0.874, 0.793, 0.738, 0.685, 0.651, 0.61, 0.585, 0.564, 0.545, 0.525, 0.512, 0.498, 0.486, 0.478, 0.483, 0.469],
+   x_m=None, Ue=None,
    Re_theta_t=818.8, Re_x_t=1.443e+06),
+ "T3C4": dict(
+   Re_x=[9600, 2.12e+04, 4.62e+04, 7.56e+04, 1.065e+05, 1.209e+05, 1.345e+05, 1.468e+05, 1.572e+05, 1.671e+05, 1.785e+05, 1.838e+05],
+   Cf=[0.008666, 0.005735, 0.004096, 0.003549, 0.002964, 0.002501, 0.001934, 0.001236, 0.000539, 0.000187, 0.000183, 0.002202],
+   Re_theta=[56.1, 84.8, 123.8, 150.4, 172.9, 191.1, 209.5, 238.1, 273.2, 309.3, 381.3, 627.8],
+   Tu_local=[2.113, 1.714, 1.365, 1.079, 0.963, 0.901, 0.898, 0.883, 0.928, 0.938, 0.985, 1.29],
+   x_m=[0.095, 0.195, 0.395, 0.595, 0.795, 0.895, 0.995, 1.095, 1.195, 1.295, 1.395, 1.495],
+   Ue=[1.51, 1.63, 1.75, 1.9, 2, 2.02, 2.02, 2, 1.96, 1.93, 1.91, 1.84],
+   Re_theta_t=381.3, Re_x_t=1.785e+05),
  "SS": dict(
    # NACA Report 909 presents its transition results as figures in a 1948
    # scan and no reliable digitisation was available to the author, so only
@@ -62,6 +73,7 @@ EXP = {
    # Re_theta_t ~ 1100 via Re_theta = 0.664 sqrt(Re_x).  No measured C_f
    # distribution is claimed for this case.
    Re_x=None, Cf=None, Re_theta=None, Tu_local=None,
+   x_m=None, Ue=None,
    Re_theta_t=1100.0, Re_x_t=2.8e6),
 }
 
@@ -70,12 +82,18 @@ def run_validation():
     free-stream turbulence intensity is computed from the inlet value and the
     measured integral length scale of each rig by the k-epsilon decay law."""
     summ=[]; sources=[]
-    for key in ["T3A","T3AM","T3B","SS"]:
+    for key in ["T3A","T3AM","T3B","T3C4","SS"]:
         v=C.VALIDATION[key]; ex=EXP[key]
+        ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
+        dec = ((ex["Re_x"], ex["Tu_local"]) if v.get("L_turb") is None
+               and ex.get("Tu_local") is not None else None)
         r=solve_flat_plate(v["L"],v["U"],v["nu"],v["Tu_pct"],npts=900,
-                           dUe=v["dUe"],L_turb=v.get("L_turb"))
+                           dUe=v["dUe"],L_turb=v.get("L_turb"),
+                           Ue_dist=ue, Tu_decay=dec)
         it=r["i_tr"]; reth=float(r["Re_theta"][it])
-        rex=v["U"]*r["x_tr"]/v["nu"]
+        # the ERCOFTAC tables define Re_x on the LOCAL free-stream velocity,
+        # so form it the same way; identical to U*x/nu on the ZPG plates
+        rex=float(r["Ue"][it])*r["x_tr"]/v["nu"]
         dfs=pd.DataFrame({"Re_x":r["Re_x"],"Cf_solver":r["Cf"],
                           "Cf_laminar_blasius":r["Cf_lam_ref"],
                           "Cf_turbulent_ref":r["Cf_turb_ref"],
@@ -249,8 +267,11 @@ def run_swept2():
 
 def plot_case(key):
     v=C.VALIDATION[key]; ex=EXP[key]
+    ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
+    dec = ((ex["Re_x"], ex["Tu_local"]) if v.get("L_turb") is None
+           and ex.get("Tu_local") is not None else None)
     r=solve_flat_plate(v["L"],v["U"],v["nu"],v["Tu_pct"],npts=900,
-                       L_turb=v.get("L_turb"))
+                       L_turb=v.get("L_turb"), Ue_dist=ue, Tu_decay=dec)
     fig,ax=new_fig(8.4,5.4)
     ax.loglog(r["Re_x"],r["Cf"],color=PALETTE[0],lw=2.4,label="UTSS solver")
     ax.loglog(r["Re_x"],r["Cf_lam_ref"],ls="--",color=PALETTE[2],lw=1.4,
@@ -274,7 +295,7 @@ def plot_case(key):
 
 def plot_combined(df_sum):
     fig,ax=new_fig(8.6,5.4)
-    cases=["T3A","T3AM","T3B","SS"]
+    cases=["T3A","T3AM","T3B","T3C4","SS"]
     x=np.arange(len(cases)); w=0.36
     exp=[EXP[k]["Re_theta_t"] for k in cases]
     pred=[df_sum.iloc[i]["Re_theta_t_pred"] for i in range(len(cases))]
@@ -291,7 +312,7 @@ def plot_combined(df_sum):
 
 if __name__=="__main__":
     df=run_validation()
-    for k in ["T3A","T3AM","T3B","SS"]: plot_case(k)
+    for k in ["T3A","T3AM","T3B","T3C4","SS"]: plot_case(k)
     plot_combined(df)
     df_sw=run_swept()
     print(df_sw.to_string(index=False))
