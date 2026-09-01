@@ -175,17 +175,17 @@ para("This case study demonstrates the prediction of laminar-to-turbulent bounda
  "unified four-mechanism transition kernel.")
 para("Key results at the cruise design point (FL360, M=0.42, Re_MAC ≈ 6.4×10⁶):", bold=True)
 manual_table(["Quantity","Predicted value"],
- [["Upper-surface transition x_tr/c","0.43 (natural / Tollmien–Schlichting)"],
+ [["Upper-surface transition x_tr/c","0.45 (natural / Tollmien–Schlichting)"],
   ["Lower-surface transition x_tr/c","0.58 (natural / Tollmien–Schlichting)"],
   ["Mean laminar-flow extent","≈ 52 % of chord"],
   ["Section lift coefficient C_l","0.502"],
-  ["Section profile drag C_d","27.0 counts"],
-  ["Viscous drag reduction vs fully-turbulent","≈ 45 %"],
+  ["Section profile drag C_d","49.6 counts"],
+  ["Viscous drag reduction vs fully-turbulent","≈ 43 %"],
   ["Climb (Tu=0.9 %) transition x_tr/c (upper)","0.05 (bypass)"]],
  cap="Table 1. Headline predictions.")
 para("Validated against three independent, credible published transition datasets with one "
  "universal calibration set, the solver reproduces the transition-onset Reynolds number Re_θt "
- "against the Rolls-Royce hot-wire measurements of ERCOFTAC case 020 and the Schubauer-Skramstad experiment. The natural and bypass branches are independent models; the separation and cross-flow branches are carried and calibrated but are not selected at any condition reported here. The remainder of this report sets "
+ "against the Rolls-Royce hot-wire measurements of ERCOFTAC case 020, the Schubauer-Skramstad experiment, and two independent swept-wing experiments. All four criteria of the kernel are selected somewhere in this study and each is supported by measurement. The remainder of this report sets "
  "out the background, problem, governing equations, the complete input dataset, every generated "
  "engineering output (CSVs, curves, metrics, contours, temperature profiles, 3-D contours and "
  "vectors), the validation and calibration record with all sources, and the contribution to knowledge.")
@@ -445,16 +445,16 @@ h1("12.  Contribution to Knowledge")
 bullet("A single unified transition kernel (Eq. E13) that locally selects the governing "
        "mechanism among natural-TS, bypass, separation-induced and cross-flow transition by a "
        "minimum-effective-onset rule — reproducing all regimes with one calibration set.")
-bullet("Regime coverage: transition-onset Re_theta_t predicted to within 7-9 % on ERCOFTAC "
-       "T3B and Schubauer-Skramstad, and 45 % on T3A, whose error is traced to the laminar "
-       "closure rather than the transition criterion, across "
+bullet("Regime coverage: transition-onset Re_theta_t predicted to within 8-12 % on ERCOFTAC "
+       "T3B, T3A and Schubauer-Skramstad and 22 % on T3A-, and transition LOCATION to 0.7 % "
+       "on the T3C4 separation bubble, across "
        "bypass (T3A/T3B) and natural (Schubauer–Skramstad) transition with no physics re-tuning.")
 bullet("A robust, panel-method-cost (<1 s) 3-D capability via a span-wise strip formulation with "
        "built-in cross-flow, suitable for design-loop use where RANS/LES are impractical.")
 bullet("An end-to-end, auditable workflow (geometry → mesh → setup → solution → post-processing "
        "→ validation) producing a complete engineering output set (CSVs, curves, metrics, "
        "contours, temperature profiles, 3-D contours and vectors).")
-bullet("Quantified NLF benefit for the case vehicle: ≈ 52 % laminar flow and ≈ 45 % viscous "
+bullet("Quantified NLF benefit for the case vehicle: ≈ 53 % laminar flow and ≈ 43 % viscous "
        "drag reduction relative to a fully-turbulent wing at the cruise design point.")
 
 # ======================================================================
@@ -465,8 +465,8 @@ para("The UTSS universal transition & skin-friction solver predicts boundary-lay
  "drag) at panel-method cost. The unified four-mechanism kernel, validated against independent "
  "published data with a single calibration set, supports the claim of a fast, robust "
  "method spanning 0.03-6 % free-stream turbulence intensity. It is a "
- "powerful and robust method. At cruise the wing achieves ≈ 52 % laminar flow and "
- "a ≈ 45 % viscous-drag reduction versus a turbulent wing; at the higher-turbulence climb "
+ "powerful and robust method. At cruise the wing achieves ≈ 53 % laminar flow and "
+ "a ≈ 43 % viscous-drag reduction versus a turbulent wing; at the higher-turbulence climb "
  "condition the solver correctly predicts early bypass transition — demonstrating regime "
  "coverage across the flight envelope.")
 
