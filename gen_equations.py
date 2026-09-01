@@ -39,6 +39,11 @@ EQS = [
    r"\theta^{2} = \frac{0.45\,\nu}{U_e^{6}} \int_{0}^{x} U_e^{5}\, dx'"),
  ("E06","4.2  Laminar boundary layer","Thwaites pressure-gradient and momentum-thickness Reynolds number",
    r"\lambda = \frac{\theta^{2}}{\nu}\frac{dU_e}{dx}, \quad Re_\theta = \frac{U_e\,\theta}{\nu}"),
+ ("E06b","4.2  Laminar boundary layer","Kinetic-energy integral (two-equation laminar march)",
+   r"\theta\frac{dH^{*}}{dx} = 2C_D - H^{*}\frac{C_f}{2} - H^{*}(1-H)\frac{\theta}{U_e}\frac{dU_e}{dx}"),
+ ("E06c","4.2  Laminar boundary layer","Laminar closure functions (from the Falkner-Skan family)",
+   r"H^{*}(H) = \frac{\theta^{*}}{\theta}, \quad l(H) = Re_\theta\frac{C_f}{2} = \theta_\eta f''(0), "
+   r"\quad d(H) = Re_\theta C_D = \theta_\eta\!\int\! f''^{2} d\eta"),
  ("E07","4.2  Laminar boundary layer","Von Karman momentum-integral equation",
    r"\frac{d\theta}{dx} + (2+H)\frac{\theta}{U_e}\frac{dU_e}{dx} = \frac{C_f}{2}"),
  # ---- 4.3  Unified transition kernel (novel) -------------------------
@@ -58,7 +63,7 @@ EQS = [
  ("E12","4.3  Unified transition kernel (novel)","Separation bubble: dead-air momentum march",
    r"\frac{d\theta}{dx} = -(2+H_s)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad C_f = 0, \quad H = H_s"),
  ("E12b","4.3  Unified transition kernel (novel)","Separation bubble: reattachment length",
-   r"x_r - x_s = \frac{N_{crit}\,\theta_s}{\sigma_{sep}}, \quad \sigma_{sep} = 0.048"),
+   r"x_r - x_s = \frac{N_{crit}\,\theta_s}{\sigma_{sep}}, \quad \sigma_{sep} = \sigma(H_{rev}) = 0.0435"),
  ("E13","4.3  Unified transition kernel (novel)","Unified minimum-onset transition kernel",
    r"Re_{\theta t}^{*} = \min\left(a_{TS}Re_{\theta t}^{TS},\, a_{BP}Re_{\theta t}^{BP},\, "
    r"a_{SEP}Re_{\theta t}^{SEP},\, a_{CF}Re_{\theta t}^{CF}\right)"),
