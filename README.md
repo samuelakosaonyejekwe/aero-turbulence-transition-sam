@@ -49,10 +49,10 @@ Flat plates — onset momentum-thickness Reynolds number:
 
 | Case | Tu % | Re_θt exp | Re_θt UTSS | err | criterion |
 |------|------|-----------|------------|-----|-----------|
-| ERCOFTAC T3B  | 5.95 | 181.3 | 166.5 | −8.2 %  | bypass |
-| ERCOFTAC T3A  | 3.04 | 272.3 | 240.1 | −11.8 % | bypass |
-| ERCOFTAC T3C4 | 2.11 | 381.3 | 246.7 | −35.3 % | separation |
-| ERCOFTAC T3A⁻ | 0.87 | 818.8 | 637.6 | −22.1 % | bypass |
+| ERCOFTAC T3B  | 5.95 | 181.3 | 168.0 | −7.3 %  | bypass |
+| ERCOFTAC T3A  | 3.04 | 272.3 | 282.1 | +3.6 %  | bypass |
+| ERCOFTAC T3C4 | 2.11 | 381.3 | 341.6 | −10.4 % | separation |
+| ERCOFTAC T3A⁻ | 0.87 | 818.8 | 683.6 | −16.5 % | bypass |
 | Schubauer & Skramstad | 0.03 | 1100 | 1162 | +5.6 % | natural |
 
 Aerofoil — NLF(1)-0416, 86 transition locations digitised from NASA TP-1861
@@ -62,26 +62,36 @@ the 0.05c orifice pitch, so its own uncertainty is ±0.025c:
 
 | Set | Points | mean abs. err | bias | within ±0.025c |
 |-----|--------|---------------|------|----------------|
-| Upper surface | 46 | 0.041 c | +0.002 c | 25 (54 %) |
-| Lower surface | 40 | 0.032 c | −0.016 c | 28 (70 %) |
-| All           | 86 | 0.037 c | −0.007 c | 53 (62 %) |
-| Within ±8.5° incidence | 78 | 0.029 c | −0.003 c | 49 (63 %) |
+| Upper surface | 46 | 0.044 c | +0.007 c | 21 (46 %) |
+| Lower surface | 40 | 0.033 c | −0.014 c | 27 (68 %) |
+| All           | 86 | 0.039 c | −0.003 c | 48 (56 %) |
+| Within the method's own verdict | 83 | 0.030 c | +0.000 c | 48 (58 %) |
+
+The method now declares where it does not apply, rather than returning the last
+station its march reached: a bubble that has not reattached by the trailing edge
+has **burst**, and a layer separating within 2 % of chord has a **leading-edge
+bubble**.  Three of the 86 are declared on those grounds and are kept in the
+all-points row.
 
 Ablations, everything else held fixed (all 86 aerofoil points):
 
 | configuration | S&S | mean abs. err | within ±0.025c |
 |---|---|---|---|
-| no bubble closure | — | 0.061 c | 19/86 |
-| one-equation laminar march | −4.7 % | 0.039 c | 45/86 |
-| Drela–Giles envelope | −6.6 % | 0.041 c | 53/86 |
-| **full model** | **+5.6 %** | **0.037 c** | **53/86** |
+| no bubble closure | +5.6 % | 0.058 c | 19/86 |
+| one-equation laminar march | −4.7 % | 0.040 c | 40/86 |
+| Drela–Giles envelope | −6.6 % | 0.042 c | 52/86 |
+| **full model** | **+5.6 %** | **0.039 c** | **48/86** |
 
 Swept wings — cross-flow: 13.7 % mean error on the 45° NLF(2)-0415 of
 Dagenhart & Saric (on which the one cross-flow coefficient is set), 55.1 % on
 the independent NACA 64(2)A015 of Boltz et al. digitised from NACA TN D-338 (55.1 %).
-The measured data collapse on the model's own similarity variable to 12 %, so
-it is the critical constant and not the functional form that fails to transfer
-between facilities.
+Marching each of the ten conditions laminar to its **measured** transition
+station and evaluating the cross-flow criterion there gives a coefficient of
+variation of **21 %** across both facilities — six sweep angles, a 14× range of
+chord Reynolds number, two sections and two eras.  The criterion therefore
+transfers in the quantity it is posed on; the transition *location* is an
+ill-conditioned function of it, which is why 21 % in the criterion becomes
+30–55 % in location.  No single C1 improves the combined result.
 
 Sources recorded in `06_validation/sources_and_references.csv`.
 
