@@ -180,7 +180,7 @@ def _nlf415_points():
 def run_swept():
     """The only case in which the cross-flow criterion is the selected one."""
     v=C.SWEPT
-    X,Y=_nlf415_points()
+    X,Y=_section_points(NLF415)
     rows=[]
     for Rec,xm in zip(v["Re_c"], v["x_tr_c"]):
         U=Rec*v["nu"]/v["chord_m"]
@@ -215,9 +215,21 @@ def run_swept():
     return df
 
 
-def _section_points(fn, n=140):
-    """Load a Selig-format section and re-spline it onto cosine spacing,
-    returned TE -> lower -> LE -> upper -> TE."""
+def _section_points(fn, n=200):
+    """Load a Selig-format section and re-spline it, TE -> lower -> LE -> upper.
+
+    The surfaces are splined against sqrt(x) rather than x.  A rounded
+    leading edge has y ~ sqrt(x) there, so y is very nearly linear in that
+    variable and a cubic spline reproduces the nose smoothly; interpolating
+    linearly in x, as a first version of this routine did, turns a sparsely
+    tabulated nose into a polygon and the panel method then returns a
+    leading-edge pressure distribution that oscillates by order unity in
+    C_p.  That is not a small cosmetic error: the critical Reynolds number
+    of the amplification envelope is exponentially sensitive to the shape
+    factor, so the spurious gradients drive the e^N integral and transition
+    is predicted far too early.
+    """
+    from scipy.interpolate import CubicSpline
     pts=[]
     for line in open(fn):
         q=line.split()
@@ -225,9 +237,16 @@ def _section_points(fn, n=140):
             try: pts.append((float(q[0]),float(q[1])))
             except ValueError: pass
     a=np.array(pts); i=int(np.argmin(a[:,0]))
-    up=a[:i+1][::-1]; lo=a[i:]
-    beta=np.linspace(0,np.pi,n+1); xc=0.5*(1.0-np.cos(beta))
-    yu=np.interp(xc, up[:,0], up[:,1]); yl=np.interp(xc, lo[:,0], lo[:,1])
+    up=a[:i+1][::-1]; lo=a[i:]                       # each runs LE -> TE
+    beta=np.linspace(0.0,np.pi,n+1); xc=0.5*(1.0-np.cos(beta))
+    out=[]
+    for surf in (up, lo):
+        x=np.clip(surf[:,0],0.0,None); y=surf[:,1]
+        k=np.argsort(x); x,y=x[k],y[k]
+        keep=np.concatenate([[True], np.diff(x)>1e-12])
+        x,y=x[keep],y[keep]
+        out.append(CubicSpline(np.sqrt(x), y, bc_type="natural")(np.sqrt(xc)))
+    yu,yl=out
     return (np.concatenate([xc[::-1],xc[1:]]),
             np.concatenate([yl[::-1],yu[1:]]))
 

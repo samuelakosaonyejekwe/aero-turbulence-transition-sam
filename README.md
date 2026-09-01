@@ -159,32 +159,32 @@ a bubble; it does not resolve one.
 
 **Cross-flow — 45° swept NLF(2)-0415** (Dagenhart & Saric, NASA/TP-1999-209344, Table 2). The
 cross-flow criterion is the selected one at all six chord Reynolds numbers; mean absolute error in
-transition location is **13.5%**, and the onset momentum-thickness Reynolds number is constant to
-better than 2% across the sweep — the evidence that the form of the criterion is right, not merely
+transition location is **13.2%**, and the onset momentum-thickness Reynolds number is constant to
+**0.3%** across the sweep — the evidence that the form of the criterion is right, not merely
 well placed.
 
 **Independent cross-flow check — NACA 64(2)A015, sweep 0–50°** (Boltz, Kenyon & Allen, NACA TN
 D-338, 1960). A different facility, section and era, with the sweep varied rather than fixed, and
-**nothing calibrated on it**. Mean absolute error **33.0%**, and the criterion selection is correct
+**nothing calibrated on it**. Mean absolute error **34.2%**, and the criterion selection is correct
 in kind at every condition — amplification below 10° of sweep, cross-flow from 30° upwards. This,
-not the 13.5% above, is the accuracy to expect on a new configuration.
+not the 13.2% above, is the accuracy to expect on a new configuration.
 
 | Λ | α | Re_c | x/c measured | x/c predicted | error | criterion |
 |---|---|---|---|---|---|---|
-| 0° | +4.0° | 6.27 × 10⁶ | 0.21 | 0.086 | −59.1% | natural |
-| 10° | 0.0° | 1.50 × 10⁷ | 0.45 | 0.405 | −10.0% | natural |
-| 30° | −3.0° | 7.13 × 10⁶ | 0.21 | 0.258 | +22.9% | cross-flow |
-| 40° | −1.5° | 6.30 × 10⁶ | 0.35 | 0.202 | −42.4% | cross-flow |
-| 50° | −1.0° | 7.36 × 10⁶ | 0.24 | 0.167 | −30.5% | cross-flow |
+| 0° | +4.0° | 6.27 × 10⁶ | 0.21 | 0.098 | −53.4% | natural |
+| 10° | 0.0° | 1.50 × 10⁷ | 0.45 | 0.364 | −19.0% | natural |
+| 30° | −3.0° | 7.13 × 10⁶ | 0.21 | 0.256 | +21.8% | cross-flow |
+| 40° | −1.5° | 6.30 × 10⁶ | 0.35 | 0.197 | −43.8% | cross-flow |
+| 50° | −1.0° | 7.36 × 10⁶ | 0.24 | 0.161 | −33.1% | cross-flow |
 
 | Re_c | x/c measured | x/c predicted | error |
 |---|---|---|---|
-| 1.92 × 10⁶ | 0.78 | 0.682 | −12.6% |
-| 2.19 × 10⁶ | 0.73 | 0.599 | −17.9% |
-| 2.37 × 10⁶ | 0.58 | 0.556 | −4.2% |
-| 2.73 × 10⁶ | 0.45 | 0.483 | +7.4% |
-| 3.27 × 10⁶ | 0.33 | 0.406 | +23.0% |
-| 3.73 × 10⁶ | 0.30 | 0.348 | +15.9% |
+| 1.92 × 10⁶ | 0.78 | 0.680 | −12.8% |
+| 2.19 × 10⁶ | 0.73 | 0.590 | −19.2% |
+| 2.37 × 10⁶ | 0.58 | 0.543 | −6.4% |
+| 2.73 × 10⁶ | 0.45 | 0.473 | +5.0% |
+| 3.27 × 10⁶ | 0.33 | 0.395 | +19.6% |
+| 3.73 × 10⁶ | 0.30 | 0.349 | +16.4% |
 
 Full experiment-vs-solver data, plots, and bibliographic sources are in `06_validation/`.
 
