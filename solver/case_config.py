@@ -94,15 +94,20 @@ def nlf16_panel_points(n=130, **kw):
 
 # ---- Validation cases (real, published reference datasets) ------------
 VALIDATION = dict(
+    # L_turb is the integral length scale of the oncoming grid turbulence,
+    # obtained by fitting the k-epsilon decay law to the measured Tu(x) of
+    # each rig (ERCOFTAC case 020).  It is a property of the tunnel, not of
+    # the transition model, and it fixes the local turbulence intensity so
+    # that no choice between "inlet" and "local" values arises.
     T3A = dict(name="ERCOFTAC T3A flat plate (bypass transition)",
-               U=5.4, Tu_pct=3.3, nu=1.5e-5, L=1.7, dUe=0.0,
+               U=5.4, Tu_pct=3.043, nu=1.5e-5, L=1.7, dUe=0.0, L_turb=1.53e-3,
                source="Roach & Brierley (1990), ERCOFTAC T3A; "
                       "Savill (1993); Langtry & Menter, AIAA J. 47(12) 2009."),
     T3B = dict(name="ERCOFTAC T3B flat plate (high-Tu bypass)",
-               U=9.4, Tu_pct=6.0, nu=1.5e-5, L=1.7, dUe=0.0,
+               U=9.4, Tu_pct=5.952, nu=1.5e-5, L=1.7, dUe=0.0, L_turb=3.83e-3,
                source="Roach & Brierley (1990), ERCOFTAC T3B; "
                       "Langtry & Menter, AIAA J. 47(12) 2009."),
     SS  = dict(name="Schubauer & Skramstad flat plate (natural transition)",
-               U=27.0, Tu_pct=0.03, nu=1.5e-5, L=4.0, dUe=0.0,
+               U=27.0, Tu_pct=0.03, nu=1.5e-5, L=4.0, dUe=0.0, L_turb=None,
                source="Schubauer & Skramstad (1948), NACA Report 909."),
 )

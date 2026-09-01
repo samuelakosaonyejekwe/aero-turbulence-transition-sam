@@ -73,13 +73,13 @@ A single, fixed calibration set (see `03_model_setup/calibration_constants.csv`)
 | Cruise | upper | 0.432 | TS / natural | 43.2% |
 | Cruise | lower | 0.578 | TS / natural | 57.8% |
 | Climb | upper | 0.018 | TS / natural | 1.8% |
-| Climb | lower | 0.157 | bypass | 15.7% |
+| Climb | lower | 0.132 | bypass | 13.2% |
 
 **Drag benefit of natural laminar flow (cruise)**
 
 | Configuration | Profile drag | Mean laminar extent |
 |---|---|---|
-| NLF (UTSS-predicted transition) | 26.9 counts | 52.2% |
+| NLF (UTSS-predicted transition) | 27.0 counts | 52.2% |
 | Fully turbulent (LE trip) | 48.9 counts | 0% |
 | **Viscous drag reduction** | **≈ 45%** | — |
 
@@ -142,11 +142,15 @@ The solver is validated against three canonical published transition experiments
 
 | Case | Tu (%) | Re_θt experiment | Re_θt UTSS | Error |
 |---|---|---|---|---|
-| ERCOFTAC T3A flat plate (bypass) | 3.3 | 200 | 200.3 | 0.2% |
-| ERCOFTAC T3B flat plate (high-Tu bypass) | 6.0 | 160 | 166.5 | 4.1% |
-| Schubauer & Skramstad (natural) | 0.03 | 1100 | 1194.6 | 8.6% |
+| ERCOFTAC T3A flat plate (bypass) | 3.04 | 272.3 | 394.5 | +44.9% |
+| ERCOFTAC T3B flat plate (high-Tu bypass) | 5.95 | 181.3 | 168.4 | −7.1% |
+| Schubauer & Skramstad (natural) | 0.03 | 1100 | 1194.1 | +8.6% |
 
 Full experiment-vs-solver data, plots, and bibliographic sources are in `06_validation/`.
+
+The T3A and T3B reference values are the Rolls-Royce hot-wire measurements distributed as **ERCOFTAC Classic Collection Case 020**, with onset taken as the station of minimum measured `C_f`; no digitisation was performed here. For Schubauer & Skramstad only the onset Reynolds number is carried, at the value quoted throughout the literature.
+
+**The T3A error is traced, not left bare.** It is not a failure of the transition criterion: supplied with the *measured* momentum thickness the criterion fires within 19%. The residual comes from the laminar closure, and is amplified because `Re_theta` grows as the square root of distance while the onset threshold *rises* as the free-stream turbulence decays, so the two curves are nearly parallel and their intersection is sensitive.
 
 **Scope of the validation.** The natural and bypass criteria are independent models and both are tested above. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
 
