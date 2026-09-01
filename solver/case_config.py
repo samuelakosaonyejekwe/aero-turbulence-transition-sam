@@ -190,14 +190,18 @@ SWEPT2 = dict(
 )
 
 # ---- NLF(1)-0416 aerofoil, Langley LTPT (natural / bubble transition) ------
-# Somers D.M., NASA TP-1861 (1981).  (An earlier version of this file credited
-# TP-1861 to McGhee et al. with the title of the later flapped-aerofoil report,
-# which contradicted the entry for the same document in
-# 06_validation/sources_and_references.csv; the two now agree.)  Transition
+# Somers D.M., NASA TP-1861, June 1981.  (An earlier version of this file, and
+# the header of 01_geometry/nlf1_0416.dat, credited TP-1861 to McGhee et al.
+# with the title and date of the later flapped-aerofoil report.  The document
+# itself settles it: TP-1861 is Somers' NLF(1)-0416 design report, its Table I
+# gives the coordinates at the 60.902 cm chord used here, and its Fig. 9(a)-(d)
+# are the transition panels at R = 1, 2, 3 and 4 x 10^6 read below.)  Transition
 # was located by traversing a microphone from orifice to orifice along the
 # model, so the report states it "can only be determined as lying somewhere
-# between two adjacent orifices"; the orifice pitch is 0.05c, and the tables
-# below give the midpoint of each bracket, uncertainty +/-0.025c.  The values
+# between two adjacent orifices".  The report does not quote a pitch; 0.05c is
+# read from the chord stations of its Table II over the range where transition
+# falls.  The tables below give the midpoint of each bracket, uncertainty
+# +/-0.025c.  The values
 # were digitised by the present author from Fig. 9(a)-(d) of TP-1861, in
 # which open symbols mark orifices running laminar and solid symbols orifices
 # running turbulent.  No measurements exist above R = 4.0e6 because the tunnel

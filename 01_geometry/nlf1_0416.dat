@@ -1,8 +1,9 @@
 NLF(1)-0416
 # Natural-laminar-flow aerofoil, 16 percent thick, design c_l = 0.40.
-# Coordinates transcribed from Table I of NASA TP-1861 (McGhee, Viken,
-# Pfenninger, Beasley & Harvey, 1984); chord 60.902 cm as tested in the
-# Langley Low-Turbulence Pressure Tunnel.
+# Coordinates transcribed from Table I of NASA TP-1861 (Somers D.M., June
+# 1981, 'Design and Experimental Results for a Natural-Laminar-Flow Airfoil
+# for General Aviation Applications'); chord 60.902 cm (23.977 in.) as tested
+# in the Langley Low-Turbulence Pressure Tunnel.
 # Selig order: TE -> upper -> LE -> lower -> TE.
   1.000000   0.000000
   0.996500   0.000980

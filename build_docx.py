@@ -395,12 +395,20 @@ image("05_postprocessing/csv_plots/geo_sections_3d.png", width=5.8,
 h1("8.  Mesh / Discretisation")
 para("The surface is discretised with cosine-clustered streamwise nodes; a wall-normal "
  "reconstruction grid (first-cell y⁺≈1) supports boundary-layer profile recovery. A "
- "mesh-independence study confirms convergence.")
+ "panel-count sweep bounds the discretisation sensitivity rather than demonstrating "
+ "asymptotic convergence: from 120 to 480 surface panels the section drag spans 2.1 counts, "
+ "4.7 % of its mean, and above 180 panels it stays within about ±0.5 count without "
+ "tightening further. The residual wander is not a truncation error that refinement removes — "
+ "it is set by which panel the transition point lands on, so it scales with the panel "
+ "spacing at transition and is of the same order as the ±0.025c bracket the aerofoil "
+ "measurements themselves carry. The 260-panel grid is used throughout.")
 table_from_csv("02_mesh/mesh_metrics.csv", cap="Table 9. Mesh metrics.")
-table_from_csv("02_mesh/mesh_independence.csv", cap="Table 10. Mesh-independence study.")
+table_from_csv("02_mesh/mesh_independence.csv",
+               cap="Table 10. Panel-count sensitivity study.")
 for f,c in [("plots/mesh_01_surface","Fig. 9. Surface mesh and wall-normal stacks."),
             ("plots/mesh_02_bl_normal","Fig. 10. Wall-normal reconstruction grid / y⁺."),
-            ("plots/mesh_03_independence","Fig. 11. Mesh-independence convergence.")]:
+            ("plots/mesh_03_independence","Fig. 11. Panel-count sensitivity of C_d and "
+             "transition location.")]:
     image(f"02_mesh/{f}.png", width=5.8, cap=c)
 table_from_csv("02_mesh/bl_normal_grid.csv", max_rows=22, sample=True,
                cap="Table 11. Wall-normal grid (bl_normal_grid.csv, sampled).")
@@ -482,7 +490,12 @@ para("To qualify as universal, the solver is validated against every published d
  "the NLF(1)-0416 section, and two swept wings from different facilities and eras — using ONE "
  "universal calibration set with no per-case re-tuning of the physics. The transition-onset "
  "momentum-thickness Reynolds number Re_θt is the metric on the plates and the transition "
- "location x_tr/c on the aerofoil and the swept wings.")
+ "location x_tr/c on the aerofoil and the swept wings. The skin-friction error is reported "
+ "separately over the laminar run and over the turbulent run, on the stations where the "
+ "measurement and the prediction are in the same state; pooled across transition it measures "
+ "the onset error a second time, in the wrong units, because a plate whose onset is early by "
+ "16 % is then charged with the whole laminar-to-turbulent step in C_f over the interval "
+ "between the two onsets.")
 table_from_csv("06_validation/validation_summary.csv",
                cap="Table 20. Validation summary — predicted vs published Re_θt.")
 h2("11.1  Flat plates")
@@ -515,10 +528,16 @@ table_from_csv("06_validation/aerofoil_nlf0416.csv", max_rows=30, sample=True,
 h2("11.3  Swept wings — the cross-flow branch")
 para("The cross-flow coefficient is set on the first of these two experiments and nothing is "
  "calibrated on the second, which is a different facility, section and era. The branch "
- "reproduces the calibration set closely and the independent set only in trend: the two "
- "require critical values differing by about half, and that difference is in none of the "
- "mean-flow quantities the method computes. It is reported as a band rather than as a single "
- "constant, and the limitation is restated in Section 13.")
+ "reproduces the calibration set to 14.7 % at the frozen constant C1 = 150. On the "
+ "independent set that same constant gives 51.7 %, and C1 = 200 gives 18.4 % — so the "
+ "criterion has the right functional form on both wings but not one critical value that "
+ "serves both. The independent set is therefore tabulated at BOTH ends of that band: "
+ "reporting only C1 = 150 understates what the criterion does here, and reporting only "
+ "C1 = 200 would be a per-case re-tune of the kind this work is claiming not to need. The "
+ "spread between the two columns is the limitation, stated rather than averaged away, and "
+ "it is a receptivity difference — stationary cross-flow vortices are seeded by "
+ "leading-edge roughness, which neither report documents. Nothing else in the model differs "
+ "between the two columns.")
 table_from_csv("06_validation/swept_wing_crossflow.csv",
                cap="Table 23. Cross-flow validation, 45° swept NLF(2)-0415 "
                    "(Dagenhart & Saric — the calibration set).")
@@ -526,10 +545,11 @@ image("06_validation/plots/val_swept_crossflow.png", width=5.9,
       cap="Fig. 42. Transition location against chord Reynolds number, 45° swept "
           "NLF(2)-0415.")
 table_from_csv("06_validation/swept_wing_independent.csv",
-               cap="Table 24. Independent swept-wing check, NACA 64(2)A015 "
-                   "(Boltz et al. — nothing calibrated here).")
+               cap="Table 24. Independent swept-wing check, NACA 64(2)A015 (Boltz et al.) "
+                   "at both ends of the reported cross-flow band — nothing calibrated here.")
 image("06_validation/plots/val_swept_independent.png", width=5.9,
-      cap="Fig. 43. Transition location against sweep angle, NACA 64(2)A015.")
+      cap="Fig. 43. Transition location against sweep angle, NACA 64(2)A015, "
+          "with the C1 = 150–200 band shaded.")
 
 h2("11.4  Ablations — what each element of the formulation is worth")
 para("Each of the three elements that distinguish this formulation is switched off in turn, "

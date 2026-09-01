@@ -12,7 +12,7 @@ import os, sys
 import numpy as np, pandas as pd
 sys.path.insert(0,"solver")
 import case_config as C
-from utss_solver import solve_flat_plate, solve_airfoil, panel_solve
+from utss_solver import solve_flat_plate, solve_airfoil, panel_solve, CAL
 from uplot import apply_style, INK, INK_SOFT, PALETTE, new_fig, finish
 import matplotlib.pyplot as plt
 
@@ -130,20 +130,53 @@ def run_validation():
             dfe["source"]=v["source"]
             dfe.to_csv(f"{VAL}/experiment_{key}.csv",index=False)
             cfi=np.interp(ex["Re_x"],r["Re_x"],r["Cf"])
-            err=round(float(np.mean(np.abs(cfi-np.array(ex["Cf"]))
-                                    /np.array(ex["Cf"]))*100),1)
+            rex_e=np.asarray(ex["Re_x"],float); cf_e=np.asarray(ex["Cf"],float)
+            rel=np.abs(cfi-cf_e)/cf_e*100.0
+            err=round(float(np.mean(rel)),1)
+            # Pooling the skin-friction error across transition measures the
+            # onset error a second time, in the wrong units: wherever the
+            # measurement is still laminar and the prediction has already gone
+            # turbulent the two differ by the whole laminar-to-turbulent step,
+            # which is a factor of five, so a plate whose onset is 16 per cent
+            # early reports a 217 per cent C_f error.  The error is therefore
+            # also given over the two intervals on which both curves are in the
+            # same state - upstream of the earlier of the two onsets, and
+            # downstream of the later - where it says what it appears to say.
+            # The pooled figure is kept alongside them, not replaced.
+            # "Same state" has to mean the state, not merely the side of
+            # onset: a plate goes on transitioning for some distance past its
+            # own onset, so on T3A- the last measured stations are still
+            # climbing through transition while the prediction is already
+            # turbulent, and taking everything downstream of the later onset
+            # charges that difference to the turbulent closure.  The laminar
+            # set is therefore the stations upstream of the earlier onset at
+            # which the measurement is still within half again of Blasius, and
+            # the turbulent set the stations at which the prediction has
+            # reached gamma >= 0.99 AND the measurement has itself climbed to
+            # at least 70 per cent of the turbulent flat-plate correlation.
+            lo=min(float(ex["Re_x_t"]), rex)
+            cf_lam_ref=0.664/np.sqrt(np.maximum(rex_e,1.0))
+            cf_turb_ref=0.0592/np.maximum(rex_e,1.0)**0.2
+            g_i=np.interp(rex_e, r["Re_x"], r["gamma"])
+            m_lam=(rex_e < lo) & (cf_e <= 1.5*cf_lam_ref)
+            m_turb=(g_i >= 0.99) & (cf_e >= 0.7*cf_turb_ref)
+            err_lam=(round(float(np.mean(rel[m_lam])),1) if m_lam.sum() else None)
+            err_turb=(round(float(np.mean(rel[m_turb])),1) if m_turb.sum() else None)
+            n_lam=int(m_lam.sum()); n_turb=int(m_turb.sum())
             # how far the laminar march under-predicts the measured, turbulence
             # thickened pre-transitional momentum thickness at onset
             io_=int(np.argmin(ex["Cf"]))
             ratio=ex["Re_theta"][io_]/(0.664*np.sqrt(ex["Re_x"][io_]))
         else:
-            ratio=None
+            ratio=None; err_lam=err_turb=None; n_lam=n_turb=0
         summ.append(dict(case=v["name"], Tu_inlet_pct=v["Tu_pct"],
             L_turb_mm=(v.get("L_turb")*1e3 if v.get("L_turb") else None),
             Re_theta_t_exp=ex["Re_theta_t"], Re_theta_t_pred=round(reth,1),
             Re_theta_t_err_pct=round((reth-ex["Re_theta_t"])/ex["Re_theta_t"]*100,1),
             Re_x_tr_exp=f"{ex['Re_x_t']:.3e}", Re_x_tr_pred=f"{rex:.3e}",
-            mean_Cf_err_pct=err,
+            Cf_err_laminar_pct=err_lam, n_pts_laminar=n_lam,
+            Cf_err_turbulent_pct=err_turb, n_pts_turbulent=n_turb,
+            Cf_err_all_pts_pct=err,
             Re_theta_meas_over_blasius=(round(ratio,3) if ratio else None),
             mechanism=r["onset_mech"]))
         sources.append(dict(dataset=v["name"], source=v["source"]))
@@ -283,37 +316,65 @@ def _section_points(fn, n=200):
             np.concatenate([yl[::-1],yu[1:]]))
 
 
+CF_BAND = (150.0, 200.0)   # the reported cross-flow band: the frozen constant,
+                           # set on Dagenhart & Saric, and the upper end
+
+
 def run_swept2():
-    """Independent swept-wing check.  Nothing is calibrated on this set."""
+    """Independent swept-wing check.  Nothing is calibrated on this set.
+
+    Evaluated at BOTH ends of the reported cross-flow band.  The frozen
+    constant, CF_C1 = 150, is the one set on Dagenhart & Saric and is what the
+    rest of this work uses; CF_C1 = 200 is the upper end quoted for this
+    facility.  Reporting only the first understates what the criterion can do
+    here and reporting only the second would be a per-case re-tune, so both are
+    tabulated and the spread between them IS the limitation.  Nothing else in
+    the model is touched by either.
+    """
     v=C.SWEPT2
     X,Y=_section_points(v["section"])
     rows=[]
     for sw,al,xm,Rec in zip(v["sweep_deg"],v["alpha_deg"],v["x_tr_c"],v["Re_c"]):
         U=Rec*v["nu"]/v["chord_m"]
-        r=solve_airfoil(X,Y,al,U,v["nu"],v["chord_m"],v["Tu_pct"],sweep_deg=sw)
-        u=r["surfaces"]["upper"]; xp=u["x_tr_chord"]
-        xp=1.0 if xp!=xp else float(xp)
-        rows.append(dict(sweep_deg=sw, alpha_deg=al, Re_c=f"{Rec:.3e}",
-                         x_tr_c_exp=xm, x_tr_c_pred=round(xp,3),
-                         err_pct=round((xp-xm)/xm*100,1),
-                         mechanism=u["onset_mech"]))
+        row=dict(sweep_deg=sw, alpha_deg=al, Re_c=f"{Rec:.3e}", x_tr_c_exp=xm)
+        for c1 in CF_BAND:
+            cal=(None if c1==CAL["CF_C1"] else dict(CF_C1=float(c1)))
+            r=solve_airfoil(X,Y,al,U,v["nu"],v["chord_m"],v["Tu_pct"],
+                            sweep_deg=sw,cal=cal)
+            u=r["surfaces"]["upper"]; xp=u["x_tr_chord"]
+            xp=1.0 if xp!=xp else float(xp)
+            row[f"x_tr_c_pred_C1_{int(c1)}"]=round(xp,3)
+            row[f"err_pct_C1_{int(c1)}"]=round((xp-xm)/xm*100,1)
+            if c1==CAL["CF_C1"]:
+                row["mechanism"]=u["onset_mech"]
+        rows.append(row)
     df=pd.DataFrame(rows); df.to_csv(f"{VAL}/swept_wing_independent.csv",index=False)
     pd.DataFrame([dict(dataset=v["name"], source=v["source"])]).to_csv(
         f"{VAL}/swept_wing_independent_source.csv", index=False)
     fig,ax=new_fig(8.4,5.4)
+    ax.fill_between(v["sweep_deg"],
+                    df[f"x_tr_c_pred_C1_{int(CF_BAND[0])}"],
+                    df[f"x_tr_c_pred_C1_{int(CF_BAND[1])}"],
+                    color=PALETTE[0], alpha=0.16,
+                    label="UTSS, C1 = %d–%d band"%CF_BAND)
+    for c1,st,cc in ((CF_BAND[0],"-s",PALETTE[0]),(CF_BAND[1],"--^",PALETTE[4])):
+        ax.plot(v["sweep_deg"], df[f"x_tr_c_pred_C1_{int(c1)}"], st, ms=7,
+                lw=2.2, color=cc,
+                label="UTSS, C1 = %d%s"%(c1," (frozen constant)"
+                                         if c1==CAL["CF_C1"] else ""))
     ax.plot(v["sweep_deg"], v["x_tr_c"], "o", ms=9, color=PALETTE[1],
-            mec=INK_SOFT, label="measured (Boltz et al.)")
-    ax.plot(v["sweep_deg"], df["x_tr_c_pred"], "-s", ms=7, lw=2.2,
-            color=PALETTE[0], label="UTSS (nothing calibrated here)")
+            mec=INK_SOFT, label="measured (Boltz et al.)", lw=0)
     ax.set_xlabel("leading-edge sweep  Λ  [deg]")
     ax.set_ylabel("transition location  x/c")
     ax.set_ylim(0,0.6)
-    ax.set_title("Independent swept-wing check: NACA 64(2)A015, Λ = 0–50°")
-    ax.legend(loc="upper right",fontsize=10)
+    ax.set_title("Independent swept-wing check: NACA 64(2)A015, Λ = 20–50°")
+    ax.legend(loc="upper right",fontsize=9)
     finish(fig,f"{VP}/val_swept_independent.png",
-           caption="Source: "+v["source"][:95]+"...")
-    print("independent swept-wing: mean |err| = %.1f%%"
-          % float(np.mean(np.abs(df["err_pct"]))))
+           caption="Nothing is calibrated on this set.  Source: "
+                   +v["source"][:80]+"...")
+    for c1 in CF_BAND:
+        print("independent swept-wing, C1 = %3d: mean |err| = %.1f%%"
+              % (c1, float(np.mean(np.abs(df[f"err_pct_C1_{int(c1)}"])))))
     return df
 
 

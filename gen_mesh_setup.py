@@ -151,7 +151,15 @@ def plot_independence(df):
     ax2.plot(df["n_surface_panels"],df["x_tr_upper_c"],"s--",color=PALETTE[1],
              label="x_tr/c (upper)")
     ax2.set_ylabel("upper-surface x_tr / c",color=PALETTE[1])
-    ax.set_title("Mesh-independence study (cruise) — converged by ~260 panels")
+    # What the sweep actually shows: C_d settles to within about +/-1 count
+    # above 180 panels and does not tighten further, the residual wander being
+    # set by which panel the transition point lands on.  Calling that
+    # "converged" overstates it - the spread over the whole sweep is 2.1 counts
+    # - so the title says what the data says.
+    cdc=df["Cd"].values*1e4
+    band=0.5*(cdc[1:].max()-cdc[1:].min())
+    ax.set_title("Mesh sensitivity (cruise): C_d within ±%.1f count above 180 "
+                 "panels" % band)
     ax.axvline(260,color=PALETTE[2],ls=":",lw=1.5)
     ax.text(252,0.96,"selected grid (260)",color=PALETTE[2],fontsize=10,
             ha="right",va="top",transform=ax.get_xaxis_transform())
