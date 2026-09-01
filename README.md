@@ -180,6 +180,16 @@ Full experiment-vs-solver data, plots, and bibliographic sources are in `06_vali
 
 The T3A and T3B reference values are the Rolls-Royce hot-wire measurements distributed as **ERCOFTAC Classic Collection Case 020**, with onset taken as the station of minimum measured `C_f`; no digitisation was performed here. For Schubauer & Skramstad only the onset Reynolds number is carried, at the value quoted throughout the literature.
 
+**Why the flat-plate errors are what they are.** The Abu-Ghannam & Shaw correlation is not the
+problem: evaluated at the *local* turbulence intensity at the *measured* onset it gives +9.6%,
+−6.7% and −7.2% on T3A, T3A⁻ and T3B — ordinary scatter. What enlarges that is **conditioning**.
+In a decaying stream the onset threshold rises as `Tu` falls while `Re_theta` grows only as
+`sqrt(Re_x)`, so the two curves are near-parallel where they meet: perturbing the threshold by ±10%
+moves the predicted transition location by a factor of **4 on T3A, 3 on T3A⁻, 2 on T3B**. A
+correlation good to ten per cent cannot locate transition to ten per cent in such a flow. Finite
+memory in the effective intensity, a cumulative crossing criterion, and carrying each rig's measured
+free-stream velocity distribution were each tested; none improves the result.
+
 **Flow history.** Abu-Ghannam & Shaw correlated onset against turbulence, pressure gradient *and flow history*. In a decaying stream the local intensity is not what the layer has experienced: applied locally the onset threshold outruns `Re_theta` and onset is predicted far downstream; applied at the inlet the decay is ignored and onset comes too early. The effective intensity is the mean of `Tu` over the boundary layer's own development in `Re_theta` — per unit of momentum-thickness growth rather than per unit of distance. It carries no fitted constant and reduces to the local value in a stream that does not decay, such as the free atmosphere.
 
 **Scope of the validation.** Three of the four criteria are now supported by measurement — amplification by Schubauer & Skramstad, bypass by three ERCOFTAC plates, cross-flow by two swept-wing experiments. The separation-induced branch is selected at no reported condition and is validated by none of it. The separation-induced and cross-flow criteria are carried in the kernel but are selected at no condition reported here and validated at none; the cross-flow branch further rests on an algebraic surrogate for the cross-flow momentum thickness whose coefficient is calibrated against design experience rather than measurement. The Prandtl-Glauert correction is applied to the pressure field and integrated loads only, the boundary-layer closures being incompressible formulations. Mean skin-friction error within the transitional region is 5.8-22.8% across the three cases.
