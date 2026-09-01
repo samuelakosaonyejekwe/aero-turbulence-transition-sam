@@ -46,12 +46,6 @@ CAL = dict(
     N_crit    = 9.0,    # reference e^N factor; the value actually used is
                         # obtained from Tu by Mack's relation (see _n_crit)
     N_floor   = 0.5,    # lower clamp on N_crit at high Tu
-    K_pt      = 0.0075, # pre-transitional thickening of the laminar layer
-                        # by free-stream turbulence (see march_bl).  Fitted
-                        # to the measured momentum-thickness DISTRIBUTIONS
-                        # of ERCOFTAC T3A and T3B (0.00774 and 0.00712),
-                        # which are a different quantity from the onset
-                        # location used as the validation metric.
     C_mu      = 0.09,   # k-epsilon constants, used only for the decay of
     C_eps2    = 1.92,   # free-stream turbulence (see _tu_decay)
     Tu_TS_max = 0.1,    # Tu [%] above which the envelope e^N branch is
@@ -362,21 +356,22 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     th2 = 0.45*nu/np.maximum(Ue**6, 1e-12)*I
     th_lam = np.sqrt(np.maximum(th2, 1e-16))
 
-    # ---- Pre-transitional thickening by free-stream turbulence ----
-    # A laminar layer in a disturbed stream is thicker than the Blasius or
-    # Thwaites value: free-stream turbulence drives Klebanoff modes that
-    # transport momentum across the layer well before breakdown.  Thwaites'
-    # method has no mechanism for this, and without it the momentum-thickness
-    # Reynolds number never reaches the bypass onset threshold before that
-    # threshold itself runs away as the turbulence decays.  The increment is
-    # taken proportional to the turbulence intensity accumulated along the
-    # surface,  d(Re_theta) = K_pt * integral( Tu d(Re_s) ),  which vanishes
-    # in a clean stream and is negligible at free-flight disturbance levels.
-    Re_s = Ue*s/nu
-    tu_f = Tu_arr/100.0
-    I_pt = np.concatenate([[0.0],
-        np.cumsum(0.5*(tu_f[1:] + tu_f[:-1])*np.diff(Re_s))])
-    th_lam = th_lam + cal["K_pt"]*I_pt*nu/np.maximum(Ue, 1e-6)
+    # ---- Flow-history-averaged free-stream turbulence ----
+    # Abu-Ghannam & Shaw correlated transition onset against turbulence,
+    # pressure gradient AND flow history.  In a decaying stream the local
+    # value is not what the layer has experienced: applying it makes the
+    # onset threshold rise faster than Re_theta grows, so the two curves
+    # chase each other and onset is predicted far too late.  The effective
+    # intensity is therefore the mean of Tu over the boundary layer's own
+    # development, measured in Re_theta rather than in Re_x - that is, per
+    # unit of momentum-thickness growth rather than per unit of distance.
+    # It carries no fitted constant, and reduces to the local value in a
+    # stream that does not decay, such as the free atmosphere.
+    Reth_lam = Ue*th_lam/nu
+    dR = np.diff(Reth_lam)
+    num = np.concatenate([[0.0], np.cumsum(0.5*(Tu_arr[1:] + Tu_arr[:-1])*dR)])
+    den = Reth_lam - Reth_lam[0]
+    Tu_eff = np.where(den > 1e-9, num/np.maximum(den, 1e-30), Tu_arr)
 
     i_tr = None
     for i in range(n):
@@ -399,13 +394,13 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
                 if dRe > 0.0:
                     n_amp += _dn_dReth(H[i])*dRe
         n_fac[i] = n_amp
-        ts_live = Tu_arr[i] <= cal.get("Tu_TS_max", 1.0)
-        N_target = ((_n_crit(Tu_arr[i], cal.get("N_floor", 0.5))
+        ts_live = Tu_eff[i] <= cal.get("Tu_TS_max", 1.0)
+        N_target = ((_n_crit(Tu_eff[i], cal.get("N_floor", 0.5))
                      / max(cal["A_TS"], 1e-6)) if ts_live else np.inf)
 
         # (b) bypass: free-stream-turbulence driven, meaningful only for
         #     elevated Tu (>~0.1%); below that the natural route governs.
-        Tu_i = Tu_arr[i]
+        Tu_i = Tu_eff[i]
         if Tu_i > 0.1:
             Rbp = cal["A_BP"] * _ags_re_theta_t(Tu_i, lam_t)
         else:
