@@ -7,6 +7,12 @@ Calibration,Laminar integral method,"Thwaites B. (1949), 'Approximate calculatio
 Calibration,Turbulent entrainment / Cf,Head M.R. (1958) entrainment method; Ludwieg H. & Tillmann W. (1950) skin-friction law.
 Calibration,Intermittency / transition length,"Narasimha R. (1957); Dhawan S. & Narasimha R. (1958), J. Fluid Mech. 3."
 Calibration,Cross-flow criterion,"Arnal D. (1984), C1 cross-flow criterion; Mayle R.E. (1991), J. Turbomachinery 113."
-Case study,NLF aerofoil design reference,"Somers D.M. (1981), 'Design and experimental results for a natural-laminar-flow aerofoil for general aviation applications', NASA TP-1861 (NLF(1)-0416)."
+Validation,ERCOFTAC T3A- flat plate,"Roach & Brierley (1990), ERCOFTAC T3A- (Tu=0.87%); ERCOFTAC Classic Collection Case 020."
+Validation,ERCOFTAC T3C4 flat plate (separation bubble),"Coupland J. (1990), ERCOFTAC T3C4; ERCOFTAC Classic Collection Case 020, variable-pressure-gradient series."
+Validation,NLF(1)-0416 aerofoil transition (86 conditions),"Somers D.M. (1981), 'Design and Experimental Results for a Natural-Laminar-Flow Airfoil for General Aviation Applications', NASA TP-1861, Fig. 9; tunnel turbulence level from McGhee R.J., Beasley W.D. & Foster J.M. (1984), NASA TP-2328, Fig. 25."
+Validation,Swept-wing cross-flow (calibration set),"Dagenhart J.R. & Saric W.S. (1999), 'Crossflow Stability and Transition Experiments in Swept-Wing Flow', NASA/TP-1999-209344, Table 2."
+Validation,Swept-wing cross-flow (independent set),"Boltz F.W., Kenyon G.C. & Allen C.Q. (1960), 'Effects of Sweep Angle on the Boundary-Layer Stability Characteristics of an Untapered Wing at Low Speeds', NACA TN D-338, Fig. 9(g)."
+Calibration,Linear stability / amplification database,"Orr (1907); Sommerfeld (1908); Gaster M. (1962), JFM 14, 222; Mack L.M. (1977), AGARD CP-224; Drela M. & Giles M.B. (1987), AIAA J. 25(10), 1347."
+Case study,NLF aerofoil design reference,"Somers D.M. (1981), 'Design and Experimental Results for a Natural-Laminar-Flow Airfoil for General Aviation Applications', NASA TP-1861 (NLF(1)-0416)."
 Case study,Panel method,"Kuethe A.M. & Chow C.Y. (1998), 'Foundations of Aerodynamics', 5th ed., Wiley."
 Case study,ISA atmosphere,"ICAO Standard Atmosphere (ISO 2533:1975), FL360 properties."

@@ -4,11 +4,11 @@ Wall-normal layers (reconstruction),44,-
 First-cell height y1,6.51,micron
 Target wall y+,0.80,-
 Wall-normal growth ratio,1.12,-
-Min streamwise spacing,0.099,mm (xc)
-Max streamwise spacing,9.927,mm (xc)
+Min streamwise spacing,0.099,1e-3 c
+Max streamwise spacing,9.927,1e-3 c
+Max streamwise spacing at MAC,20.074,mm
 LE clustering ratio,99.9,-
 BL grid outer extent,7.04,mm
 Friction velocity u_tau (TE),4.800,m/s
-Max cell aspect ratio,1524,-
-Grid orthogonality (min),88.5,deg
-Mesh type,structured C-type (surface) + normal reconstruction,-
+Max cell aspect ratio (at MAC),3082,-
+Discretisation type,surface panel distribution + wall-normal reconstruction stack (no volume mesh is generated),-

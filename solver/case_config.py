@@ -190,12 +190,15 @@ SWEPT2 = dict(
 )
 
 # ---- NLF(1)-0416 aerofoil, Langley LTPT (natural / bubble transition) ------
-# McGhee, Viken, Pfenninger, Beasley & Harvey, NASA TP-1861 (1984).  Transition
+# Somers D.M., NASA TP-1861 (1981).  (An earlier version of this file credited
+# TP-1861 to McGhee et al. with the title of the later flapped-aerofoil report,
+# which contradicted the entry for the same document in
+# 06_validation/sources_and_references.csv; the two now agree.)  Transition
 # was located by traversing a microphone from orifice to orifice along the
 # model, so the report states it "can only be determined as lying somewhere
 # between two adjacent orifices"; the orifice pitch is 0.05c, and the tables
 # below give the midpoint of each bracket, uncertainty +/-0.025c.  The values
-# were digitised by the present author from Fig. 9(a)-(d) of that report, in
+# were digitised by the present author from Fig. 9(a)-(d) of TP-1861, in
 # which open symbols mark orifices running laminar and solid symbols orifices
 # running turbulent.  No measurements exist above R = 4.0e6 because the tunnel
 # ambient noise then swamped the microphone.
@@ -205,7 +208,7 @@ SWEPT2 = dict(
 # the pressure minimum - a deliberate design feature - so this case tests the
 # separation-induced branch and the natural (TS) branch on a real aerofoil.
 #
-# Free-stream turbulence is not quoted in TP-1861.  Fig. 25 of the companion
+# Free-stream turbulence is not quoted in TP-1861.  Fig. 25 of the tunnel
 # calibration report (McGhee, Beasley & Foster, NASA TP-2328, 1984) gives the
 # LTPT test-section level as 0.012-0.016 percent at M = 0.05 and 0.041-0.044
 # percent at M = 0.15, essentially independent of stagnation pressure at fixed
@@ -221,12 +224,12 @@ NLF0416 = dict(
     Tu_pct    = 0.03,
     Tu_band   = (0.02, 0.05),
     orifice_pitch = 0.05,         # -> +/-0.025c reading uncertainty
-    source    = "McGhee R.J., Viken J.K., Pfenninger W., Beasley W.D. & Harvey "
-                "W.D. (1984), 'Experimental Results for a Flapped Natural-"
-                "Laminar-Flow Airfoil with High Lift/Drag Ratio', NASA TP-1861, "
-                "Fig. 9 (transition) and Table I (coordinates); turbulence level "
-                "from McGhee R.J., Beasley W.D. & Foster J.M. (1984), NASA "
-                "TP-2328, Fig. 25.",
+    source    = "Somers D.M. (1981), 'Design and Experimental Results for a "
+                "Natural-Laminar-Flow Airfoil for General Aviation Applications', "
+                "NASA TP-1861, Fig. 9 (transition) and Table I (coordinates); "
+                "turbulence level from McGhee R.J., Beasley W.D. & Foster J.M. "
+                "(1984), 'Recent Modifications and Calibration of the Langley "
+                "Low-Turbulence Pressure Tunnel', NASA TP-2328, Fig. 25.",
     # Re_c -> surface -> list of (c_l, x_tr/c) digitised from Fig. 9
     data = {
         1.0e6: dict(

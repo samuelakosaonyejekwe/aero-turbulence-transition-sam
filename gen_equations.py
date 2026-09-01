@@ -43,7 +43,7 @@ EQS = [
    r"\theta\frac{dH^{*}}{dx} = 2C_D - H^{*}\frac{C_f}{2} - H^{*}(1-H)\frac{\theta}{U_e}\frac{dU_e}{dx}"),
  ("E06c","4.2  Laminar boundary layer","Laminar closure functions (from the Falkner-Skan family)",
    r"H^{*}(H) = \frac{\theta^{*}}{\theta}, \quad l(H) = Re_\theta\frac{C_f}{2} = \theta_\eta f''(0), "
-   r"\quad d(H) = Re_\theta C_D = \theta_\eta\!\int\! f''^{2} d\eta"),
+   r"\quad d(H) = Re_\theta C_D = \theta_\eta \int \left(f''\right)^{2} d\eta"),
  ("E07","4.2  Laminar boundary layer","Von Karman momentum-integral equation",
    r"\frac{d\theta}{dx} + (2+H)\frac{\theta}{U_e}\frac{dU_e}{dx} = \frac{C_f}{2}"),
  # ---- 4.3  Unified transition kernel (novel) -------------------------
@@ -60,10 +60,14 @@ EQS = [
    r"\sigma = -\alpha_i\theta = \frac{\omega_i}{c_g}, \quad c_g = \frac{\partial\omega_r}{\partial\alpha_r}"),
  ("E11","4.3  Unified transition kernel (novel)","Cross-flow criterion (swept wing, C1 on Re_theta2)",
    r"Re_{\theta 2} = k_{cf}\,Re_\theta\,\sin\Lambda\,\cos\Lambda \ \ge\ C_1"),
- ("E12","4.3  Unified transition kernel (novel)","Separation bubble: dead-air momentum march",
-   r"\frac{d\theta}{dx} = -(2+H_s)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad C_f = 0, \quad H = H_s"),
- ("E12b","4.3  Unified transition kernel (novel)","Separation bubble: reattachment length",
-   r"x_r - x_s = \frac{N_{crit}\,\theta_s}{\sigma_{sep}}, \quad \sigma_{sep} = \sigma(H_{rev}) = 0.0435"),
+ ("E11b","4.3  Unified transition kernel (novel)","Cross-flow amplification integral (the closure actually used)",
+   r"N_{cf} = \int_{x_{c1}}^{x} \frac{\sigma(H_{rev})}{\theta}\,dx' \ \ge\ N_{crit}"),
+ ("E12","4.3  Unified transition kernel (novel)","Separation bubble: dead-air march (momentum and kinetic energy, no wall shear)",
+   r"\frac{d\theta}{dx} = -(2+H)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad "
+   r"\theta\frac{dH^{*}}{dx} = 2C_D - H^{*}(1-H)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad C_f = 0"),
+ ("E12b","4.3  Unified transition kernel (novel)","Separation bubble: reattachment condition",
+   r"N_{bub} = \int_{x_s}^{x_r} \frac{\sigma(H_{rev}, Re_\theta)}{\theta}\,dx' = N_{crit}, \quad "
+   r"\sigma(H_{rev}) \approx 0.0435"),
  ("E13","4.3  Unified transition kernel (novel)","Unified minimum-onset transition kernel",
    r"Re_{\theta t}^{*} = \min\left(a_{TS}Re_{\theta t}^{TS},\, a_{BP}Re_{\theta t}^{BP},\, "
    r"a_{SEP}Re_{\theta t}^{SEP},\, a_{CF}Re_{\theta t}^{CF}\right)"),

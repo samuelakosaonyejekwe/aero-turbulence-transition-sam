@@ -37,13 +37,18 @@ def transition_summary(rc, rl):
             xtr=s["x_tr"]/W["MAC"] if not np.isnan(s["x_tr"]) else 1.0
             rex=cond["U_inf"]*s["x_tr"]/cond["nu_inf"] if not np.isnan(s["x_tr"]) else np.nan
             it=s["i_tr"]
-            reth=s["Re_theta"][it] if it else np.nan
+            has_tr = it is not None
+            reth=float(s["Re_theta"][it]) if has_tr else np.nan
             xch=s.get("x_tr_chord",np.nan)
+            # a surface that stays laminar to the trailing edge is reported as
+            # x_tr/c = 1.0, the same convention the polar and span-wise sweeps
+            # use, rather than as a blank
+            xch = float(xch) if xch==xch else 1.0
             rows.append(dict(case=nm,surface=surf,s_tr_c=round(xtr,3),
-                x_tr_c=round(float(xch),3) if xch==xch else None,
-                Re_x_tr=f"{rex:.3e}", Re_theta_at_onset=round(float(reth),1) if it else None,
+                x_tr_c=round(xch,3),
+                Re_x_tr=f"{rex:.3e}", Re_theta_at_onset=round(reth,1) if has_tr else None,
                 mechanism=s["onset_mech"],
-                laminar_run_pct=round(float(xch)*100,1) if xch==xch else None,
+                laminar_run_pct=round(xch*100,1),
                 Cf_te=round(float(s["Cf"][-1]),5)))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/transition_summary.csv",index=False)
     return df
@@ -72,27 +77,32 @@ def spanwise():
         r=solve_airfoil(X,Y,aeff,cr["U_inf"],cr["nu_inf"],chord,cr["Tu_pct"],
                         sweep_deg=W["le_sweep_deg"],mach=cr["mach"])
         u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
+        # a fully laminar surface counts as x_tr/c = 1.0 everywhere, so the
+        # mean laminar fraction is defined at every station
+        xu=u["x_tr_chord"]; xu=1.0 if xu!=xu else float(xu)
+        xl=l["x_tr_chord"]; xl=1.0 if xl!=xl else float(xl)
         rows.append(dict(eta=round(e,3), y_m=round(e*W["span_b"]/2,3),
             chord_m=round(chord,3), Re_local=round(Re,-2), alpha_eff_deg=round(aeff,2),
-            xtr_upper_c=round(u["x_tr_chord"],3) if u["x_tr_chord"]==u["x_tr_chord"] else 1.0,
-            xtr_lower_c=round(l["x_tr_chord"],3) if l["x_tr_chord"]==l["x_tr_chord"] else 1.0,
+            xtr_upper_c=round(xu,3), xtr_lower_c=round(xl,3),
             Cd_section=round(r["Cd"],5),
-            laminar_fraction=round(0.5*(u["x_tr_chord"]+l["x_tr_chord"]),3)))
+            laminar_fraction=round(0.5*(xu+xl),3)))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/spanwise_distribution.csv",index=False)
     return df
 
 def pressure_field(cond,name):
     X,Y=C.nlf16_panel_points(130)
-    gx=np.linspace(-0.4,1.4,160); gy=np.linspace(-0.6,0.6,110)
+    gx=np.linspace(-0.4,1.4,241); gy=np.linspace(-0.6,0.6,161)
     Xg,Yg=np.meshgrid(gx,gy)
     Vx,Vy,Cp=velocity_field(X,Y,cond["alpha_deg"],Xg,Yg,U=cond["U_inf"],
                             mach=cond["mach"])
-    # mask interior of airfoil
-    co=C.nlf16_coords(n=200)
+    # Mask the body, using the SAME closed polygon the panels were built on.
+    # Masking against a separately sampled contour left a ragged band of
+    # unmasked cells straddling the surface, and those cells sit on the panel
+    # singularity, so they carried velocities of order ten times free stream.
     from matplotlib.path import Path
-    poly=np.column_stack([np.concatenate([co["xu"],co["xl"][::-1]]),
-                          np.concatenate([co["yu"],co["yl"][::-1]])])
-    inside=Path(poly).contains_points(np.column_stack([Xg.ravel(),Yg.ravel()])).reshape(Xg.shape)
+    poly=np.column_stack([X,Y])
+    inside=Path(poly).contains_points(np.column_stack([Xg.ravel(),Yg.ravel()]),
+                                      radius=0.004).reshape(Xg.shape)
     Cp=np.where(inside,np.nan,Cp)
     spd=np.sqrt(Vx**2+Vy**2); spd=np.where(inside,np.nan,spd)
     df=pd.DataFrame({"x_c":Xg.ravel(),"y_c":Yg.ravel(),"Cp":Cp.ravel(),
@@ -132,9 +142,17 @@ def nlf_vs_turbulent(rc):
     """Drag benefit: NLF (predicted transition) vs forced-fully-turbulent."""
     X,Y=C.nlf16_panel_points(130)
     # forced turbulent: tiny Re_theta_t -> trip at LE (A_BP huge)
-    cal_trip=dict(CAL); cal_trip.update(A_TS=0.02,A_BP=0.02)  # trip near LE
+    # A_BP scales the bypass onset threshold, so a small value trips the layer
+    # at the first station; Tu = 5 % also switches the e^N branch off, which is
+    # what makes the reference fully turbulent from the leading edge.
+    cal_trip=dict(CAL); cal_trip.update(A_BP=0.02)
+    # The reference must differ from the NLF case ONLY in where it transitions,
+    # so it is run at the same Mach number and therefore with the same
+    # compressible closures; solving it incompressibly, as an earlier version
+    # did, put part of the quoted drag saving down to the change of flow model.
     rt=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
-                     5.0,sweep_deg=W["le_sweep_deg"],cal=cal_trip)
+                     5.0,sweep_deg=W["le_sweep_deg"],cal=cal_trip,
+                     mach=cr["mach"])
     Cd_nlf=rc["Cd"]; Cd_turb=rt["Cd"]
     u=rc["surfaces"]["upper"]; l=rc["surfaces"]["lower"]
     lam=0.5*((u["x_tr"]+l["x_tr"])/W["MAC"])
@@ -151,7 +169,7 @@ def integrated_forces(rc):
           ("Section profile drag Cd",round(rc["Cd"],5),"-"),
           ("Section Cd (counts)",round(rc["Cd"]*1e4,1),"counts"),
           ("Section L/D",round(rc["Cl"]/rc["Cd"],1),"-"),
-          ("Wing lift (3D est, e=0.85)",round(rc["Cl"]*0.9*q*S,0),"N"),
+          ("Wing lift (3-D estimate, C_L = 0.90 C_l)",round(rc["Cl"]*0.9*q*S,0),"N"),
           ("Dynamic pressure q",round(q,1),"Pa"),
           ("Reynolds number Re_MAC",f"{cr['Re_MAC']:.3e}","-"),
           ("Mach number",cr["mach"],"-")]

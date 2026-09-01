@@ -1,0 +1,5 @@
+set,points,mean_abs_err_c,bias_c,within_bracket,within_bracket_pct
+Upper surface,46,0.0409,0.0025,25,54.3
+Lower surface,40,0.0332,-0.0148,27,67.5
+All,86,0.0373,-0.0055,52,60.5
+Conditions the method accepts,83,0.0288,-0.0031,52,62.7

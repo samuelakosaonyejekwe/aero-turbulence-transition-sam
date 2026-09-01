@@ -16,6 +16,22 @@ from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 
+def _chord_interp(xs, vals, xq):
+    """Interpolate a surface quantity onto a chordwise station list.
+
+    The march is ordered by arc length from the stagnation point, and near a
+    rounded nose that ordering is not monotone in x/c - the first few control
+    points step back and forth by a thousandth of a chord.  np.interp requires
+    an increasing abscissa and gives no warning when it does not get one, so
+    the sequence is sorted and de-duplicated first.
+    """
+    xs = np.asarray(xs, float); vals = np.asarray(vals, float)
+    k = np.argsort(xs, kind="stable")
+    xs = xs[k]; vals = vals[k]
+    keep = np.concatenate([[True], np.diff(xs) > 1e-12])
+    return np.interp(xq, xs[keep], vals[keep])
+
+
 def _tidy3d(ax):
     ax.xaxis.set_major_locator(MaxNLocator(5))
     ax.yaxis.set_major_locator(MaxNLocator(5))
@@ -267,37 +283,24 @@ def plot_nlf_vs_turb():
 # ======================================================================
 # 4.  PRESSURE / VELOCITY CONTOURS  + VECTORS
 # ======================================================================
-def _blanket_field(cond):
-    """Build a clean off-body field anchored on the CORRECT panel surface
-    solution: pressure decays from the wall Cp to freestream; velocity
-    blends surface-tangent edge velocity to freestream."""
-    from scipy.spatial import cKDTree
-    from utss_solver import panel_solve
-    X,Y=C.nlf16_panel_points(160)
-    xc,yc,Cp_s,V,th,S=panel_solve(X,Y,cond["alpha_deg"])
-    U=cond["U_inf"]; al=np.radians(cond["alpha_deg"])
-    # downstream-oriented surface tangents
-    tx=np.cos(th); ty=np.sin(th)
-    flip=(tx*np.cos(al)+ty*np.sin(al))<0
-    tx[flip]*=-1; ty[flip]*=-1
-    Ue=np.abs(V)*U
-    tree=cKDTree(np.column_stack([xc,yc]))
-    gx=np.linspace(-0.45,1.5,200); gy=np.linspace(-0.65,0.65,150)
-    Xg,Yg=np.meshgrid(gx,gy)
-    pts=np.column_stack([Xg.ravel(),Yg.ravel()])
-    dist,idx=tree.query(pts)
-    L=0.16
-    w=np.exp(-dist/L)
-    Cp=(w*Cp_s[idx]).reshape(Xg.shape)
-    # velocity blend
-    Vx=(w*Ue[idx]*tx[idx]+(1-w)*U*np.cos(al)).reshape(Xg.shape)
-    Vy=(w*Ue[idx]*ty[idx]+(1-w)*U*np.sin(al)).reshape(Xg.shape)
-    spd=np.sqrt(Vx**2+Vy**2)
-    return Xg,Yg,Cp,Vx,Vy,spd
+def _solution_field(case):
+    """The off-body field written by run_solution.py, read back as it stands.
+
+    An earlier version of this module built its own field here by weighting the
+    surface pressure with exp(-d/L) away from the wall.  That is a picture of a
+    field, not a solution: it is not the potential flow, it does not satisfy
+    continuity, and it disagreed with 04_solution/field_pressure_*.npz - which
+    the same project computes from the exact constant-strength vortex-panel
+    induced velocity - by more than the quantity being plotted.  The stored
+    field is used instead, so the contours in the report are the solution the
+    report tabulates.
+    """
+    d=np.load(f"{SOL}/field_pressure_{case}.npz")
+    return (d["Xg"],d["Yg"],d["Cp"],d["Vx"],d["Vy"],d["spd"])
 
 def plot_contours(case):
     cond=cr if case=="cruise" else cl
-    Xg,Yg,Cp,Vx,Vy,spd=_blanket_field(cond)
+    Xg,Yg,Cp,Vx,Vy,spd=_solution_field(case)
     co=C.nlf16_coords(n=200)
     polyx=np.concatenate([co["xu"],co["xl"][::-1]]); polyy=np.concatenate([co["yu"],co["yl"][::-1]])
     # Cp contour
@@ -384,8 +387,11 @@ def build_3d_field():
     for e in etas:
         chord=W["root_chord"]+e*(W["tip_chord"]-W["root_chord"])
         twist=e*W["twist_tip_deg"]; aeff=cr["alpha_deg"]+twist
+        # same Mach number as run_solution.py, so the 3-D contours show the
+        # solution the surface CSVs of section 9 tabulate and not a second,
+        # incompressible one
         r=solve_airfoil(X,Y,aeff,cr["U_inf"],cr["nu_inf"],chord,cr["Tu_pct"],
-                        sweep_deg=W["le_sweep_deg"])
+                        sweep_deg=W["le_sweep_deg"],mach=cr["mach"])
         data[e]=r["surfaces"]
     return etas,data
 
@@ -423,12 +429,12 @@ def plot_3d(field):
                 s=data[e][surf]
                 xs=s["x"]; val=s[qty if qty!="Cf" else "Cf"]
                 if qty=="Cp":
-                    valc=np.clip(np.interp(xc,xs,s["Cp"]),-0.7,1.0)
+                    valc=np.clip(_chord_interp(xs,s["Cp"],xc),-0.7,1.0)
                 elif qty=="Cf":
                     # scale to x10^3 and clip the stagnation singularity
-                    valc=np.clip(np.interp(xc,xs,s["Cf"])*1e3,0,6.0)
+                    valc=np.clip(_chord_interp(xs,s["Cf"],xc)*1e3,0,6.0)
                 else:
-                    valc=np.interp(xc,xs,s["gamma"])
+                    valc=_chord_interp(xs,s["gamma"],xc)
                 xr=[];yr=[];zr=[]
                 for xx in xc:
                     Xp,Yp,Zp=_wing_xyz(e,xx,surf); xr.append(Xp);yr.append(Yp);zr.append(Zp)
@@ -457,7 +463,13 @@ def plot_3d(field):
         fig.savefig(f"{TD}/{fname}.png",dpi=170,facecolor="white"); plt.close(fig)
 
 def plot_3d_vectors(field):
-    """3D skin-friction direction vectors coloured by Cf, on upper surface."""
+    """Surface-flow direction arrows on the upper surface, coloured by C_f.
+
+    The arrows lie along the chordwise surface direction of each strip.  A
+    strip formulation carries no span-wise wall shear, so this is not a
+    skin-friction line pattern and is not labelled as one; what it shows is
+    where the wall shear is high and low over the wing.
+    """
     etas,data=field
     fig=plt.figure(figsize=(11,7))
     ax=fig.add_subplot(111,projection="3d")
@@ -467,7 +479,7 @@ def plot_3d_vectors(field):
     pts=[]; cfs=[]
     for e in etas[::2]:
         s=data[e]["upper"]
-        cfc=np.interp(xc,s["x"],s["Cf"])
+        cfc=_chord_interp(s["x"],s["Cf"],xc)
         for j,xx in enumerate(xc):
             Xp,Yp,Zp=_wing_xyz(e,xx,"upper")
             Xp2,_,Zp2=_wing_xyz(e,min(xx+0.03,1.0),"upper")
@@ -483,7 +495,8 @@ def plot_3d_vectors(field):
     ax.view_init(elev=40,azim=-65); _tidy3d(ax)
     try: ax.set_box_aspect((3.0,7.0,1.2))
     except Exception: pass
-    ax.set_title("3D skin-friction vectors on upper surface (coloured by C_f)",
+    ax.set_title("Upper-surface flow direction, coloured by C_f (strip "
+                 "formulation: chordwise only)",
                  color=INK,fontweight="normal")
     ax.grid(False)
     fig.savefig(f"{TD}/td_skinfriction_vectors.png",dpi=170,facecolor="white")
@@ -535,22 +548,40 @@ def plot_remaining_csvs():
     # numeric constants and note the rest on the axis label.
     cc=cc.copy()
     cc["num"]=pd.to_numeric(cc["value"],errors="coerce")
-    derived=list(cc.loc[cc["num"].isna(),"constant"])
+    nonnum=cc.loc[cc["num"].isna()]
+    # two different kinds of non-numeric entry, and calling both "computed from
+    # Tu" was wrong: cf_amp and two_eq are switches that select a closure, while
+    # N_crit and sigma_sep are quantities the model computes at run time.
+    flags=[r.constant for _,r in nonnum.iterrows()
+           if str(r.value).strip() in ("True","False")]
+    derived=[r.constant for _,r in nonnum.iterrows()
+             if str(r.value).strip() not in ("True","False")]
     cc=cc.dropna(subset=["num"]).reset_index(drop=True)
     fig,ax=new_fig(8.6,5.0)
     yy=np.arange(len(cc))
     bars=ax.barh(yy,cc["num"],color=PALETTE[4],height=0.6)
     ax.set_yticks(yy); ax.set_yticklabels(cc["constant"])
-    ax.set_xscale("log")
-    ax.set_xlabel("constant value (log scale)" + (
-        "   [%s: computed from Tu]"%", ".join(derived) if derived else ""))
+    # Symmetric log, not log: the constant set spans five decades AND contains a
+    # negative member (the Thwaites separation parameter).  On a plain log axis
+    # that bar has no finite extent and matplotlib fails while sizing the
+    # figure, which is what stopped this script part-way through.
+    ax.set_xscale("symlog",linthresh=0.01,linscale=0.6)
+    ax.set_xlabel("constant value (symmetric-log scale)")
     for b,v in zip(bars,cc["num"]):
-        ax.text(v*1.08,b.get_y()+b.get_height()/2,f"{v:g}",va="center",
+        off = 1.12 if v > 0 else 1.6
+        ax.text(v*off if abs(v)>0.02 else (0.03 if v>0 else -0.05),
+                b.get_y()+b.get_height()/2,f"{v:g}",
+                va="center",ha="left" if v>0 else "right",
                 fontsize=9,color=INK)
-    ax.set_xlim(1e-3,400)
+    ax.set_xlim(-0.6,600)
+    ax.axvline(0.0,color=INK_SOFT,lw=0.9)
     ax.invert_yaxis()
     ax.set_title("UTSS calibration constant set (single set, all cases)")
-    finish(fig,f"{CSVP}/calibration_constants.png")
+    note=[]
+    if derived: note.append("computed at run time, not fixed: "+", ".join(derived))
+    if flags:   note.append("closure switches: "+", ".join(flags))
+    finish(fig,f"{CSVP}/calibration_constants.png",
+           caption=("Not plotted — "+";  ".join(note)) if note else None)
 
     # --- 7d. flight conditions comparison (flow_conditions.csv) ---
     fc=pd.read_csv("03_model_setup/flow_conditions.csv")
