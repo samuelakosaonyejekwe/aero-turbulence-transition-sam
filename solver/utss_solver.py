@@ -87,6 +87,19 @@ CAL = dict(
                         # physically meaningful indicator; lam is a local
                         # quantity and its threshold belongs to the
                         # one-parameter method it was fitted for.
+    cf_amp    = True,   # close the cross-flow branch with an amplification
+                        # integral rather than a local threshold.  A stationary
+                        # cross-flow vortex has to grow before it breaks down;
+                        # a criterion that fires the instant a local Reynolds
+                        # number is exceeded places transition at the first
+                        # station that is unstable, not at the first that has
+                        # amplified enough, and the two differ by a factor of
+                        # two on the wing of Sec. IV.C.  The rate is the
+                        # computed shear-layer value of Sec. II.C.4 - a
+                        # cross-flow profile is inflectional, like a separated
+                        # one - and the threshold is the same N_crit every
+                        # other branch uses, so the integral form adds no
+                        # constant to the one the criterion already had.
     cf_exact  = False,  # form the cross-flow Reynolds number from the exact
                         # Falkner-Skan-Cooke factor K(lambda) instead of the
                         # constant surrogate k_cf
@@ -615,6 +628,8 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
     use_db = bool(cal.get("use_os_db", True))
     bubble_on = bool(cal.get("bubble", True))
     i_sep = None; s_sep = 0.0; th_sep = 0.0; H_sep = 0.0; th_b = 0.0; n_bub = 0.0
+    n_cf = 0.0
+    sig_cf = float(_stab.sigma_curve(_stab.H_REVERSE, 400.0).max())
     omegas = np.array([]); amp = np.array([])
     if use_db:
         om_lo, om_hi = _stab.omega_grid_bounds()
@@ -796,7 +811,17 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         #     which reduces the stability of an inflectional three-dimensional
         #     profile to a single Reynolds number, and not the surrogate for
         #     the cross-flow thickness.  See Sec. VI.
-        if sweep_deg > 1.0:
+        if sweep_deg > 1.0 and cal.get("cf_amp", True):
+            L_r = np.radians(sweep_deg)
+            if cal.get("cf_exact", False):
+                fac = np.sin(L_r)*np.cos(L_r)*_stab.crossflow_factor(lam[i])
+                Re_th2 = Reth[i]*fac
+            else:
+                Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"])
+            if Re_th2 >= cal["CF_C1"]*cal["A_CF"] and i > 0:
+                n_cf += (sig_cf/max(theta[i], 1e-12))*(s[i] - s[i-1])
+            Rcf = 1e9
+        elif sweep_deg > 1.0:
             if cal.get("cf_exact", False):
                 L_r = np.radians(sweep_deg)
                 fac = (np.sin(L_r)*np.cos(L_r)
@@ -819,10 +844,14 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, Ue_inf=1.0,
         Rt = 1e9 if in_bubble else min(Rbp, Rsep, Rcf)
         Re_th_t[i] = Rt
         trig_ts = bool(ts_live and n_amp >= N_target)
-        if (trig_ts or bub_trig or Reth[i] >= Rt) and i_tr is None and i > 1:
+        trig_cf = bool(sweep_deg > 1.0 and cal.get("cf_amp", True)
+                       and n_cf >= _n_crit(Tu_eff[i], cal.get("N_floor", 0.5)))
+        if (trig_ts or bub_trig or trig_cf or Reth[i] >= Rt) and i_tr is None and i > 1:
             i_tr = i
             if in_bubble:
                 mech = "separation"
+            elif trig_cf and not trig_ts:
+                mech = "crossflow"
             elif trig_ts and Reth[i] < Rt:
                 mech = "TS-natural"
             else:
