@@ -158,7 +158,14 @@ def run_validation():
             cf_lam_ref=0.664/np.sqrt(np.maximum(rex_e,1.0))
             cf_turb_ref=0.0592/np.maximum(rex_e,1.0)**0.2
             g_i=np.interp(rex_e, r["Re_x"], r["gamma"])
-            m_lam=(rex_e < lo) & (cf_e <= 1.5*cf_lam_ref)
+            # A station inside the predicted bubble is in neither state: the
+            # closure sets C_f identically to zero there, so a relative error
+            # against a measured 1.9e-4 is 100 per cent by construction and
+            # says nothing about the laminar branch.  Two such stations were
+            # what carried the T3C4 laminar figure from 18.6 to 29.7 per cent.
+            rex_sep = (float(r["Re_x"][r["i_sep"]])
+                       if r.get("i_sep") is not None else np.inf)
+            m_lam=(rex_e < lo) & (cf_e <= 1.5*cf_lam_ref) & (rex_e < rex_sep)
             m_turb=(g_i >= 0.99) & (cf_e >= 0.7*cf_turb_ref)
             err_lam=(round(float(np.mean(rel[m_lam])),1) if m_lam.sum() else None)
             err_turb=(round(float(np.mean(rel[m_turb])),1) if m_turb.sum() else None)
@@ -376,6 +383,77 @@ def run_swept2():
         print("independent swept-wing, C1 = %3d: mean |err| = %.1f%%"
               % (c1, float(np.mean(np.abs(df[f"err_pct_C1_{int(c1)}"])))))
     return df
+
+
+def crossflow_criticals(write=True, quiet=False):
+    """What the cross-flow criterion would have to return at each MEASURED
+    transition point, on both swept wings.
+
+    This is the evidence for the band of Sec. IV.C, and it is measured rather
+    than asserted.  The march is run with every branch disabled so that it
+    reaches the measured station, and the criterion is evaluated there.  If a
+    single critical value served both experiments the two means would agree;
+    the scatter within each experiment says whether the FORM of the criterion
+    is right, separately from whether one constant fits both.
+    """
+    import stability as _st
+    from utss_solver import _re_theta2
+    # every branch off, so the laminar march reaches the measured station
+    NOCF = dict(CF_C1=1e12, A_TS=1e6, Tu_TS_max=-1.0, bubble=False)
+
+    def probe(X, Y, al, U, nu, c, tu, sw, x_meas):
+        r = solve_airfoil(X, Y, al, U, nu, c, tu, sweep_deg=sw, cal=NOCF)
+        u = r["surfaces"]["upper"]
+        x = np.asarray(u["x"], float); k = np.argsort(x)
+        Rt = float(np.interp(x_meas, x[k], np.asarray(u["Re_theta"], float)[k]))
+        lm = float(np.interp(x_meas, x[k], np.asarray(u["lam"], float)[k]))
+        L = np.radians(sw)
+        return (Rt, _re_theta2(Rt, sw, CAL["CF_ratio"]),
+                Rt*np.sin(L)*np.cos(L)*_st.crossflow_factor(lm))
+
+    rows = []
+    v1 = C.SWEPT; X1, Y1 = _section_points(NLF415)
+    for Rec, xm in zip(v1["Re_c"], v1["x_tr_c"]):
+        Rt, r2, rx = probe(X1, Y1, v1["alpha_deg"], Rec*v1["nu"]/v1["chord_m"],
+                           v1["nu"], v1["chord_m"], v1["Tu_pct"],
+                           v1["sweep_deg"], xm)
+        rows.append(dict(dataset="Dagenhart & Saric (calibration)",
+                         sweep_deg=v1["sweep_deg"], Re_c=f"{Rec:.3e}",
+                         x_tr_c_measured=xm, Re_theta=round(Rt, 1),
+                         Re_theta2_surrogate=round(r2, 1),
+                         Re_cf_exact_FSC=round(rx, 1)))
+    v2 = C.SWEPT2; X2, Y2 = _section_points(v2["section"])
+    for sw, al, xm, Rec in zip(v2["sweep_deg"], v2["alpha_deg"],
+                               v2["x_tr_c"], v2["Re_c"]):
+        Rt, r2, rx = probe(X2, Y2, al, Rec*v2["nu"]/v2["chord_m"],
+                           v2["nu"], v2["chord_m"], v2["Tu_pct"], sw, xm)
+        rows.append(dict(dataset="Boltz et al. (independent)", sweep_deg=sw,
+                         Re_c=f"{Rec:.3e}", x_tr_c_measured=xm,
+                         Re_theta=round(Rt, 1),
+                         Re_theta2_surrogate=round(r2, 1),
+                         Re_cf_exact_FSC=round(rx, 1)))
+    df = pd.DataFrame(rows)
+    stat = []
+    groups = [(n, d) for n, d in df.groupby("dataset", sort=False)]
+    groups.append(("Both facilities pooled", df))
+    for name, d in groups:
+        for col, lab in (("Re_theta2_surrogate", "surrogate Re_theta2"),
+                         ("Re_cf_exact_FSC", "exact Falkner-Skan-Cooke Re_cf")):
+            v = d[col].to_numpy(float)
+            m = float(v.mean())
+            # population coefficient of variation, so the pooled figure and the
+            # per-facility ones are formed the same way
+            stat.append(dict(dataset=name, criterion=lab,
+                             mean_critical_value=round(m, 1),
+                             coeff_of_variation_pct=round(float(v.std())/m*100, 1),
+                             n_points=len(d)))
+    st_df = pd.DataFrame(stat)
+    if write:
+        df.to_csv(f"{VAL}/crossflow_criticals.csv", index=False)
+        st_df.to_csv(f"{VAL}/crossflow_criticals_summary.csv", index=False)
+    if not quiet:
+        print(st_df.to_string(index=False))
+    return df, st_df
 
 
 def _cl_curve(X, Y, mach, alphas=(-4.0, 2.0, 8.0)):
@@ -703,6 +781,7 @@ if __name__=="__main__":
     print(df_sw.to_string(index=False))
     df_sw2=run_swept2()
     print(df_sw2.to_string(index=False))
+    crossflow_criticals()
     df_nlf=run_nlf0416()
     print(nlf0416_summary(df_nlf).to_string(index=False))
     plot_nlf0416(df_nlf)

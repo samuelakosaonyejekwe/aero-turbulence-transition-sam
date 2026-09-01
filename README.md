@@ -105,7 +105,31 @@ Boltz et al. digitised from NACA TN D-338:
 
 Both columns of the independent set are computed and tabulated by
 `gen_validation.py` into `06_validation/swept_wing_independent.csv`; the spread
-between them is the limitation, not a choice to be made per case.  The
+between them is the limitation, not a choice to be made per case.
+
+What the two experiments actually require is measured rather than asserted, in
+`06_validation/crossflow_criticals.csv`: the march is run with every branch
+disabled so that it reaches the measured transition station, and the criterion
+is evaluated there.
+
+| set | critical Re_θ2 | coeff. of variation | points |
+|---|---|---|---|
+| Dagenhart & Saric | 169 | 21.7 % | 6 |
+| Boltz et al. | 234 | 4.0 % | 4 |
+| pooled | 195 | 22.1 % | 10 |
+
+Each facility is internally consistent — Boltz to 4 % across four sweep angles
+and a factor of three in chord Reynolds number — and the two differ by 38 %.
+That is the shape of a receptivity difference, not of a criterion with the
+wrong form.  Two attempts to close the gap fail and are recorded rather than
+dropped: the exact Falkner–Skan–Cooke factor K(λ) in place of the constant
+surrogate makes it worse (pooled variation 86 % against 22 %, and the ratio
+between the two sets inverts), and giving the cross-flow branch its own
+amplification threshold,
+separate from Mack's, moves the independent set only from 55 % to 51 % as that
+threshold goes from N = 2 to 12, because once Re_θ2 exceeds C1 the
+amplification builds fast enough that the threshold is nearly redundant with
+C1 itself.  The
 branch is closed by an **amplification integral** rather than a local threshold
 — a stationary cross-flow vortex must grow before it breaks down — using the
 computed rate 0.0435 and the same N_crit as every other branch, so it adds no

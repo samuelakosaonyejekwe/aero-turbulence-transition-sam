@@ -248,6 +248,10 @@ def setup_tables():
         ("sep_floor",CAL["sep_floor"],"min separation-induced onset Re_theta (ablation path only)",
          "superseded by the bubble closure; reachable only with bubble=False"),
         ("n_freq",CAL["n_freq"],"frequencies carried by the e^N integration","discretisation parameter; onset moves <0.2% over 24-64"),
+        ("CF_N",CAL["CF_N"],"separate amplification threshold for the crossflow branch (ablation path only)",
+         "0 = use the same N_crit as every other branch; exposed to test whether a "
+         "roughness-seeded branch needs its own threshold, and it does not - see "
+         "06_validation/crossflow_criticals_summary.csv"),
     ]
     pd.DataFrame(calrows,columns=["constant","value","role","calibration_source"]).to_csv(
         f"{SET}/calibration_constants.csv",index=False)
