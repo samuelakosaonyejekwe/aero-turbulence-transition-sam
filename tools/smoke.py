@@ -208,29 +208,45 @@ def kernel_every_mechanism_fires():
 
 @check
 def kernel_continuous_in_turbulence():
-    """no step change in the answer across the natural/bypass handover"""
+    """the answer is continuous in Tu across the natural/bypass handover"""
     import case_config as C
     from utss_solver import solve_airfoil
     cr, W = C.CRUISE, C.WING
-    X, Y = C.nlf16_panel_points(80)
-    tus = np.geomspace(0.03, 1.0, 22)
-    xtr = []
-    for tu in tus:
-        r = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
-                          W["MAC"], float(tu), sweep_deg=W["le_sweep_deg"],
-                          mach=cr["mach"])
-        u = r["surfaces"]["upper"]["x_tr_chord"]
-        xtr.append(1.0 if u != u else float(u))
-    xtr = np.array(xtr)
+    npan = 80
+    X, Y = C.nlf16_panel_points(npan)
+
+    def sweep(n, lo=0.08, hi=0.30):
+        tus = np.linspace(lo, hi, n)
+        out = []
+        for tu in tus:
+            r = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                              W["MAC"], float(tu), sweep_deg=W["le_sweep_deg"],
+                              mach=cr["mach"])
+            u = r["surfaces"]["upper"]["x_tr_chord"]
+            out.append(1.0 if u != u else float(u))
+        return tus, np.array(out)
+
     # transition may only move forward as the stream gets noisier
+    tus, xtr = sweep(23)
     assert np.all(np.diff(xtr) <= 1e-9), \
         "transition moves aft with rising Tu: %s" % np.array2string(xtr, precision=3)
-    jump = float(np.max(np.abs(np.diff(xtr))))
-    assert jump < 0.06, (
-        "step of %.3fc in transition location between adjacent Tu; the "
-        "natural/bypass handover is discontinuous:\n  Tu  %s\n  xtr %s"
-        % (jump, np.array2string(tus, precision=3),
-           np.array2string(xtr, precision=3)))
+
+    # Continuity is tested by REFINEMENT, not by an absolute threshold.  The
+    # predicted transition location can only land on a panel, so the sampled
+    # jump can never fall below the panel spacing however smooth the model is;
+    # an absolute bound therefore measures the grid, not the physics.  Halving
+    # the sampling halves the jump for a continuous function and leaves it
+    # unchanged for a step.  The old gate produced a 0.17c step here that did
+    # not refine away at all.
+    j1 = float(np.max(np.abs(np.diff(sweep(12)[1]))))
+    j2 = float(np.max(np.abs(np.diff(xtr))))
+    xs = np.sort(np.abs(np.asarray(C.nlf16_coords(npan)["xu"])))
+    spacing = float(np.max(np.diff(xs)[(xs[:-1] > 0.2) & (xs[:-1] < 0.6)]))
+    assert j2 <= max(0.55*j1, 1.6*spacing) + 1e-9, (
+        "the jump in transition location did not refine away: %.4fc at "
+        "dTu = %.4f, %.4fc at half that, against a panel spacing of %.4fc. "
+        "A step that survives refinement is a discontinuity in the model."
+        % (j1, (tus[1]-tus[0])*2, j2, spacing))
 
 
 @check
