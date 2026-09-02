@@ -107,6 +107,10 @@ CAL = dict(
     bubble    = True,   # close the separation branch by continuing the
                         # amplification integral through the detached shear
                         # layer instead of transitioning at separation itself
+    bub_rev_H = False,  # let the shape factor in the dead-air momentum equation
+                        # follow the reverse-flow profile the amplification rate
+                        # is already read from, instead of being capped at the
+                        # attached Falkner-Skan separation value (see march_bl)
     H_sep     = 0.0,    # if positive, laminar separation is declared where the
                         # solved shape factor reaches this value instead of
                         # where the Thwaites parameter reaches lam_sep.  With
@@ -793,6 +797,23 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
                     Hst_b + dx_b*(2.0*d_b - Hs_b*(1.0 - H_b)*lam_b)/(th_b*Ret_b),
                     _HS_LO, _HS_HI))
                 H_b = float(np.clip(_stab.H_from_Hstar(Hst_b), H_sep, _H_MAXTAB))
+                if cal.get("bub_rev_H", False):
+                    # The momentum equation across the dead-air region needs H,
+                    # not H*, so it is not bound by the fold that stops the
+                    # kinetic-energy march: only the INVERSION H = H(H*) ceases
+                    # to exist there.  Capping it at the attached separation
+                    # value while reading the amplification rate off the
+                    # reverse-flow profile at H_REVERSE is the model
+                    # contradicting itself about which profile the detached
+                    # layer has.  With this on, H relaxes across the bubble
+                    # from its separation value towards that same reverse-flow
+                    # profile, in step with the amplification that measures how
+                    # far through the bubble the layer is.  No constant is
+                    # added: both ends are quantities the model already uses.
+                    _f = min(max(n_bub/max(_n_crit(Tu_eff[i],
+                                                   cal.get("N_floor", 0.5)),
+                                           1e-9), 0.0), 1.0)
+                    H_b = H_sep + _f*(_stab.H_REVERSE - H_sep)
                 # The amplification rate of the detached shear layer is read
                 # from the same table as everywhere else.  The tabulated
                 # Falkner-Skan family is continued past separation onto its

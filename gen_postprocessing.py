@@ -95,17 +95,26 @@ def plot_geometry_csvs():
     finish(fig,f"{CSVP}/geo_airfoil.png")
 
     pl=pd.read_csv("01_geometry/wing_planform.csv")
-    fig,ax=new_fig(8,5)
-    ax.plot(pl["eta"],pl["chord_m"],"o-",color=PALETTE[0],label="chord [m]")
-    ax.set_xlabel("span fraction η"); ax.set_ylabel("chord [m]",color=PALETTE[0])
-    ax2=ax.twinx()
-    ax2.plot(pl["eta"],pl["twist_deg"],"s--",color=PALETTE[1],label="twist [deg]")
-    ax2.plot(pl["eta"],pl["z_dihedral_m"],"^:",color=PALETTE[2],label="dihedral z [m]")
-    ax2.set_ylabel("twist [deg] / z [m]")
-    ax.set_title("Wing span-wise geometry distribution")
-    l1,la1=ax.get_legend_handles_labels(); l2,la2=ax2.get_legend_handles_labels()
-    ax.legend(l1+l2,la1+la2,fontsize=10,loc="center right")
-    finish(fig,f"{CSVP}/geo_planform.png")
+    # Three quantities in two units.  Twist is in degrees and chord and
+    # dihedral rise in metres, and putting the last two on one twinned axis
+    # against the first meant an axis labelled "twist [deg] / z [m]" - two
+    # units on one scale, with the dihedral squashed into a sixth of it.
+    # One panel per unit instead.
+    fig,axs=plt.subplots(2,1,figsize=(8,6.0),sharex=True)
+    a0,a1=axs
+    a0.plot(pl["eta"],pl["chord_m"],"o-",color=PALETTE[0],label="chord")
+    a0.plot(pl["eta"],pl["z_dihedral_m"],"^:",color=PALETTE[2],label="dihedral rise z")
+    a0.set_ylabel("length  [m]")
+    a0.set_ylim(-0.15, float(pl["chord_m"].max())*1.32)   # head-room for the key
+    a0.legend(fontsize=10,loc="upper right")
+    a0.set_title("Wing span-wise geometry distribution")
+    a1.plot(pl["eta"],pl["twist_deg"],"s--",color=PALETTE[1],label="twist")
+    a1.set_ylabel("twist  [deg]"); a1.set_xlabel("span fraction η")
+    a1.legend(fontsize=10,loc="upper right")
+    for a in axs: a.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(f"{CSVP}/geo_planform.png",dpi=170,facecolor="white")
+    plt.close(fig)
 
 def plot_mesh_csvs():
     sm=pd.read_csv("02_mesh/surface_mesh_nodes.csv")
@@ -134,6 +143,8 @@ def plot_mesh_csvs():
     ax2=ax.twinx(); ax2.plot(mi["n_surface_panels"],mi["x_tr_upper_c"],"s--",color=PALETTE[1])
     ax2.set_ylabel("x_tr/c upper",color=PALETTE[1])
     ax.axvline(260,color=PALETTE[2],ls=":")
+    ax.text(260,ax.get_ylim()[1],"  selected grid (260)",color=PALETTE[2],
+            fontsize=9,va="top",ha="left")
     ax.set_title("Mesh sensitivity: C_d and transition location vs panel count")
     finish(fig,f"{CSVP}/mesh_independence.png")
 
@@ -186,7 +197,9 @@ def plot_surface(case):
     ax2.set_ylim(1.3, max(3.0, float(max(mbu["H_shape"].max(),
                                          mbl["H_shape"].max()))*1.12))
     ax2.axhline(2.6,color=PALETTE[5],lw=0.9,alpha=0.6)
-    ax2.text(0.55,2.64,"H ≈ 2.6 (incipient separation)",fontsize=10,
+    # over the forward run the shape factor sits below 2.6, so the label goes
+    # there; at mid-chord it sat on the H curves it is annotating
+    ax2.text(0.22,2.64,"H ≈ 2.6 (incipient separation)",fontsize=10,
              color=PALETTE[5],ha="center")
     l1,la1=ax.get_legend_handles_labels(); l2,la2=ax2.get_legend_handles_labels()
     ax.legend(l1+l2,la1+la2,fontsize=9,loc="upper center",ncol=4,
@@ -388,8 +401,18 @@ def plot_contours(case):
     cf=ax.contourf(Xg,Yg,spd,levels=lv,cmap=CF_CMAP,extend="both")
     ax.grid(False)          # no grid lines over a filled field
     try:
-        ax.streamplot(Xg,Yg,np.nan_to_num(Vx),np.nan_to_num(Vy),density=1.1,
-                      color=INK_SOFT,linewidth=0.6,arrowsize=0.7)
+        # streamplot was fed nan_to_num, which turns the masked body into a
+        # region of exactly zero velocity that streamlines run into and stop
+        # against, leaving a spurious straight line below the section.  A
+        # masked array makes it skip those cells instead.
+        # A masked array rather than nan_to_num, which turned the body into a
+        # region of exactly zero velocity for the integrator to run into.
+        # (The column of arrowheads below the section is not a streamline:
+        # matplotlib places one arrow at each trajectory's mid-arc-length, and
+        # on a near-uniform field those midpoints line up.)
+        body=np.isnan(spd)
+        ax.streamplot(Xg,Yg,np.ma.array(Vx,mask=body),np.ma.array(Vy,mask=body),
+                      density=1.1,color=INK_SOFT,linewidth=0.6,arrowsize=0.7)
     except Exception: pass
     _body(ax,polyx,polyy)
     cb=fig.colorbar(cf,ax=ax,shrink=0.85,pad=0.02); cb.set_label("speed [m/s]")
@@ -485,7 +508,7 @@ def plot_3d(field):
     xc=0.5*(1-np.cos(np.linspace(0,np.pi,nchord)))
     for qty,cmap,lab,fname,vmnmx in [
         ("Cp",FIELD_CMAP,"C_p","td_Cp",(-0.7,1.0)),
-        ("Cf",CF_CMAP,"C_f  ×10³","td_Cf",(0,6.0)),
+        ("Cf",CF_CMAP,"C_f  ×10³","td_Cf",None),
         ("gamma",GAMMA_CMAP,"intermittency γ","td_gamma",(0,1))]:
         fig=plt.figure(figsize=(11,7))
         ax=fig.add_subplot(111,projection="3d")
@@ -500,8 +523,10 @@ def plot_3d(field):
                 if qty=="Cp":
                     valc=np.clip(_chord_interp(xs,s["Cp"],xc),-0.7,1.0)
                 elif qty=="Cf":
-                    # scale to x10^3 and clip the stagnation singularity
-                    valc=np.clip(_chord_interp(xs,s["Cf"],xc)*1e3,0,6.0)
+                    # scale to x10^3; the range is set from the data below by
+                    # percentile, so the stagnation spike is excluded without
+                    # a hardcoded ceiling that stops matching the solution
+                    valc=np.clip(_chord_interp(xs,s["Cf"],xc)*1e3,0,None)
                 else:
                     valc=_chord_interp(xs,s["gamma"],xc)
                 xr=[];yr=[];zr=[]
@@ -510,8 +535,19 @@ def plot_3d(field):
                 XX.append(xr);YY.append(yr);ZZ.append(zr);VV.append(valc)
             surfgrids[surf]=(np.array(XX),np.array(YY),np.array(ZZ),np.array(VV))
             allv.append(np.array(VV))
-        av=np.concatenate([a.ravel() for a in allv])
-        vmin,vmax=(vmnmx if vmnmx else (np.nanpercentile(av,2),np.nanpercentile(av,98)))
+        # The colour range is taken from the stations clear of the leading-edge
+        # stagnation singularity, where the integral C_f diverges: including it
+        # sets the scale at 33e-3 and paints the whole wing one flat blue,
+        # while a hardcoded ceiling (this used to be 0 to 6e-3) stops matching
+        # the solution as soon as anything upstream of it changes.
+        keep=xc>0.02
+        av=np.concatenate([a[:,keep].ravel() for a in allv])
+        if vmnmx:
+            vmin,vmax=vmnmx
+        elif qty=="Cf":
+            vmin,vmax=0.0,float(np.nanpercentile(av,99))
+        else:
+            vmin,vmax=np.nanpercentile(av,2),np.nanpercentile(av,98)
         norm=Normalize(vmin,vmax)
         # lower surface first.  plot_surface paints in call order, not by
         # depth, so drawing the lower one last covered the upper one: the
@@ -689,18 +725,23 @@ def plot_remaining_csvs():
         # as text: the CSVs carry their own formatting, and re-parsing turns
         # Re_MAC written as 6.414e+06 into 6414000.0
         df=pd.read_csv(csv, dtype=str).fillna("")
-        def wrap(x):
-            x=str(x)
-            return "\n".join(textwrap.wrap(x,wrapcol)) if len(x)>wrapcol else x
-        data=[[wrap(c) for c in row] for row in df.values]
         cols=[str(c) for c in df.columns]; ncol=len(cols)
+        if ncol==2: colW=[0.34,0.66]
+        elif ncol==3: colW=[0.52,0.24,0.24]
+        else: colW=[1/ncol]*ncol
+        # Wrap each column to ITS OWN width.  One wrapcol for every column
+        # overflowed the narrow ones: the discretisation-type cell of
+        # mesh_metrics.csv sits in a column a quarter of the table wide and
+        # was wrapped to 34 characters, so it ran out past the cell border.
+        wcol=[max(10,int(round(wrapcol*ncol*w))) for w in colW]
+        def wrap(x,w):
+            x=str(x)
+            return "\n".join(textwrap.wrap(x,w)) if len(x)>w else x
+        data=[[wrap(c,wcol[j]) for j,c in enumerate(row)] for row in df.values]
         rowlines=[max(1,max(str(c).count("\n")+1 for c in row)) for row in data]
         total=sum(rowlines)+1
         fig_h=min(0.7+0.30*total, 13.5); fig_w=min(3.4+3.2*ncol,12.5)
         fig,ax=new_fig(fig_w,fig_h); ax.axis("off")
-        if ncol==2: colW=[0.34,0.66]
-        elif ncol==3: colW=[0.52,0.24,0.24]
-        else: colW=[1/ncol]*ncol
         tbl=ax.table(cellText=data,colLabels=cols,cellLoc="left",loc="center",
                      colWidths=colW)
         tbl.auto_set_font_size(False); tbl.set_fontsize(fontsize)
