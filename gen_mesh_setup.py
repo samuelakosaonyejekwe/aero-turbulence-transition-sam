@@ -255,7 +255,7 @@ def setup_tables():
         ("Marching scheme","explicit trapezoidal, arc-length stepping with "
          "sub-stepping on the kinetic-energy equation"),
         ("Convergence tol (panel)","1e-10 (direct solve)"),
-        ("Wall y+ target","~1 (reconstruction grid)")]
+        ("Wall y+ target","0.80 (reconstruction grid; no volume mesh is solved on it)")]
     pd.DataFrame(ss,columns=["setting","value"]).to_csv(
         f"{SET}/solver_settings.csv",index=False)
 
@@ -293,7 +293,12 @@ def setup_tables():
         ("CF_ratio",CAL["CF_ratio"],"theta2/theta surrogate for crossflow","FITTED on Dagenhart & Saric; independent check in Sec. IV.C"),
         ("sigma_sep","from table","shear-layer amplification rate in a bubble","computed on the reverse-flow Falkner-Skan branch; 0.0435, not fitted"),
         ("two_eq",CAL["two_eq"],"two-equation laminar march (momentum + kinetic energy)","closures from the Falkner-Skan family; no fitted constant"),
-        ("N_anchor",N_anchor,"offset on Mack's N_crit","unit conversion to the present amplification rates; set jointly on S&S and the 86 NLF(1)-0416 conditions"),
+        ("N_anchor",N_anchor,"offset on Mack's N_crit",
+         "unit conversion from Mack's 1977 growth rates to the present tabulated ones; "
+         "set on the Schubauer-Skramstad plate ALONE, which it reproduces to 0.07 %. "
+         "It was previously set jointly on that plate and the 86 NLF(1)-0416 conditions, "
+         "which made that set a calibration set while three places in this project "
+         "described it as one on which nothing is calibrated"),
         ("C_mu",CAL["C_mu"],"k-epsilon constant in the free-stream turbulence decay",
          "standard value 0.09; with C_eps2 it fixes Tu(x) from the rig's integral length scale, and neither is fitted here"),
         ("C_eps2",CAL["C_eps2"],"k-epsilon constant in the free-stream turbulence decay",

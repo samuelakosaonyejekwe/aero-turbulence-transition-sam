@@ -5,16 +5,23 @@ independent, published dataset the four branches of the kernel reach, with ONE
 universal calibration set (no per-case physics re-tuning).  Records all
 sources.
 
-  Flat plates (transition-onset Re_theta_t)
-    ERCOFTAC T3A   - bypass,     Tu = 3.04 %  (Roach & Brierley 1990)
-    ERCOFTAC T3A-  - bypass,     Tu = 0.87 %  (Roach & Brierley 1990)
-    ERCOFTAC T3B   - bypass,     Tu = 5.95 %  (Roach & Brierley 1990)
+  Flat plates (transition-onset Re_theta_t).  Which of these is calibration
+  and which is validation is stated here rather than left to be inferred:
+    ERCOFTAC T3A   - bypass,     Tu = 3.04 %  (Roach & Brierley 1990)   [C]
+    ERCOFTAC T3A-  - bypass,     Tu = 0.87 %  (Roach & Brierley 1990)   [C]
+    ERCOFTAC T3B   - bypass,     Tu = 5.95 %  (Roach & Brierley 1990)   [C]
     ERCOFTAC T3C4  - separation bubble, Tu = 2.11 %  (Coupland 1990)
-    Schubauer & Skramstad - natural, Tu = 0.03 %  (NACA Rep. 909, 1948)
+    Schubauer & Skramstad - natural, Tu = 0.03 %  (NACA Rep. 909, 1948)  [C]
+  [C] marks a set a constant was set on.  The three T3 plates are the only
+  bypass data here, and CAL["tu_hist"] - the weight given to the flow history
+  of Tu in the Abu-Ghannam & Shaw correlation - was set on them, so they are a
+  calibration basis and not an independent check.  The Schubauer & Skramstad
+  plate sets the natural branch's anchor.  T3C4 (the separation branch), the
+  86 aerofoil conditions and the Boltz swept wing are out of sample.
 
   Aerofoil (transition location x_tr/c)
-    NLF(1)-0416, 86 conditions from NASA TP-1861 Fig. 9 - nothing calibrated
-    on this set
+    NLF(1)-0416, 86 conditions from NASA TP-1861 Fig. 9 - out of sample; the
+    natural branch's one constant is set on the Schubauer & Skramstad plate
 
   Swept wings (cross-flow branch)
     Dagenhart & Saric 45 deg NLF(2)-0415 - the calibration set
@@ -693,7 +700,13 @@ def run_nlf0416(Tu_pct=None, quiet=False, write=True, cal=None):
     """Aerofoil transition validation against NASA TP-1861, Fig. 9.
 
     86 transition locations on the NLF(1)-0416 section, both surfaces, at four
-    chord Reynolds numbers.  Nothing in the model is calibrated on this set.
+    chord Reynolds numbers.  Nothing in the model is calibrated on this set -
+    and that statement is now true.  The anchor of the natural branch used to
+    be chosen at whatever value put the most of these 86 predictions inside
+    the experimental bracket, which made this a calibration set while this
+    docstring, the figure caption and the README all called it otherwise.  It
+    is set on the Schubauer & Skramstad plate alone (see utss_solver._n_crit),
+    so every point here is out of sample.
     Each measured point is matched by trimming the incidence to the measured
     lift coefficient; the experimental uncertainty is half the 0.05c orifice
     pitch, so a prediction is counted as within the measurement bracket when it
@@ -959,7 +972,9 @@ def plot_nlf0416(df=None):
     fig.tight_layout(rect=(0, 0.035, 1, 0.97))
     fig.text(0.5, 0.012,
              "Bars show the +/-0.025c orifice-pitch bracket within which the "
-             "experiment localises transition.  Nothing is calibrated on this set.",
+             "experiment localises transition.  Nothing is calibrated on this "
+             "set: the one constant of the natural branch is set on the "
+             "Schubauer & Skramstad plate alone.",
              ha="center", fontsize=8.5, color=INK_SOFT, style="italic")
     import os as _os
     _os.makedirs(VP, exist_ok=True)
