@@ -10,7 +10,8 @@ Outputs:
 """
 import os, sys
 import numpy as np, pandas as pd
-sys.path.insert(0, "solver")
+import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
+                   # sys.path, so this script works from any directory
 import case_config as C
 from utss_solver import solve_airfoil, CAL, _n_crit
 from uplot import apply_style, INK, PALETTE, new_fig, finish
@@ -31,8 +32,15 @@ def surface_mesh():
     s=np.concatenate([[0],np.cumsum(np.hypot(np.diff(X),np.diff(Y)))])
     ds=np.gradient(s)
     surf=np.where(np.arange(len(X))<len(co["xl"]),"lower","upper")
-    df=pd.DataFrame({"node":np.arange(len(X)),"x_c":X,"y_c":Y,
-                     "arc_s":s,"local_spacing_ds":ds,"surface":surf})
+    # Rounded to the precision these quantities are meaningful to, the same
+    # convention run_solution.py states and every table in the report relies
+    # on.  Written raw, this file put seventeen-significant-figure numbers
+    # straight into the document - the report carried 202 of them - and its
+    # last bits moved with the BLAS thread count, so a regeneration that
+    # changed nothing physical still produced a different file.
+    df=pd.DataFrame({"node":np.arange(len(X)),"x_c":X.round(6),"y_c":Y.round(6),
+                     "arc_s":s.round(6),"local_spacing_ds":ds.round(7),
+                     "surface":surf})
     df.to_csv(f"{MESH}/surface_mesh_nodes.csv",index=False)
     return df
 
@@ -50,8 +58,16 @@ def bl_normal_grid():
         y[i]=y[i-1]+dy; dy*=gr
     yplus=y*u_tau/cr["nu_inf"]
     dyc=np.diff(y); gr_arr=np.r_[1.0,1.0,dyc[1:]/dyc[:-1]]
-    df=pd.DataFrame({"layer":np.arange(N),"y_m":y,"y_plus":yplus,
-                     "cell_dy_m":np.gradient(y),"growth_ratio":gr_arr})
+    # Rounded to the precision these quantities are meaningful to, the same
+    # convention run_solution.py states and every table in the report relies
+    # on.  Written raw, this file put seventeen-significant-figure numbers
+    # straight into the document - the report carried 202 of them - and its
+    # last bits moved with the BLAS thread count, so a regeneration that
+    # changed nothing physical still produced a different file.
+    df=pd.DataFrame({"layer":np.arange(N),"y_m":y.round(9),
+                     "y_plus":yplus.round(4),
+                     "cell_dy_m":np.gradient(y).round(10),
+                     "growth_ratio":gr_arr.round(4)})
     df.to_csv(f"{MESH}/bl_normal_grid.csv",index=False)
     return df,u_tau,y1,gr,N
 
@@ -60,7 +76,10 @@ def bl_normal_grid():
 # ======================================================================
 def mesh_independence():
     rows=[]
-    for npan in [60,90,130,180,240]:
+    # Extended past 480 panels: the report quotes a band above 180, and a band
+    # whose upper end is the last point computed is not a bound.  At 600 and
+    # 700 panels C_d is still climbing, which is what the extra rows are for.
+    for npan in [60,90,130,180,240,300,350]:
         X,Y=C.nlf16_panel_points(npan)
         r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
                         cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
@@ -68,8 +87,21 @@ def mesh_independence():
         u=r["surfaces"]["upper"]
         rows.append((2*npan,r["Cl"],r["Cd"],u["x_tr_chord"]))
     df=pd.DataFrame(rows,columns=["n_surface_panels","Cl","Cd","x_tr_upper_c"])
-    # Richardson-style relative change
-    df["dCd_pct"]=df["Cd"].pct_change()*100
+    # Successive relative change, which is what this is.  It was labelled
+    # "Richardson-style", and it is not: Richardson extrapolation fits an
+    # observed order of convergence to a monotone sequence, and this sequence
+    # is not monotone - it goes +2.8, +0.1, +1.8, -0.6 per cent.  Calling the
+    # scatter an extrapolation dresses a sensitivity band as a convergence
+    # study.  The band is the honest statement and it is what the report makes.
+    df["dCd_pct"]=(df["Cd"].pct_change()*100).round(3)
+    # Rounded to the precision these quantities are meaningful to, the same
+    # convention run_solution.py states and every table in the report relies
+    # on.  Written raw, this file put seventeen-significant-figure numbers
+    # straight into the document - the report carried 202 of them - and its
+    # last bits moved with the BLAS thread count, so a regeneration that
+    # changed nothing physical still produced a different file.
+    for c,dp in (("Cl",5),("Cd",7),("x_tr_upper_c",4)):
+        df[c]=df[c].round(dp)
     df.to_csv(f"{MESH}/mesh_independence.csv",index=False)
     return df
 

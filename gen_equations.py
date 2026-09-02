@@ -9,6 +9,8 @@ Author: Akosa Samuel Onyejekwe, 2026.
 """
 import os, glob
 import pandas as pd
+import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
+                   # sys.path, so this script works from any directory
 import latex2mathml.converter as L
 import mathml2omml
 from docx import Document

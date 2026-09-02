@@ -6,7 +6,8 @@ No black anywhere; text never overlaps the data.
 """
 import os, sys
 import numpy as np, pandas as pd
-sys.path.insert(0,"solver")
+import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
+                   # sys.path, so this script works from any directory
 import case_config as C
 from utss_solver import solve_airfoil
 from uplot import (apply_style, INK, INK_SOFT, PALETTE, FIELD_CMAP, CF_CMAP,

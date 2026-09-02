@@ -15,7 +15,10 @@ Transition & Skin-friction Solver**.
 
 The full report (background, problem, all equations, input data, every
 generated output, validation, calibration, sources, contribution to knowledge)
-is compiled in **`case.docx`**.
+is committed as **[`aero_turbulence_transition_report.pdf`](aero_turbulence_transition_report.pdf)**.
+`build_docx.py` regenerates it as `case.docx`, which is a build product and is
+not tracked - this file used to point readers at that name, which a clone does
+not contain.
 
 ## Method (3-D)
 Vortex-panel inviscid solution with a Karman–Tsien compressibility correction →
@@ -257,11 +260,32 @@ Sources recorded in `06_validation/sources_and_references.csv`.
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
 solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld +
                   amplification database), case_config.py, uplot.py (style)
+tools/            smoke.py (16 checks over the whole solver in ~10 s),
+                  pipeline.py (staged regeneration), baseline.py (numeric diff
+                  of every generated CSV against a snapshot)
+utss_paths.py     anchors every entry point to the repository root, so a
+                  generator run from another directory still reads and writes
+                  here
 verify_outputs.py checks the compiled report against the generated CSVs
-case.docx         FULL compiled report
+aero_turbulence_transition_report.pdf   FULL compiled report (tracked)
+case.docx         the same report as .docx - a build product, not tracked
 ```
 
 ## Reproduce
+```bash
+python3 tools/smoke.py         # 16 checks over the whole solver, ~10 s.
+                               #   Run this FIRST and after every edit: a full
+                               #   regeneration is four minutes and the faults
+                               #   that waste it are all visible here in the
+                               #   first second.
+python3 tools/pipeline.py      # the whole regeneration, as dependency-ordered
+                               #   stages, two at a time, smoke-gated and
+                               #   timed, stopping at the first failure with
+                               #   that stage's log.  ~4.3 min on two cores.
+```
+
+The stages can still be run one at a time, in this order, from any directory:
+
 ```bash
 python3 gen_geometry.py        # geometry + drawings
 python3 gen_mesh_setup.py      # mesh + model setup
@@ -274,6 +298,14 @@ python3 gen_postprocessing.py  # all plots, contours, profiles, 3D
 python3 gen_equations.py       # build model.equations.docx (native equations)
 python3 build_docx.py          # assemble case.docx
 python3 verify_outputs.py      # check the compiled report against the CSVs
+```
+
+To see exactly what a change moved, snapshot before and diff after:
+
+```bash
+python3 tools/baseline.py save /tmp/before
+python3 tools/pipeline.py
+python3 tools/baseline.py diff /tmp/before --quiet-same
 ```
 
 Self-checks, all of which run on the numbers rather than quoting them:

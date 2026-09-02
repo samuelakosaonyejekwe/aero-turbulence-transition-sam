@@ -44,7 +44,8 @@ for h,sz in [("Title",26),("Heading 1",17),("Heading 2",13.5),("Heading 3",11.5)
 EQD="07_equations"; eq_index=pd.read_csv(f"{EQD}/equations_index.csv").set_index("key")
 
 import sys as _sys
-_sys.path.insert(0, "solver")
+import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
+                   # sys.path, so this script works from any directory
 import case_config as _C
 C_CLIMB_TU = _C.CLIMB["Tu_pct"]
 
@@ -485,13 +486,24 @@ h1("8.  Mesh / Discretisation")
 _mi = pd.read_csv("02_mesh/mesh_independence.csv")
 _cd = _mi.Cd.to_numpy(float)*1e4
 _hi = _cd[_mi.n_surface_panels >= 180]
-para("The surface is discretised with cosine-clustered streamwise nodes; a wall-normal "
- "reconstruction grid (first-cell y⁺≈1) supports boundary-layer profile recovery. A "
+_mm = pd.read_csv("02_mesh/mesh_metrics.csv").set_index("metric")
+para("THERE IS NO VOLUME MESH. This method is a surface panel discretisation coupled to "
+ "an integral boundary layer, and the wall-normal stack below is a reconstruction grid "
+ "used to recover profiles from the marched integral quantities - it is not a grid any "
+ "equation is solved on. The y⁺, growth ratio and aspect ratio in %s are reported "
+ "because they characterise that reconstruction, and they are the quantities a reader "
+ "coming from a finite-volume solver will look for; they should not be read as "
+ "evidence of a resolved near-wall grid, because there is none to resolve. This "
+ "paragraph used to say so only in the last row of the table."
+ % "@@TAB:mesh_metrics@@", italic=True, size=10)
+para("The surface is discretised with cosine-clustered streamwise nodes; the wall-normal "
+ "reconstruction grid places its first point at y⁺ = %s. A "
  "panel-count sweep bounds the discretisation sensitivity rather than demonstrating "
  "asymptotic convergence: from %d to %d surface panels the section drag spans %.1f counts, "
  "%.1f %% of its mean, and above %d panels it stays within about ±%.1f count without "
  "tightening further."
- % (_mi.n_surface_panels.min(), _mi.n_surface_panels.max(),
+ % (str(_mm.loc["Target wall y+","value"]),
+    _mi.n_surface_panels.min(), _mi.n_surface_panels.max(),
     _cd.ptp(), 100.0*_cd.ptp()/_cd.mean(), 180, 0.5*_hi.ptp()) +
  "  The residual wander is not a truncation error that refinement removes — "
  "it is set by which panel the transition point lands on, so it scales with the panel "
@@ -499,7 +511,8 @@ para("The surface is discretised with cosine-clustered streamwise nodes; a wall-
  "measurements themselves carry. The 260-panel grid is used for every case-study "
  "result; the tabulated validation sections are re-splined onto their own "
  "cosine-clustered grids of 400 and 440 panels.")
-table_from_csv("02_mesh/mesh_metrics.csv", cap="Mesh metrics.")
+table_from_csv("02_mesh/mesh_metrics.csv", key="mesh_metrics",
+               cap="Metrics of the surface discretisation and of the wall-normal reconstruction stack. No volume mesh is generated.")
 table_from_csv("02_mesh/mesh_independence.csv",
                cap="Panel-count sensitivity study.")
 for f,c in [("plots/mesh_01_surface","Surface mesh and wall-normal stacks."),
