@@ -11,7 +11,7 @@ Re_c,surface,c_l_exp,alpha_deg,c_l_solver,x_tr_c_exp,x_tr_c_pred,err_c,err_pct,w
 1.0e+06,upper,0.076,-3.915,0.076,0.525,0.496,-0.029,-5.4,False,False,False,False,0.418,separation
 1.0e+06,upper,-0.039,-4.846,-0.0387,0.575,0.496,-0.079,-13.7,False,False,False,False,,TS-natural
 1.0e+06,upper,-0.151,-5.75,-0.1503,0.575,0.518,-0.057,-9.9,False,False,False,False,,TS-natural
-1.0e+06,lower,1.262,5.759,1.2623,0.675,0.685,0.01,1.4,True,False,False,False,0.582,separation
+1.0e+06,lower,1.262,5.759,1.2623,0.675,0.678,0.003,0.5,True,False,False,False,0.582,separation
 1.0e+06,lower,1.173,5.028,1.1733,0.675,0.685,0.01,1.4,True,False,False,False,0.582,separation
 1.0e+06,lower,1.075,4.224,1.0753,0.675,0.691,0.016,2.4,True,False,False,False,0.582,separation
 1.0e+06,lower,0.977,3.421,0.9772,0.675,0.678,0.003,0.5,True,False,False,False,0.575,separation
@@ -72,7 +72,7 @@ Re_c,surface,c_l_exp,alpha_deg,c_l_solver,x_tr_c_exp,x_tr_c_pred,err_c,err_pct,w
 4.0e+06,upper,-0.032,-4.789,-0.0317,0.475,0.447,-0.028,-6.0,False,False,False,False,,TS-natural
 4.0e+06,upper,-0.147,-5.718,-0.1463,0.475,0.461,-0.014,-3.0,True,False,False,False,,TS-natural
 4.0e+06,upper,-0.382,-7.63,-0.382,0.525,0.496,-0.029,-5.4,False,False,False,False,,TS-natural
-4.0e+06,upper,-0.617,-9.536,-0.617,0.575,0.461,-0.114,-19.9,False,True,False,True,0.002,separation
+4.0e+06,upper,-0.617,-9.536,-0.617,0.575,0.026,-0.549,-95.5,False,True,False,True,0.002,separation
 4.0e+06,upper,-0.721,-10.379,-0.7209,0.625,0.589,-0.036,-5.8,False,False,False,False,,TS-natural
 4.0e+06,upper,-0.926,-12.043,-0.9259,0.775,0.736,-0.039,-5.0,False,False,False,False,,TS-natural
 4.0e+06,upper,-1.033,-12.912,-1.0328,0.875,1.0,0.125,14.3,False,True,True,False,0.95,none(laminar)

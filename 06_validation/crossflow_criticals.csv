@@ -1,5 +1,5 @@
 dataset,sweep_deg,Re_c,x_tr_c_measured,Re_theta,Re_theta2_surrogate,Re_cf_exact_FSC
-Dagenhart & Saric (calibration),45.0,1.920e+06,0.78,616.5,204.9,813.3
+Dagenhart & Saric (calibration),45.0,1.920e+06,0.78,617.7,205.3,814.9
 Dagenhart & Saric (calibration),45.0,2.190e+06,0.73,513.4,170.6,677.3
 Dagenhart & Saric (calibration),45.0,2.370e+06,0.58,447.4,148.7,354.4
 Dagenhart & Saric (calibration),45.0,2.730e+06,0.45,418.2,139.0,281.7

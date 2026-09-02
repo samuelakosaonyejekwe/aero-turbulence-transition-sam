@@ -1,6 +1,6 @@
 Re_c,x_tr_c_exp,x_tr_c_pred,err_pct,Re_theta_at_onset,mechanism
 1.920e+06,0.78,0.778,-0.3,577.5,separation
-2.190e+06,0.73,0.702,-3.8,480.6,crossflow
+2.190e+06,0.73,0.695,-4.8,475.0,crossflow
 2.370e+06,0.58,0.643,10.9,471.4,crossflow
 2.730e+06,0.45,0.567,25.9,474.3,crossflow
 3.270e+06,0.33,0.48,45.6,474.7,crossflow
