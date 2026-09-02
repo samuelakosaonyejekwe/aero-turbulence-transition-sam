@@ -1,0 +1,6 @@
+C_len,multiple_of_published,Cd_counts,x_tr_c_upper,transitional_extent_pct_chord,completes_before_TE
+2.25,0.25,43.84,0.554,8.3,True
+4.5,0.5,43.84,0.554,18.3,True
+9.0,1.0,43.74,0.554,36.3,True
+18.0,2.0,39.45,0.554,,False
+36.0,4.0,32.84,0.554,,False

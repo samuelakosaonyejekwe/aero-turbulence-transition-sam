@@ -1,7 +1,7 @@
 dataset,criterion,mean_critical_value,coeff_of_variation_pct,n_points
-Dagenhart & Saric (calibration),surrogate Re_theta2,168.9,21.7,6
-Dagenhart & Saric (calibration),exact Falkner-Skan-Cooke Re_cf,456.9,63.0,6
+Dagenhart & Saric (calibration),surrogate Re_theta2,164.8,17.2,6
+Dagenhart & Saric (calibration),exact Falkner-Skan-Cooke Re_cf,440.4,58.9,6
 Boltz et al. (independent),surrogate Re_theta2,233.8,4.0,4
 Boltz et al. (independent),exact Falkner-Skan-Cooke Re_cf,117.8,4.8,4
-Both facilities pooled,surrogate Re_theta2,194.9,22.1,10
-Both facilities pooled,exact Falkner-Skan-Cooke Re_cf,321.3,86.5,10
+Both facilities pooled,surrogate Re_theta2,192.4,21.2,10
+Both facilities pooled,exact Falkner-Skan-Cooke Re_cf,311.4,82.1,10
