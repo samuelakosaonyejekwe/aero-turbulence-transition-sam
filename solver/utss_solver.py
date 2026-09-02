@@ -65,15 +65,22 @@ CAL = dict(
     N_floor   = 0.5,    # lower clamp on N_crit at high Tu
     C_mu      = 0.09,   # k-epsilon constants, used only for the decay of
     C_eps2    = 1.92,   # free-stream turbulence (see _tu_decay)
-    Tu_TS_max = 0.1,    # Tu [%] above which the envelope e^N branch is
-                        # switched off.  Set equal to the bypass gate, so
-                        # the two routes are complementary rather than
-                        # overlapping: below 0.1% the amplification route
-                        # governs and the bypass correlation is inactive,
-                        # above it the reverse.  Leaving both live in the
-                        # overlap makes the e^N branch fire spuriously,
-                        # because Mack's relation returns N_crit ~ 3 there
-                        # and the envelope method is not calibrated that low.
+    Tu_BP_lo  = 0.10,   # Tu [%] below which the bypass correlation carries no
+    Tu_BP_hi  = 0.25,   # weight, and above which it carries all of it; between
+                        # them the two closures are blended (see
+                        # _branch_weight and the kernel).  These replace the
+                        # single Tu_TS_max = 0.1 gate, which switched the e^N
+                        # branch off and the correlation on at the same value
+                        # and so made the predicted transition location a STEP
+                        # function of the free-stream turbulence: 0.1000 % and
+                        # 0.1001 % differed by 0.17c and by a third of the
+                        # profile drag.  The window is deliberately wider than
+                        # the spread of any case in this study - the noisiest
+                        # natural case is 0.07 % and the quietest bypass case
+                        # 0.87 % - so every result here is computed at one end
+                        # or the other and none is blended.  The window is what
+                        # makes the model a function of Tu rather than a
+                        # switch, not a constant fitted to anything.
     C_len     = 9.0,    # Dhawan & Narasimha's transition-length correlation,
                         # Re_lambda = C_len * Re_x_t^0.75, with Re_x_t formed on
                         # the streamwise distance from the leading edge (or the
@@ -246,6 +253,35 @@ def _n_crit(Tu_pct, floor=0.5, anchor=0.50):
     """
     Tu = min(max(float(Tu_pct)/100.0, 8.0e-4), 2.98e-2)
     return max(-8.43 - 2.4*np.log(Tu) - anchor, floor)
+
+
+def _branch_weight(Tu_pct, cal=None):
+    """How much of the bypass correlation applies at this turbulence level.
+
+    0 below Tu_BP_lo, 1 above Tu_BP_hi, and a smoothstep between.  Below the
+    lower edge the layer is in the range the amplification integral was built
+    for and Abu-Ghannam & Shaw is extrapolated outside its data; above the
+    upper edge the reverse, because Mack's relation returns a critical
+    amplification factor of about 2 there and the envelope method is not
+    calibrated that low.  Between them both closures have some claim, and the
+    weight interpolates rather than choosing.
+
+    A single threshold - the old cal["Tu_TS_max"] - made this a step, and the
+    step was visible in the answer: see the note in the kernel.  The smoothstep
+    3t^2 - 2t^3 is used because it is continuous in value AND in slope at both
+    edges, so no case sitting near an edge picks up a kink.
+    """
+    cal = {**CAL, **(cal or {})}
+    lo = float(cal.get("Tu_BP_lo", 0.10))
+    hi = float(cal.get("Tu_BP_hi", 0.25))
+    if hi <= lo:
+        return 0.0 if Tu_pct <= lo else 1.0
+    t = (float(Tu_pct) - lo)/(hi - lo)
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
+    return t*t*(3.0 - 2.0*t)
 
 
 def _re_theta_crit(H):
@@ -866,17 +902,19 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
             # amplification factor, which is what closes it; the attached-layer
             # integral is frozen there and must not overwrite it
             n_fac[i] = n_amp
-        ts_live = Tu_eff[i] <= cal.get("Tu_TS_max", 1.0)
-        N_target = ((_n_crit(Tu_eff[i], cal.get("N_floor", 0.5))
-                     / max(cal["A_TS"], 1e-6)) if ts_live else np.inf)
+        N_crit_i = _n_crit(Tu_eff[i], cal.get("N_floor", 0.5))
+        N_target = N_crit_i / max(cal["A_TS"], 1e-6)
 
-        # (b) bypass: free-stream-turbulence driven, meaningful only for
-        #     elevated Tu (>~0.1%); below that the natural route governs.
+        # (b) bypass: free-stream-turbulence driven.  Abu-Ghannam & Shaw
+        #     correlated an attached layer in an ELEVATED-Tu stream; below
+        #     about a tenth of a per cent the correlation is outside the data
+        #     it was fitted to and the amplification route governs instead.
+        #     _branch_weight decides how much of each applies; the threshold is
+        #     always formed, and the weight, not a gate, is what turns the
+        #     branch off.
         Tu_i = Tu_eff[i]
-        if Tu_i > 0.1:
-            Rbp = cal["A_BP"] * _ags_re_theta_t(Tu_i, lam_t)
-        else:
-            Rbp = 1e9
+        Rbp = cal["A_BP"] * _ags_re_theta_t(max(Tu_i, 0.02), lam_t)
+        w_bp = _branch_weight(Tu_i, cal)
 
         # (c) separation-induced.  Thwaites' laminar march terminates at
         #     lambda = -0.09; downstream of that the layer has left the wall
@@ -901,7 +939,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
         if bubble_on and i_sep is not None:
             Rsep = 1e9
         elif sep_now:
-            Rref = Rbp if Rbp < 1e8 else _ags_re_theta_t(max(Tu_i, 0.02), lam_t)
+            Rref = _ags_re_theta_t(max(Tu_i, 0.02), lam_t)
             Rsep = cal["A_SEP"]*max(cal["sep_floor"], 0.7*Rref)
         else:
             Rsep = 1e9
@@ -954,33 +992,92 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
         # pressure gradient, and the cross-flow criterion presumes a wall
         # boundary layer.  Once the layer has separated the bubble closure is
         # the only thing that can end it.
+        # ---------- selection: one progress variable per mechanism ----------
+        # Every branch reports the same thing - how far through its own onset
+        # criterion the layer has got, as a number that reaches 1 at onset -
+        # and the kernel fires on the first station at which any of them does.
+        #
+        #   p_TS  = N / N_crit                    amplification, e^N
+        #   p_BP  = Re_theta / Re_theta_t(AGS)    correlation
+        #   p_SEP = N_bub / N_crit  (bubble on)   amplification across dead air
+        #           Re_theta / Re_theta_t (off)   correlation, ablation path
+        #   p_CF  = N_cf / N_cf,crit (cf_amp on)  amplification
+        #           Re_theta / Re_theta_t (off)   C1 threshold
+        #
+        # This is the form Eq. (E13) states.  What it replaces was written as a
+        # minimum over four onset REYNOLDS NUMBERS, which only two of the four
+        # branches actually produce: in the shipped configuration the TS, the
+        # separation and the cross-flow branches all close on amplification
+        # integrals and were carried past the minimum as a 1e9 "cannot fire"
+        # sentinel, so the minimum ranged over one live term and the equation
+        # in the report described a calculation the solver was not doing.
+        # Expressed as progress the four are commensurable, the weights a_TS,
+        # a_BP, a_SEP, a_CF all act the same way on all four, and the kernel is
+        # one line.
         in_bubble = bubble_on and i_sep is not None
-        Rt = 1e9 if in_bubble else min(Rbp, Rsep, Rcf)
-        # 1e9 is the internal "this branch cannot fire here" sentinel.  It used
-        # to be written straight into the output, so a case that transitions on
-        # the amplification integral - every natural-transition case - reported
-        # an onset Reynolds number of a billion, and the report's transition-
-        # criterion figure autoscaled to 1e9 and drew Re_theta as a flat line
-        # along the axis.  Absent is absent: it leaves as NaN.
+
+        p_ts = (n_amp/N_target) if N_target > 0.0 else 0.0
+        p_bp = 0.0 if in_bubble else Reth[i]/max(Rbp, 1e-9)
+        if bubble_on:
+            p_sep = n_bub/max(N_crit_i/max(cal["A_SEP"], 1e-6), 1e-9)
+        else:
+            p_sep = 0.0 if in_bubble else Reth[i]/max(Rsep, 1e-9)
+        if sweep_deg > 1.0 and cal.get("cf_amp", True):
+            _Ncf = float(cal.get("CF_N", 0.0)) or N_crit_i
+            p_cf = n_cf/max(_Ncf/max(cal["A_CF"], 1e-6), 1e-9)
+        else:
+            p_cf = 0.0 if in_bubble else Reth[i]/max(Rcf, 1e-9)
+
+        # The natural and bypass routes are the same transition seen through
+        # two closures with different ranges of validity, so they are combined
+        # rather than switched between.  A hard gate at Tu = 0.1 % made the
+        # answer DISCONTINUOUS in the free-stream turbulence: on the cruise
+        # section, 0.1000 % gave x_tr/c = 0.542 and 0.1001 % gave 0.373, a
+        # step of 0.17c and 33 % in profile drag across a change of one part in
+        # a thousand in an input the study quotes to two figures.  A geometric
+        # blend of the two progresses over the declared window removes the step
+        # without adding a fitted constant to either branch: at the lower edge
+        # it is exactly the amplification integral, at the upper edge exactly
+        # the correlation, and the crossing of unity moves monotonically
+        # between the two onsets in between.  It is the same weighting the
+        # bypass branch already uses for the flow history of Tu.  The window is
+        # set wider than any case in this study, so no result here is blended
+        # - it is there so that the model is a function rather than a switch.
+        if in_bubble:
+            p_nat = 0.0
+        elif w_bp <= 0.0:
+            p_nat = p_ts
+        elif w_bp >= 1.0:
+            p_nat = p_bp
+        else:
+            p_nat = (max(p_ts, 1e-12)**(1.0 - w_bp))*(max(p_bp, 1e-12)**w_bp)
+
+        # The onset Reynolds number is reported only where a branch that
+        # actually produces one is the governing branch; 1e9 was the internal
+        # "cannot fire here" sentinel and used to be written straight into the
+        # output, so every natural-transition case reported an onset Reynolds
+        # number of a billion.  Absent is absent: it leaves as NaN.
+        Rt = 1e9 if in_bubble else min(Rbp if w_bp > 0.0 else 1e9, Rsep, Rcf)
         Re_th_t[i] = np.nan if Rt >= 1e8 else Rt
-        trig_ts = bool(ts_live and n_amp >= N_target)
-        _Ncf = (float(cal.get("CF_N", 0.0)) or
-                _n_crit(Tu_eff[i], cal.get("N_floor", 0.5)))
-        trig_cf = bool(sweep_deg > 1.0 and cal.get("cf_amp", True)
-                       and n_cf >= _Ncf)
-        if (trig_ts or bub_trig or trig_cf or Reth[i] >= Rt) and i_tr is None and i > 1:
+
+        p_all = (p_nat, p_sep, p_cf)
+        if max(p_all) >= 1.0 and i_tr is None and i > 1:
             i_tr = i
-            if in_bubble:
+            if in_bubble or (bubble_on and p_sep >= 1.0):
                 mech = "separation"
-            elif trig_cf and not trig_ts:
-                mech = "crossflow"
-            elif trig_ts and Reth[i] < Rt:
-                mech = "TS-natural"
             else:
-                mech = ["bypass", "separation", "crossflow"][
-                    int(np.argmin([Rbp, Rsep, Rcf]))]
-                if trig_ts:
-                    mech = "TS-natural"
+                k = int(np.argmax(p_all))
+                if k == 0:
+                    # inside the blend the label follows the closure that is
+                    # carrying more of the weight, so it never claims a branch
+                    # the answer did not come from
+                    mech = "bypass" if (w_bp >= 0.5 or p_ts < 1.0) else "TS-natural"
+                    if w_bp <= 0.0:
+                        mech = "TS-natural"
+                    elif w_bp >= 1.0:
+                        mech = "bypass"
+                else:
+                    mech = ("separation", "crossflow")[k - 1]
             mechanism[i] = mech
             break
 

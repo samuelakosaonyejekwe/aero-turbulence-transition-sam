@@ -39,6 +39,12 @@ import numpy as np
 from scipy.integrate import solve_bvp
 from scipy.linalg import eig
 
+# numpy renamed trapz to trapezoid in 2.0 and deprecated the old spelling, which
+# is slated for removal.  Binding the name once here keeps every quadrature in
+# this module running on both, rather than pinning the project to a numpy that
+# still carries the deprecated alias.
+_trapz = getattr(np, "trapezoid", None) or np.trapz
+
 # ----------------------------------------------------------------------
 # Falkner-Skan similarity profiles
 # ----------------------------------------------------------------------
@@ -65,6 +71,31 @@ def _fs_solve(beta, eta, guess):
     return solve_bvp(rhs, bc, eta, guess, tol=1e-9, max_nodes=200000)
 
 
+def _fs_third(beta, f, fp, fpp):
+    """f'''(eta) from the similarity equation itself, not by differencing.
+
+    The Orr-Sommerfeld operator needs U'' - it is the term that carries the
+    inflectional instability, and it is what decides the amplification rate on
+    exactly the adverse-gradient profiles this database exists to tabulate.
+
+    It used to be formed as `Upp = D1 @ dU`, a Chebyshev derivative matrix
+    applied to the similarity f'' after that had been LINEARLY interpolated
+    onto the collocation grid.  Spectral differentiation is only spectrally
+    accurate on a smooth function; applied to a piecewise-linear interpolant it
+    differentiates the interpolation kinks, and the Chebyshev matrix amplifies
+    them by O(N^2).  The correct value is available in closed form, because
+    f''' is what the Falkner-Skan equation gives:
+
+        f''' + f f'' + beta (1 - f'^2) = 0.
+
+    So f''' is stored with the family, interpolated like f' and f'', and U'' on
+    the collocation grid follows by the chain rule with no differentiation at
+    all.  The cached families carry it; a cache written before this change
+    lacks the key and is rebuilt rather than silently reused.
+    """
+    return -f*fpp - beta*(1.0 - fp*fp)
+
+
 def _fs_family():
     """All Falkner-Skan profiles, favourable through separation, by continuation."""
     global _FS_FAMILY
@@ -83,10 +114,13 @@ def _fs_family():
                          "falkner_skan_family.npz")
     if os.path.exists(cache):
         d = np.load(cache)
-        fam = [(float(b), float(h), float(t), uu, pp) for b, h, t, uu, pp
-               in zip(d["beta"], d["H"], d["theta"], d["u"], d["up"])]
-        _FS_FAMILY = (d["eta"], fam)
-        return _FS_FAMILY
+        if "upp" in d.files:            # see _fs_third: caches without it are stale
+            fam = [(float(b), float(h), float(t), uu, pp, qq)
+                   for b, h, t, uu, pp, qq
+                   in zip(d["beta"], d["H"], d["theta"], d["u"], d["up"],
+                          d["upp"])]
+            _FS_FAMILY = (d["eta"], fam)
+            return _FS_FAMILY
     g = np.zeros((3, eta.size))
     g[0] = eta - np.tanh(eta); g[1] = np.tanh(eta); g[2] = 1.0/np.cosh(eta)**2
     fam = []
@@ -96,8 +130,9 @@ def _fs_family():
             continue
         g = sol.sol(eta)
         f, u, up = g
-        ds = np.trapz(1.0 - u, eta); th = np.trapz(u*(1.0 - u), eta)
-        fam.append((float(b), float(ds/th), float(th), u.copy(), up.copy()))
+        ds = _trapz(1.0 - u, eta); th = _trapz(u*(1.0 - u), eta)
+        fam.append((float(b), float(ds/th), float(th), u.copy(), up.copy(),
+                    _fs_third(b, f, u, up)))
     H = np.array([m[1] for m in fam])
     keep = np.concatenate([[True], np.diff(H) > 1e-9])
     fam = [m for m, k in zip(fam, keep) if k]
@@ -106,7 +141,8 @@ def _fs_family():
                         H=np.array([m[1] for m in fam]),
                         theta=np.array([m[2] for m in fam]),
                         u=np.array([m[3] for m in fam]),
-                        up=np.array([m[4] for m in fam]))
+                        up=np.array([m[4] for m in fam]),
+                        upp=np.array([m[5] for m in fam]))
     _FS_FAMILY = (eta, fam)
     return _FS_FAMILY
 
@@ -123,7 +159,7 @@ def falkner_skan(beta, eta_max=_ETA_MAX, n=_ETA_N):
         raise RuntimeError("Falkner-Skan failed at beta=%.5f: %s"
                            % (beta, sol.message))
     f, u, up = sol.sol(eta)
-    ds = np.trapz(1.0 - u, eta); th = np.trapz(u*(1.0 - u), eta)
+    ds = _trapz(1.0 - u, eta); th = _trapz(u*(1.0 - u), eta)
     return eta, u, up, float(ds/th), float(th)
 
 
@@ -133,12 +169,18 @@ _H_CACHE = {}
 def _combined_family():
     """Attached and reverse-flow branches joined into one monotone H family."""
     eta, fam = _fs_family()
-    prof = [(m[1], m[2], m[3], m[4]) for m in fam]          # (H, theta, u, u')
-    try:
-        rev = fs_reverse_family()
-        prof += [(m[2], m[3], m[4], m[5]) for m in rev if m[2] > prof[-1][0]]
-    except Exception:
-        pass
+    prof = [(m[1], m[2], m[3], m[4], m[5]) for m in fam]   # H, theta, and the
+    #                                            three similarity derivatives
+    # The reverse-flow branch is not optional.  The separation-bubble closure
+    # reads its amplification rate at H = H_REVERSE = 4.90, and only this
+    # branch reaches that far.  Swallowing a failure here, as an earlier
+    # version did with a bare `except Exception: pass`, left the family capped
+    # at the attached separation profile H = 4.00, roughly halved sigma, and
+    # changed every bubble length in the study - with no warning, and with
+    # nothing in the self-tests that would have noticed.  If the branch cannot
+    # be built, that is a fault to be fixed, not a fallback to be taken.
+    rev = fs_reverse_family()
+    prof += [(m[2], m[3], m[4], m[5], m[6]) for m in rev if m[2] > prof[-1][0]]
     prof.sort(key=lambda t: t[0])
     keep = [prof[0]]
     for p in prof[1:]:
@@ -174,8 +216,11 @@ def fs_profile_for_H(H_target):
     w = (t - H[j])/(H[j+1] - H[j])
     u = (1.0 - w)*prof[j][2] + w*prof[j+1][2]
     up = (1.0 - w)*prof[j][3] + w*prof[j+1][3]
+    upp = (1.0 - w)*prof[j][4] + w*prof[j+1][4]
     th = (1.0 - w)*prof[j][1] + w*prof[j+1][1]
-    pr = (eta, u, up, t, th)
+    # f''' rides along so that the Orr-Sommerfeld operator can form U'' by the
+    # chain rule instead of differentiating an interpolant; see _fs_third.
+    pr = (eta, u, up, t, th, upp)
     _H_CACHE[key] = pr
     return pr
 
@@ -267,8 +312,35 @@ def os_temporal(y, D1, U, Upp, alpha, Re):
     return w[keep[np.argmax(w[keep].imag)]]
 
 
+def _os_profile(profile, N, y_max=60.0, y_half=6.0):
+    """(U, U', U'', y, D1) on the collocation grid, in momentum-thickness units.
+
+    One place builds the mean flow the Orr-Sommerfeld operator sees, so the
+    tabulated database, the direct growth curve and the spatial-eigenvalue
+    check cannot be built on three subtly different profiles - which they were:
+    growth_curve() flattened U to 1 above the similarity grid and _sigma_slab()
+    did not, and both formed U'' by differentiating an interpolant.
+
+    eta = y*theta_eta, so d/dy = theta_eta d/deta and U'' = f''' theta_eta^2.
+    """
+    eta, u, up, H, th_eta, upp = profile
+    y, D1 = _grid(N, y_max, y_half)
+    eta_y = np.clip(y*th_eta, 0.0, eta[-1])
+    U = np.interp(eta_y, eta, u)
+    dU = np.interp(eta_y, eta, up)*th_eta
+    Upp = np.interp(eta_y, eta, upp)*th_eta*th_eta
+    # above the top of the similarity grid the profile is free stream: U -> 1
+    # with no shear and no curvature.  Clipping eta_y already holds U, U' and
+    # U'' at their edge values, which are 1, 0 and 0 to quadrature accuracy;
+    # setting them explicitly keeps a truncated grid from leaking a residual
+    # curvature into the operator.
+    out = y > eta[-1]/th_eta
+    U[out] = 1.0; dU[out] = 0.0; Upp[out] = 0.0
+    return U, dU, Upp, y, D1
+
+
 def growth_curve(H_target, Re_theta, alphas, N=110, y_max=60.0, y_half=6.0,
-                 profile=None):
+                 profile=None, with_alpha=False):
     """Spatial growth rate against frequency at one (H, Re_theta).
 
     Returns (omega_r, sigma) with omega_r = alpha*c_r the dimensionless
@@ -278,15 +350,8 @@ def growth_curve(H_target, Re_theta, alphas, N=110, y_max=60.0, y_half=6.0,
     """
     if profile is None:
         profile = fs_profile_for_H(H_target)
-    eta, u, up, H, th_eta = profile
-    y, D1 = _grid(N, y_max, y_half)
-    # interpolate the similarity profile onto the collocation grid, in units
-    # of the momentum thickness
-    eta_y = np.clip(y*th_eta, 0.0, eta[-1])
-    U = np.interp(eta_y, eta, u)
-    dU = np.interp(eta_y, eta, up)*th_eta
-    Upp = D1 @ dU
-    U[y > eta[-1]/th_eta] = 1.0
+    U, dU, Upp, y, D1 = _os_profile(profile, N, y_max, y_half)
+    eta, u, up, H, th_eta = profile[:5]
     om_r, om_i = [], []
     for a in alphas:
         c = os_temporal(y, D1, U, Upp, a, Re_theta)
@@ -295,13 +360,29 @@ def growth_curve(H_target, Re_theta, alphas, N=110, y_max=60.0, y_half=6.0,
         else:
             om_r.append(a*c.real); om_i.append(a*c.imag)
     om_r = np.array(om_r); om_i = np.array(om_i)
-    good = np.isfinite(om_r)
+    good = np.isfinite(om_r) & np.isfinite(om_i)
     if good.sum() < 3:
-        return np.array([]), np.array([])
-    cg = np.gradient(om_r[good], np.asarray(alphas)[good])
+        return ((np.array([]),)*4 if with_alpha else (np.array([]), np.array([])))
+    # Sorted by frequency before the group velocity is differenced, and
+    # duplicates dropped.  np.gradient assumes its coordinate is monotone and
+    # returns nonsense where it is not; omega_r(alpha) is monotone in the
+    # amplified band but need not be once a mode is lost and the sweep picks up
+    # a neighbouring one, and this function is the reference the tabulated
+    # database is checked against.  _sigma_slab has always sorted here; this
+    # did not, so the two could disagree - which is exactly the drift the
+    # sigma_lookup/sigma_curve comment warns about, in the other direction.
+    wr = om_r[good]; wi = om_i[good]; aa = np.asarray(alphas, float)[good]
+    k = np.argsort(wr); wr, wi, aa = wr[k], wi[k], aa[k]
+    keep = np.concatenate([[True], np.diff(wr) > 1e-12])
+    wr, wi, aa = wr[keep], wi[keep], aa[keep]
+    if wr.size < 3:
+        return ((np.array([]),)*4 if with_alpha else (np.array([]), np.array([])))
+    cg = np.gradient(wr, aa)
     cg = np.where(np.abs(cg) < 1e-6, np.nan, cg)
-    sigma = -(-om_i[good]/cg)          # -alpha_i = +omega_i/c_g
-    return om_r[good], np.nan_to_num(sigma, nan=0.0)
+    sigma = wi/cg                      # Gaster: -alpha_i = +omega_i/c_g
+    if with_alpha:
+        return wr, np.nan_to_num(sigma, nan=0.0), aa, np.nan_to_num(cg, nan=0.0)
+    return wr, np.nan_to_num(sigma, nan=0.0)
 
 
 # ----------------------------------------------------------------------
@@ -331,12 +412,7 @@ DB_PATH  = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 def _sigma_slab(H):
     """sigma(Re_theta, omega) at one shape factor."""
     pr = fs_profile_for_H(H)
-    eta, u, up, Hh, th = pr
-    y, D1 = _grid(NCHEB, 60.0, 6.0)
-    eta_y = np.clip(y*th, 0.0, eta[-1])
-    U = np.interp(eta_y, eta, u)
-    dU = np.interp(eta_y, eta, up)*th
-    Upp = D1 @ dU
+    U, dU, Upp, y, D1 = _os_profile(pr, NCHEB, 60.0, 6.0)
     out = np.zeros((RET_GRID.size, OM_GRID.size))
     for i, Re in enumerate(RET_GRID):
         om_r, om_i = [], []
@@ -504,7 +580,7 @@ def thwaites_closure():
     global _CLOSURE
     if _CLOSURE is None:
         eta, fam = _fs_family()
-        lam = np.array([b*th*th for b, H, th, u, up in fam])
+        lam = np.array([b*th*th for b, H, th, u, up, _q in fam])
         H = np.array([m[1] for m in fam])
         l = np.array([m[2]*m[4][0] for m in fam])
         k = np.argsort(lam)
@@ -558,8 +634,10 @@ _FS_REVERSE = None
 def fs_reverse_family(fw_min=-0.075, n=90):
     """Profiles from separation into reverse flow, ordered by decreasing shear.
 
-    Returns a list of (f''(0), beta, H, theta_eta, u, u') with u the streamwise
-    velocity in similarity units; on this branch u is negative near the wall.
+    Returns a list of (f''(0), beta, H, theta_eta, f', f'', f''') with f' the
+    streamwise velocity in similarity units; on this branch f' is negative near
+    the wall.  f''' comes from the similarity equation itself (see _fs_third)
+    so that U'' never has to be formed by differentiating an interpolant.
     """
     global _FS_REVERSE
     if _FS_REVERSE is not None:
@@ -569,10 +647,12 @@ def fs_reverse_family(fw_min=-0.075, n=90):
     eta = np.linspace(0.0, _ETA_MAX, _ETA_N)
     if os.path.exists(cache):
         d = np.load(cache)
-        _FS_REVERSE = [(float(a), float(b), float(h), float(t), uu, pp)
-                       for a, b, h, t, uu, pp in zip(d["fw"], d["beta"], d["H"],
-                                                     d["theta"], d["u"], d["up"])]
-        return _FS_REVERSE
+        if "upp" in d.files:            # a cache written before f''' is stale
+            _FS_REVERSE = [(float(a), float(b), float(h), float(t), uu, pp, qq)
+                           for a, b, h, t, uu, pp, qq
+                           in zip(d["fw"], d["beta"], d["H"], d["theta"],
+                                  d["u"], d["up"], d["upp"])]
+            return _FS_REVERSE
     _, fam = _fs_family()
     k = int(np.argmin([m[4][0] for m in fam]))       # nearest to separation
     g = np.vstack([np.zeros_like(eta), fam[k][3], fam[k][4]])
@@ -587,15 +667,16 @@ def fs_reverse_family(fw_min=-0.075, n=90):
         beta = float(sol.p[0])
         g = sol.sol(eta)
         f, u, up = g
-        ds = np.trapz(1.0 - u, eta); th = np.trapz(u*(1.0 - u), eta)
+        ds = _trapz(1.0 - u, eta); th = _trapz(u*(1.0 - u), eta)
         out.append((float(fw), beta, float(ds/th), float(th),
-                    u.copy(), up.copy()))
+                    u.copy(), up.copy(), _fs_third(beta, f, u, up)))
     np.savez_compressed(cache, fw=np.array([m[0] for m in out]),
                         beta=np.array([m[1] for m in out]),
                         H=np.array([m[2] for m in out]),
                         theta=np.array([m[3] for m in out]),
                         u=np.array([m[4] for m in out]),
-                        up=np.array([m[5] for m in out]), eta=eta)
+                        up=np.array([m[5] for m in out]),
+                        upp=np.array([m[6] for m in out]), eta=eta)
     _FS_REVERSE = out
     return _FS_REVERSE
 
@@ -669,7 +750,7 @@ def crossflow_reynolds(beta, sweep_deg, Re_theta):
     wmax = w[i]
     outer = np.where(w[i:] <= 0.1*wmax)[0]
     eta10 = eta[i + outer[0]] if len(outer) else eta[-1]
-    th_eta = np.trapz(fp*(1.0 - fp), eta)        # streamwise theta, similarity
+    th_eta = _trapz(fp*(1.0 - fp), eta)        # streamwise theta, similarity
     # Re_theta = U_e theta / nu and theta = th_eta * scale, so the scale cancels
     return float(wmax*eta10/th_eta*Re_theta)
 
@@ -784,22 +865,21 @@ def gaster_residual(cases=((2.5913, 300.0), (2.5913, 800.0),
     alphas = np.geomspace(8.0e-3, 0.35, 24)
     for H, Re in cases:
         pr = fs_profile_for_H(H)
-        eta, u, up, Hh, th = pr
-        y, D1 = _grid(N, y_max, y_half)
-        eta_y = np.clip(y*th, 0.0, eta[-1])
-        U = np.interp(eta_y, eta, u)
-        dU = np.interp(eta_y, eta, up)*th
-        Upp = D1 @ dU
-        U[y > eta[-1]/th] = 1.0
-        wr, sig = growth_curve(H, Re, alphas, N=N, y_max=y_max,
-                               y_half=y_half, profile=pr)
+        U, dU, Upp, y, D1 = _os_profile(pr, N, y_max, y_half)
+        wr, sig, aa, cgs = growth_curve(H, Re, alphas, N=N, y_max=y_max,
+                                        y_half=y_half, profile=pr,
+                                        with_alpha=True)
         if not sig.size or sig.max() <= 0.0:
             continue
+        # alpha and the group velocity come back from the SAME sorted sweep
+        # that produced the peak.  Reading them out of the input `alphas` by
+        # index, as this did, assumes growth_curve returns one frequency per
+        # input wavenumber in the order given - which it does not: it drops the
+        # wavenumbers whose eigenvalue solve failed and sorts what is left by
+        # frequency, so the index of the peak addressed the wrong alpha.
         k = int(np.argmax(sig))
-        om = float(wr[k]); sg = float(sig[k])
-        a0 = float(np.interp(om, wr, alphas[:wr.size]))
-        j = int(np.clip(k, 1, wr.size - 2))
-        cg = (wr[j+1] - wr[j-1])/(alphas[j+1] - alphas[j-1])
+        om = float(wr[k]); sg = float(sig[k]); a0 = float(aa[k])
+        cg = float(cgs[k])
         a, ok = spatial_alpha(y, D1, U, Upp, Re, om, a0, cg)
         se = -float(a.imag)
         # a Newton step that has landed on a different mode shows up as a
@@ -875,7 +955,7 @@ def crossflow_table():
     if _CF_TABLE is None:
         eta, fam = _fs_family()
         lam, K = [], []
-        for b, H, th, u, upp in fam:
+        for b, H, th, u, upp, _q in fam:
             f = np.concatenate([[0.0],
                                 np.cumsum(0.5*(u[1:] + u[:-1])*np.diff(eta))])
             F = np.concatenate([[0.0],
@@ -939,11 +1019,11 @@ def twoeq_closure():
     if _TWOEQ is None:
         eta, fam = _fs_family()
         H, Hs, L, D = [], [], [], []
-        for b, h, th, u, up in fam:
-            ths = np.trapz(u*(1.0 - u*u), eta)          # energy thickness
+        for b, h, th, u, up, _q in fam:
+            ths = _trapz(u*(1.0 - u*u), eta)          # energy thickness
             H.append(h); Hs.append(ths/th)
             L.append(th*up[0])
-            D.append(th*np.trapz(up*up, eta))
+            D.append(th*_trapz(up*up, eta))
         H = np.array(H); Hs = np.array(Hs)
         L = np.array(L); D = np.array(D)
         k = np.argsort(H); H, Hs, L, D = H[k], Hs[k], L[k], D[k]
