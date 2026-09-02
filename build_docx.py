@@ -766,7 +766,7 @@ para("The UTSS universal transition & skin-friction solver predicts boundary-lay
 para("Two limitations bound that claim and are stated here rather than left to be discovered. "
  "The cross-flow critical constant does not transfer between facilities: the two independent "
  "swept-wing experiments support the functional form of the criterion, and the measured data "
- "collapse on it, but reproducing the second requires a critical value 50 % larger than the "
+ "collapse on it, but reproducing the second requires a critical value 42 % larger than the "
  "first. And the method is an attached-flow formulation with an incidence envelope of about "
  "+/-8.5 deg on a real section; beyond that the laminar march separates near the leading edge "
  "and the result should not be relied on.")
