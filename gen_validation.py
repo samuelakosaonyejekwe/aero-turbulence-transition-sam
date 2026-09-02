@@ -30,6 +30,7 @@ import case_config as C
 from utss_solver import solve_flat_plate, solve_airfoil, panel_solve, CAL
 from uplot import apply_style, INK, INK_SOFT, PALETTE, new_fig, finish
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 apply_style()
 VAL="06_validation"; VP=os.path.join(VAL,"plots"); os.makedirs(VP,exist_ok=True)
@@ -462,13 +463,102 @@ def crossflow_criticals(write=True, quiet=False):
                              mean_critical_value=round(m, 1),
                              coeff_of_variation_pct=round(float(v.std())/m*100, 1),
                              n_points=len(d)))
+    # Whether a Reynolds-number term could carry one facility into the other.
+    # It cannot, and the reason is worth recording: WITHIN Dagenhart & Saric the
+    # required critical value falls steeply with chord Reynolds number, while
+    # Boltz sits at six times the Reynolds number and requires MORE, not less.
+    # The between-facility offset has the opposite sign to the within-facility
+    # trend, so no monotone function of Re_c fits both.
+    trend = []
+    for name, g in df.groupby("dataset", sort=False):
+        x = np.log10(g["Re_c"].to_numpy(float))
+        y = g["Re_theta2_surrogate"].to_numpy(float)
+        sl = float(np.polyfit(x, y, 1)[0])
+        trend.append(dict(dataset=name, n_points=len(g),
+                          Re_c_min=f"{g['Re_c'].astype(float).min():.2e}",
+                          Re_c_max=f"{g['Re_c'].astype(float).max():.2e}",
+                          mean_required=round(float(y.mean()), 1),
+                          slope_per_decade_Re_c=round(sl, 1),
+                          correlation=round(float(np.corrcoef(x, y)[0, 1]), 3)))
+    tr_df = pd.DataFrame(trend)
     st_df = pd.DataFrame(stat)
     if write:
         df.to_csv(f"{VAL}/crossflow_criticals.csv", index=False)
         st_df.to_csv(f"{VAL}/crossflow_criticals_summary.csv", index=False)
+        tr_df.to_csv(f"{VAL}/crossflow_reynolds_trend.csv", index=False)
     if not quiet:
         print(st_df.to_string(index=False))
     return df, st_df
+
+
+def residual_diagnostics(write=True, quiet=False):
+    """Where the flat-plate residuals come from, measured rather than asserted.
+
+    Two effects account for them, and which one applies depends on which branch
+    fires - a distinction that is easy to miss because all five plates are
+    reported in the same table.
+
+    Pre-transitional thickening.  Free-stream turbulence thickens a laminar
+    layer before it transitions, and the laminar march carries no such
+    mechanism.  Where onset comes from the Abu-Ghannam & Shaw correlation the
+    effect is already inside it, because that correlation was fitted to
+    MEASURED momentum-thickness Reynolds numbers; where onset comes from the
+    model's own marched theta - which on this set is only the separating
+    T3C4 plate - it is not, and the shortfall shows up in full.  The column
+    Re_theta_meas_over_blasius already measures the thickening at each plate's
+    onset; multiplying the prediction by it is therefore a legitimate
+    correction on the separation branch and a double count on the bypass
+    branch, and the table below shows exactly that pattern.
+
+    Conditioning.  In a decaying stream the onset threshold rises while
+    Re_theta grows only as the square root of distance, so the two curves close
+    at a shallow angle and the crossing is sensitive.  The gain is measured by
+    shifting the threshold by +/-10 per cent and recording how far the
+    predicted transition LOCATION moves.
+    """
+    rows = []
+    for key in CASES:
+        v = C.VALIDATION[key]; ex = EXP[key]
+        r = solve_case(key)
+        pred = float(r["Re_theta"][r["i_tr"]]); meas = ex["Re_theta_t"]
+        k = None
+        if ex["Cf"] is not None:
+            io = int(np.argmin(ex["Cf"]))
+            k = ex["Re_theta"][io]/(0.664*np.sqrt(ex["Re_x"][io]))
+        corr = pred*k if k else None
+        # conditioning: how far the LOCATION moves for a +/-10 % threshold shift
+        ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
+        dec = ((ex["Re_x"], ex["Tu_local"]) if v.get("L_turb") is None
+               and ex.get("Tu_local") is not None else None)
+        # The perturbation is applied to the BYPASS threshold, so the gain is
+        # only meaningful where the bypass branch is the one selected; on the
+        # separating and the natural plates it is identically zero, which is
+        # a statement about which branch fired and not about conditioning.
+        gain = None
+        if r["onset_mech"] == "bypass":
+            xs = []
+            for a in (0.90, 1.10):
+                rr = solve_flat_plate(v["L"], v["U"], v["nu"], v["Tu_pct"],
+                                      npts=900, dUe=v["dUe"],
+                                      L_turb=v.get("L_turb"),
+                                      Ue_dist=ue, Tu_decay=dec,
+                                      cal=dict(A_BP=a))
+                xs.append(float(rr["x_tr"]) if rr["i_tr"] is not None else np.nan)
+            gain = abs(xs[1]-xs[0])/float(r["x_tr"])/0.20
+        rows.append(dict(
+            case=v["name"], branch=r["onset_mech"],
+            Re_theta_t_pred=round(pred, 1), Re_theta_t_exp=meas,
+            err_pct=round(100*(pred-meas)/meas, 1),
+            meas_over_blasius=(round(k, 3) if k else None),
+            pred_x_thickening=(round(corr, 1) if corr else None),
+            err_pct_after_thickening=(round(100*(corr-meas)/meas, 1) if corr else None),
+            location_gain_bypass_threshold=(round(gain, 1) if gain else None)))
+    df = pd.DataFrame(rows)
+    if write:
+        df.to_csv(f"{VAL}/residual_diagnostics.csv", index=False)
+    if not quiet:
+        print(df.to_string(index=False))
+    return df
 
 
 def _cl_curve(X, Y, mach, alphas=(-4.0, 2.0, 8.0)):
@@ -713,14 +803,23 @@ def plot_nlf0416(df=None):
             bad = d[out]
             if len(bad):
                 ax.plot(bad.x_tr_c_pred, bad.c_l_exp, "x", ms=7, mew=1.6,
-                        color=PALETTE[2], lw=0,
-                        label="outside ±8.5° envelope" if surf == "upper" else None)
+                        color=PALETTE[2], lw=0)
         ax.set_title(r"$R = %.1f\times10^6$" % (Rec/1e6), fontsize=11)
         ax.set_xlim(0, 1.0); ax.set_ylim(-1.3, 1.7)
         ax.grid(alpha=0.25, lw=0.6)
     for ax in axes[-1]: ax.set_xlabel(r"transition location  $x_T/c$")
     for ax in axes[:, 0]: ax.set_ylabel(r"section lift coefficient  $c_l$")
-    axes[0, 0].legend(loc="upper left", fontsize=8.5, framealpha=0.9)
+    # The cross markers were labelled inside the per-panel loop, and the panel
+    # that builds the legend happens to contain none of them, so they appeared
+    # in three panels with nothing in the legend to say what they were.  The
+    # entry is added as a proxy instead, which does not depend on which panel
+    # happens to hold one.
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    handles.append(Line2D([], [], color=PALETTE[2], marker="x", ms=7, mew=1.6,
+                          lw=0))
+    labels.append("declared: burst or leading-edge bubble,\nor outside ±8.5°")
+    axes[0, 0].legend(handles, labels, loc="upper left", fontsize=8,
+                      framealpha=0.9)
     fig.suptitle("NLF(1)-0416 transition location, M = 0.10  —  "
                  "86 points digitised from NASA TP-1861, Fig. 9", fontsize=12)
     fig.tight_layout(rect=(0, 0.035, 1, 0.97))
@@ -757,6 +856,12 @@ def plot_case(key):
                color=PALETTE[4],ls="-.",lw=1.3,label="UTSS predicted onset")
     ax.set_xlabel("Re_x"); ax.set_ylabel("skin-friction  C_f")
     ax.set_ylim(2e-4,8e-3)
+    # the march starts at x = 1e-4 m, so autoscaling put two empty decades of
+    # Re_x to the left of anything worth reading
+    _rx = np.asarray(r["Re_x"], float)
+    _lo = min(_rx[_rx > 0].min(), (min(ex["Re_x"]) if ex["Cf"] is not None
+                                   else ex["Re_x_t"]))
+    ax.set_xlim(max(_lo*0.5, 1e3), _rx.max()*1.4)
     ax.set_title(f"Validation: {key}  (Tu={v['Tu_pct']}%)  —  "
                  f"Re_θt pred {r['Re_theta'][r['i_tr']]:.0f} vs exp {ex['Re_theta_t']:.0f}")
     ax.legend(loc="lower left",fontsize=10)
@@ -774,9 +879,12 @@ def plot_combined(df_sum):
     pred=[lookup[k] for k in cases]
     ax.bar(x-w/2,exp,w,color=PALETTE[1],label="experiment Re_θt")
     ax.bar(x+w/2,pred,w,color=PALETTE[0],label="UTSS predicted Re_θt")
+    # a constant offset on a log axis is a large gap at Re_theta = 180 and no
+    # gap at all at 1160; scale it instead
     for xi,(e,p) in enumerate(zip(exp,pred)):
-        ax.text(xi-w/2,e+10,f"{e:.0f}",ha="center",fontsize=10,color=INK)
-        ax.text(xi+w/2,p+10,f"{p:.0f}",ha="center",fontsize=10,color=INK)
+        ax.text(xi-w/2,e*1.04,f"{e:.0f}",ha="center",fontsize=10,color=INK)
+        ax.text(xi+w/2,p*1.04,f"{p:.0f}",ha="center",fontsize=10,color=INK)
+    ax.set_ylim(top=max(max(exp),max(pred))*1.35)
     ax.set_yscale("log"); ax.set_xticks(x); ax.set_xticklabels(cases)
     ax.set_ylabel("transition-onset  Re_θt")
     ax.set_title("Universal validation: transition-onset Re_θt, one calibration set")
@@ -797,6 +905,7 @@ if __name__=="__main__":
     df_sw2=run_swept2()
     print(df_sw2.to_string(index=False))
     crossflow_criticals()
+    residual_diagnostics()
     df_nlf=run_nlf0416()
     print(nlf0416_summary(df_nlf).to_string(index=False))
     plot_nlf0416(df_nlf)

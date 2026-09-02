@@ -1,0 +1,6 @@
+case,branch,Re_theta_t_pred,Re_theta_t_exp,err_pct,meas_over_blasius,pred_x_thickening,err_pct_after_thickening,location_gain_bypass_threshold
+ERCOFTAC T3A flat plate (bypass transition),bypass,282.1,272.3,3.6,1.117,315.1,15.7,3.5
+ERCOFTAC T3A- flat plate (low-Tu bypass),bypass,683.6,818.8,-16.5,1.027,701.7,-14.3,2.5
+ERCOFTAC T3B flat plate (high-Tu bypass),bypass,168.0,181.3,-7.3,1.123,188.7,4.1,2.0
+ERCOFTAC T3C4 flat plate (laminar separation bubble),separation,271.4,381.3,-28.8,1.359,368.8,-3.3,
+Schubauer & Skramstad flat plate (natural transition),TS-natural,1161.6,1100.0,5.6,,,,

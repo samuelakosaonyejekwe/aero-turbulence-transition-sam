@@ -208,6 +208,37 @@ leading-edge roughness, and neither report documents the surface finish.  The
 branch is therefore reported with a band, **C1 = 150–200**, and every other
 result in this work uses the frozen C1 = 150.
 
+### Where the residuals come from
+
+Two effects account for the flat-plate residuals, and which one applies depends
+on which branch fires — a distinction the single summary table hides.
+
+**Pre-transitional thickening.** Free-stream turbulence thickens a laminar layer
+before it transitions, and the laminar march carries no such mechanism. Where
+onset comes from the Abu-Ghannam & Shaw correlation the effect is already inside
+it, because that correlation was fitted to *measured* momentum-thickness
+Reynolds numbers; where onset comes from the model's own marched θ — on this set
+the separating T3C4 plate alone — it is not. The measured layer at T3C4 is 1.36×
+the Blasius momentum thickness at its own onset, the largest of the five, and
+scaling the prediction by that factor takes the error from −28.8 % to −3.3 %.
+The same scaling makes each of the three bypass plates *worse*, which is the
+signature of a double count and is what identifies the diagnosis rather than a
+convenient rescaling. Generated into
+`06_validation/residual_diagnostics.csv`.
+
+**Conditioning.** In a decaying stream the onset threshold rises while Re_θ
+grows only as the square root of distance, so the two curves close at a shallow
+angle. Shifting the bypass threshold by ±10 % moves the predicted transition
+location by a factor of 3.5 on T3A, 2.5 on T3A⁻ and 2.0 on T3B.
+
+For the cross-flow branch, one explanation is ruled out rather than doubted:
+within Dagenhart & Saric the required critical value *falls* with chord Reynolds
+number (−251 per decade, r = −0.88), while Boltz sits at six times the Reynolds
+number and requires 42 % *more*. The between-facility offset has the opposite
+sign to the within-facility trend, so no monotone function of Re_c carries one
+set into the other (`06_validation/crossflow_reynolds_trend.csv`). That leaves
+receptivity — the leading-edge finish neither report documents — by elimination.
+
 Sources recorded in `06_validation/sources_and_references.csv`.
 
 ## Folder structure
