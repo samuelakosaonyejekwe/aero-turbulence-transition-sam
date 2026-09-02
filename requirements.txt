@@ -1,8 +1,38 @@
-latex2mathml
-mathml2omml
-matplotlib
-numpy
-pandas
-pymupdf
-python-docx
-scipy
+# Pinned to the environment every number in this repository was computed in.
+#
+# The results here are a claim about reproducibility, and an unpinned
+# requirements file does not support one: `pip install -r requirements.txt`
+# resolves to whatever is current on the day it is run.  Two of these pins are
+# load-bearing rather than cautious.
+#
+#   numpy   - the amplification database, the Falkner-Skan family and every
+#             quadrature in solver/ are built with numpy.trapezoid, which
+#             exists from 1.22 onward; numpy.trapz, its former spelling, is
+#             deprecated in numpy 2 and slated for removal.  The code uses the
+#             current spelling, so it runs on both, but the floating-point
+#             results are pinned to the version they were generated with.
+#   scipy   - solve_bvp settles the Falkner-Skan family, including the
+#             reverse-flow branch that the separation-bubble amplification rate
+#             is read from.  A different solver version can converge to the
+#             same profiles to a different last digit, which moves the
+#             tabulated rates in the last digit too.
+#
+# The upper bounds are the next major version, not a guess at what will break.
+# To move off a pin, change it here, run `python3 tools/smoke.py`, then
+# `python3 tools/pipeline.py` and `python3 tools/baseline.py diff <snapshot>`,
+# and read what moved before believing the new environment.
+
+numpy==1.26.4
+scipy==1.11.4
+matplotlib==3.6.3
+pandas==3.0.3
+
+# document generation
+python-docx==1.2.0
+latex2mathml==3.81.0
+mathml2omml==0.0.2
+lxml==5.2.1
+
+# verify_outputs.py reads the RENDERED pdf, which is the only way to see what
+# a reader sees; a .docx check misses every layout fault.
+PyMuPDF==1.27.2.3
