@@ -95,6 +95,12 @@ EQS = [
    r"\frac{\nu_{ref}}{\nu_e} = \left(\frac{T_{ref}}{T_e}\right)^{1+\omega}"),
  ("E23","4.5  Drag, temperature & reference scales","Reynolds number (mean aerodynamic chord)",
    r"Re_{MAC} = \frac{\rho_\infty U_\infty \overline{c}}{\mu_\infty} = \frac{U_\infty \overline{c}}{\nu_\infty}"),
+ ("E25","4.5  Drag, temperature & reference scales","Prandtl lifting line (Glauert monoplane equation, odd n for a symmetric wing)",
+   r"\sum_{n\ \mathrm{odd}} A_n \sin n\theta \left[\frac{4b}{a_0 c(\theta)} + \frac{n}{\sin\theta}\right] "
+   r"= \alpha(\theta) - \alpha_{L0}, \quad y = -\frac{b}{2}\cos\theta"),
+ ("E26","4.5  Drag, temperature & reference scales","Wing lift, induced drag and span efficiency from the loading",
+   r"C_L = \pi A\!R\, A_1, \quad C_{D_i} = \pi A\!R \sum_n n A_n^{2}, "
+   r"\quad e = \frac{A_1^{2}}{\sum_n n A_n^{2}}"),
  ("E24","4.5  Drag, temperature & reference scales","Mean aerodynamic chord",
    r"\overline{c} = \frac{2}{3} c_{root}\frac{1+\lambda+\lambda^{2}}{1+\lambda}"),
 ]

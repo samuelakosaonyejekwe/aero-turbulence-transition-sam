@@ -407,7 +407,7 @@ for k in ["E08","E09","E10","E10b","E10c","E11","E11b","E12","E12b","E13","E14"]
 h2("4.4  Transitional region and turbulent closure")
 for k in ["E15","E16","E17","E18","E19"]: equation(k)
 h2("4.5  Drag, temperature and reference quantities")
-for k in ["E20","E21","E22","E22b","E23","E24"]: equation(k)
+for k in ["E20","E21","E22","E22b","E25","E26","E23","E24"]: equation(k)
 
 # ======================================================================
 h1("5.  Why UTSS is Better — Comparison with Existing Solvers")

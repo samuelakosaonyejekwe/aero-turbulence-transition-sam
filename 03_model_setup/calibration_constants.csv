@@ -18,6 +18,7 @@ C_eps2,1.92,k-epsilon constant in the free-stream turbulence decay,standard valu
 bubble,True,separation branch closed by marching the detached shear layer,True is the model; False is the 'no bubble closure' ablation
 use_os_db,True,amplification rates read from the tabulated Orr-Sommerfeld solutions,"True is the model; False selects the Drela-Giles envelope fit, the third ablation"
 cf_exact,False,exact Falkner-Skan-Cooke K(lambda) in place of the constant surrogate (ablation path only),"False is the model; True was tried and is reported in Sec. IV.C, where it makes the two swept wings agree less, not more"
+bub_rev_H,False,shape factor in the dead-air momentum equation follows the reverse-flow profile (ablation path only),"False is the model; True relaxes the cap at the attached Falkner-Skan separation value onto the reverse-flow profile the amplification rate is already read from, and moves T3C4 by 0.8 points and the 86 aerofoil conditions by 0.0004c - see 06_validation/bubble_diagnostics.csv"
 H_sep,0.0,declare laminar separation on the solved shape factor instead of on lambda (ablation path only),0 = use lam_sep; the shape-factor test is the more principled statement but the aerofoil measurements reject it - see the note in march_bl
 tu_hist,0.6,"weight on the flow-history average of Tu, Tu_eff = Tu_avg^w Tu_local^(1-w)",FITTED on the three ERCOFTAC plates; no effect where Tu does not decay
 lam_sep,-0.09,Thwaites parameter at laminar separation,Thwaites (1949) published value; not fitted

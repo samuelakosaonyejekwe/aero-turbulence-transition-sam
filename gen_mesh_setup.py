@@ -174,7 +174,10 @@ def setup_tables():
                     U_inf_ms=round(d["U_inf"],2), rho_kgm3=round(d["rho_inf"],4),
                     mu_Pas=d["mu_inf"], T_inf_K=d["T_inf_K"], Tu_pct=d["Tu_pct"],
                     alpha_deg=d["alpha_deg"], Re_MAC=round(d["Re_MAC"],-3))
-    rows=[cond(cr,"CRUISE (FL360, M0.42)"), cond(C.CLIMB,"CLIMB (FL100, M0.30)")]
+    # labelled by altitude rather than by flight level: FL100 is 3048 m and
+    # the condition is defined at 3000 m, so the flight level was a false
+    # precision
+    rows=[cond(cr,"CRUISE (11 km, M0.42)"), cond(C.CLIMB,"CLIMB (3 km, M0.30)")]
     # fix nu rounding
     for r,d in zip(rows,[cr,C.CLIMB]):
         r["nu_m2s"]=f"{d['nu_inf']:.3e}"; r["q_inf_Pa"]=round(0.5*d["rho_inf"]*d["U_inf"]**2,1)
@@ -264,6 +267,8 @@ def setup_tables():
          "True is the model; False selects the Drela-Giles envelope fit, the third ablation"),
         ("cf_exact",CAL["cf_exact"],"exact Falkner-Skan-Cooke K(lambda) in place of the constant surrogate (ablation path only)",
          "False is the model; True was tried and is reported in Sec. IV.C, where it makes the two swept wings agree less, not more"),
+        ("bub_rev_H",CAL["bub_rev_H"],"shape factor in the dead-air momentum equation follows the reverse-flow profile (ablation path only)",
+         "False is the model; True relaxes the cap at the attached Falkner-Skan separation value onto the reverse-flow profile the amplification rate is already read from, and moves T3C4 by 0.8 points and the 86 aerofoil conditions by 0.0004c - see 06_validation/bubble_diagnostics.csv"),
         ("H_sep",CAL["H_sep"],"declare laminar separation on the solved shape factor instead of on lambda (ablation path only)",
          "0 = use lam_sep; the shape-factor test is the more principled statement but the aerofoil measurements reject it - see the note in march_bl"),
         ("tu_hist",CAL["tu_hist"],"weight on the flow-history average of Tu, Tu_eff = Tu_avg^w Tu_local^(1-w)",
