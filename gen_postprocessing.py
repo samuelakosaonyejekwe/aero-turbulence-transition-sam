@@ -88,7 +88,10 @@ def plot_geometry_csvs():
     ax.plot(af["x_lower"],af["y_lower"],color=PALETTE[2],lw=2,label="lower")
     ax.plot(af["x_c"],af["y_camber"],color=PALETTE[4],lw=1,ls="--",label="camber")
     ax.set_aspect("equal"); ax.set_xlabel("x/c"); ax.set_ylabel("y/c")
-    ax.set_title("UTSS-NLF16 section geometry (from CSV)"); ax.legend(fontsize=10)
+    # head-room above the section for the legend, which sat on the camber line
+    ax.set_ylim(-0.115, 0.175)
+    ax.set_title("UTSS-NLF16 section geometry (from CSV)")
+    ax.legend(fontsize=10, ncol=3, loc="upper center", framealpha=0.92)
     finish(fig,f"{CSVP}/geo_airfoil.png")
 
     pl=pd.read_csv("01_geometry/wing_planform.csv")
@@ -115,7 +118,10 @@ def plot_mesh_csvs():
 
     bl=pd.read_csv("02_mesh/bl_normal_grid.csv")
     fig,ax=new_fig(8,5)
-    ax.semilogy(bl["layer"],bl["y_plus"],"o-",color=PALETTE[1])
+    # the wall node itself is y+ = 0, which on a log axis draws a line running
+    # off the bottom of the frame; the grid starts at the first cell
+    b1=bl[bl["y_plus"]>0]
+    ax.semilogy(b1["layer"],b1["y_plus"],"o-",color=PALETTE[1])
     ax.axhline(1.0,color=PALETTE[2],ls="--",lw=1.2,label="y⁺ = 1 target")
     ax.set_xlabel("wall-normal layer"); ax.set_ylabel("y⁺")
     ax.set_title("Wall-normal grid resolution (first cell y⁺≈0.8)")
@@ -338,18 +344,38 @@ def _solution_field(case):
     d=np.load(f"{SOL}/field_pressure_{case}.npz")
     return (d["Xg"],d["Yg"],d["Cp"],d["Vx"],d["Vy"],d["spd"])
 
+def _body(ax, px, py, ring_c=0.010):
+    """Draw the aerofoil so that it covers the cells the field masked out.
+
+    run_solution.py blanks every cell within `ring_c` of the surface, because
+    they sit on the panel singularity.  Filling only the section itself leaves
+    that annulus showing as a jagged white halo the width of one grid cell, so
+    the body is stroked in white to the same width first and outlined on top.
+    """
+    fig=ax.figure
+    # ring_c in data units -> points, from the axes' own scaling
+    ax.figure.canvas.draw()
+    x0,x1=ax.get_xlim()
+    w_pt=ax.get_window_extent().width*72.0/fig.dpi
+    lw=2.0*ring_c/(x1-x0)*w_pt          # stroke is centred, so double it
+    ax.fill(px,py,color="white",ec="white",lw=lw,zorder=4,
+            joinstyle="round")
+    ax.plot(px,py,color=INK,lw=1.5,zorder=5)
+
+
 def plot_contours(case):
     cond=cr if case=="cruise" else cl
     Xg,Yg,Cp,Vx,Vy,spd=_solution_field(case)
-    co=C.nlf16_coords(n=200)
-    polyx=np.concatenate([co["xu"],co["xl"][::-1]]); polyy=np.concatenate([co["yu"],co["yl"][::-1]])
+    # the same closed polygon run_solution.py masked the field against, so the
+    # white body covers exactly the cells that were removed
+    polyx,polyy=C.nlf16_panel_points(130)
     # Cp contour
     fig,ax=new_fig(10,5.6)
     lv=np.linspace(np.nanpercentile(Cp,2),np.nanpercentile(Cp,99),28)
     cf=ax.contourf(Xg,Yg,Cp,levels=lv,cmap=FIELD_CMAP,extend="both")
     ax.grid(False)          # no grid lines over a filled field
     ax.contour(Xg,Yg,Cp,levels=lv[::4],colors=[INK_SOFT],linewidths=0.4,alpha=0.6)
-    ax.fill(polyx,polyy,color="white",ec=INK,lw=1.5,zorder=4)
+    _body(ax,polyx,polyy)
     cb=fig.colorbar(cf,ax=ax,shrink=0.85,pad=0.02); cb.set_label("C_p")
     ax.set_aspect("equal"); ax.set_xlim(-0.35,1.4); ax.set_ylim(-0.55,0.55)
     ax.set_xlabel("x/c"); ax.set_ylabel("y/c")
@@ -365,7 +391,7 @@ def plot_contours(case):
         ax.streamplot(Xg,Yg,np.nan_to_num(Vx),np.nan_to_num(Vy),density=1.1,
                       color=INK_SOFT,linewidth=0.6,arrowsize=0.7)
     except Exception: pass
-    ax.fill(polyx,polyy,color="white",ec=INK,lw=1.5,zorder=4)
+    _body(ax,polyx,polyy)
     cb=fig.colorbar(cf,ax=ax,shrink=0.85,pad=0.02); cb.set_label("speed [m/s]")
     ax.set_aspect("equal"); ax.set_xlim(-0.35,1.4); ax.set_ylim(-0.55,0.55)
     ax.set_xlabel("x/c"); ax.set_ylabel("y/c")
@@ -378,7 +404,7 @@ def plot_contours(case):
     ax.grid(False)          # no grid lines over the vector field
     q=ax.quiver(Xg[sk],Yg[sk],Vx[sk],Vy[sk],spd[sk],cmap=FIELD_CMAP,
                 scale=2600,width=0.0026)
-    ax.fill(polyx,polyy,color="white",ec=INK,lw=1.5,zorder=4)
+    _body(ax,polyx,polyy)
     cb=fig.colorbar(q,ax=ax,shrink=0.85,pad=0.02); cb.set_label("speed [m/s]")
     ax.set_aspect("equal"); ax.set_xlim(-0.35,1.4); ax.set_ylim(-0.55,0.55)
     ax.set_xlabel("x/c"); ax.set_ylabel("y/c")
