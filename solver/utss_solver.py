@@ -185,12 +185,25 @@ CAL = dict(
                         # kinetic-energy integrals, so that the shape factor is
                         # a solved variable carrying its own history rather
                         # than a local function of the pressure gradient
-    n_freq    = 40,     # number of physical frequencies carried by the e^N
-                        # integration.  The amplification factor is the
-                        # envelope of the individual N(omega) curves, so this
-                        # is a discretisation parameter, not a fitted one: the
-                        # predicted onset changes by under 0.2% between 24 and
-                        # 64 frequencies.
+    d_omega   = 1.03,   # MAXIMUM ratio between adjacent physical frequencies
+                        # carried by the e^N integration.  The amplification
+                        # factor is the envelope of the individual N(omega)
+                        # curves, so the frequency set is a discretisation and
+                        # not a fitted constant - but it has to be stated as a
+                        # resolution rather than as a count.  A fixed count was
+                        # spread geometrically over the whole surface's range
+                        # of U_e/theta, which on a long plate spans three
+                        # decades, so 40 frequencies left only a handful inside
+                        # the amplified band at any one station: onset on the
+                        # Schubauer-Skramstad plate moved 5 per cent between 24
+                        # and 64 frequencies and did not settle, against the
+                        # "under 0.2 %" this comment used to claim.  That claim
+                        # had been checked on the aerofoil, where the answer is
+                        # quantised to the panel it lands on and a 0.2 % change
+                        # is invisible.  Fixing the SPACING instead makes the
+                        # count follow the flow, and the envelope converges.
+    n_freq_min= 40,     # floor and cap on the resulting count, so a degenerate
+    n_freq_max= 400,    # range cannot produce a set of two or of a million
 )
 
 
@@ -784,8 +797,14 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         if live.any():
             w_lo = om_lo*float(np.min(rat[live]))
             w_hi = om_hi*float(np.max(rat[live]))
-            omegas = np.geomspace(max(w_lo, 1e-9), max(w_hi, w_lo*10.0),
-                                  int(cal.get("n_freq", 40)))
+            w_lo = max(w_lo, 1e-9); w_hi = max(w_hi, w_lo*10.0)
+            # the count follows from the span and the required spacing, so a
+            # long plate gets more frequencies than a short one automatically
+            _dw = max(float(cal.get("d_omega", 1.03)), 1.0 + 1e-6)
+            _n = int(np.ceil(np.log(w_hi/w_lo)/np.log(_dw))) + 1
+            _n = int(np.clip(_n, int(cal.get("n_freq_min", 40)),
+                             int(cal.get("n_freq_max", 400))))
+            omegas = np.geomspace(w_lo, w_hi, _n)
             amp = np.zeros(omegas.size)
 
     # ---- laminar-branch state at EVERY station ----
