@@ -18,4 +18,4 @@ Turbulent separation flag,H > 2.6
 Drag integration,"Squire-Young far-wake, evaluated at 0.98c"
 Marching scheme,"explicit trapezoidal, arc-length stepping with sub-stepping on the kinetic-energy equation"
 Convergence tol (panel),1e-10 (direct solve)
-Wall y+ target,~1 (reconstruction grid)
+Wall y+ target,0.80 (reconstruction grid; no volume mesh is solved on it)

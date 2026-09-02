@@ -1560,6 +1560,12 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         r["x_sep_turb_chord"] = (float(xc[idx][_st]) if _st is not None else np.nan)
         r["H_te"] = float(r["H"][-1])
         r["sep_margin_H"] = float(2.6 - r["H"][-1])
+        # Head's entrainment method has no validity past separation, so the
+        # turbulent shape factor is clamped at H = 2.8.  Where the trailing-edge
+        # value sits ON that clamp, H_te is the bound and not a solved quantity,
+        # and a "margin" computed from it would be reporting the clamp as
+        # though it were a result.  The flag says which it is.
+        r["H_te_at_clip"] = bool(r["H"][-1] >= 2.8 - 1e-6)
         r["bubble_burst"] = bool(r.get("bubble_burst", False))
         res[name] = r
 

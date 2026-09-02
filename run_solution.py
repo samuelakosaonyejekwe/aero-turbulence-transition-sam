@@ -64,6 +64,7 @@ def transition_summary(rc, rl):
                 # the study delivers; until now nothing computed it into an
                 # output, though march_bl has always found the station.
                 H_te=round(float(s["H_te"]),3),
+                H_te_at_clip=bool(s["H_te_at_clip"]),
                 sep_margin_H=round(float(s["sep_margin_H"]),3),
                 x_sep_turb_c=(round(float(s["x_sep_turb_chord"]),3)
                               if s["x_sep_turb_chord"]==s["x_sep_turb_chord"]
@@ -198,7 +199,9 @@ def bl_profiles(rc):
 
     def laminar_leg(H_lam, th_lam):
         """(delta_99, f(y/delta)) for the Falkner-Skan profile at this H."""
-        e_fs,u_fs,_,_,th_eta=_stab.fs_profile_for_H(float(H_lam))
+        # fs_profile_for_H returns (eta, f', f'', H, theta_eta, f''');
+        # the third derivative rides along for the Orr-Sommerfeld operator
+        e_fs,u_fs,_,_,th_eta,_=_stab.fs_profile_for_H(float(H_lam))
         i99=int(np.argmax(u_fs>=0.99))
         e99=float(e_fs[i99]) if i99 else float(e_fs[-1])
         delta=e99*th_lam/th_eta

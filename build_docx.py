@@ -404,8 +404,27 @@ para("Bypass onset uses the Abu-Ghannam & Shaw correlation evaluated at the flow
  "Tu; natural/TS onset integrates one amplification factor per physical frequency using the "
  "tabulated Orr-Sommerfeld growth rates and triggers on their envelope at N_crit; "
  "separation-induced onset closes a laminar bubble across the dead-air region; and cross-flow "
- "onset uses the C1 criterion. The kernel takes the minimum effective onset across all four:")
-for k in ["E08","E09","E10","E10b","E10c","E11","E11b","E12","E12b","E13","E14"]: equation(k)
+ "onset closes an amplification integral on the stationary vortex (Eq. E11b), the C1 criterion "
+ "of Eq. E11 serving only to mark where that integral starts.")
+para("Each branch reports the same quantity — how far through its own criterion the layer has "
+ "got, as a number that reaches unity at onset — and the kernel fires at the first station "
+ "where any of them does. Writing the four commensurably is what makes them one kernel: only "
+ "the bypass branch produces an onset REYNOLDS NUMBER, the other three closing on "
+ "amplification integrals, so a minimum taken over four Reynolds numbers ranges over one live "
+ "term and three placeholders. Earlier versions of this report stated the kernel that way, and "
+ "the output showed it: the onset-Reynolds-number column of every cruise surface file was "
+ "entirely empty, because the branch that governs there does not produce one.")
+for k in ["E08","E09","E10","E10b","E10c","E11","E11b","E12","E12b","E13","E13b","E14"]: equation(k)
+para("The natural and bypass routes are the same transition seen through two closures with "
+ "different ranges of validity, so Eq. E14 blends them over a declared window rather than "
+ "switching between them. A single threshold made the predicted transition location a STEP "
+ "function of the free-stream turbulence: on the cruise section, Tu = 0.1000 % gave "
+ "x_tr/c = 0.542 and 0.1001 % gave 0.373 — 0.17c and a third of the profile drag across one "
+ "part in a thousand of an input this study quotes to two figures, with the design point at "
+ "0.07 %. The window, Tu = 0.10–0.25 %, is wider than the spread of any case here (the "
+ "noisiest natural case is 0.07 %, the quietest bypass case 0.87 %), so no result in this "
+ "work is blended; it is there so that the model is a function of Tu rather than a switch.",
+ italic=True, size=10)
 h2("4.4  Transitional region and turbulent closure")
 for k in ["E15","E16","E17","E18","E19"]: equation(k)
 h2("4.5  Drag, temperature and reference quantities")
@@ -429,8 +448,10 @@ manual_table(
  cap="Capability comparison versus existing solver classes.")
 para("Novelty. The distinguishing element is the unified transition kernel "
  "(Eq. E13): a single closed expression that selects the governing transition mechanism "
- "locally by taking the minimum effective onset Reynolds number across four co-resident "
- "mechanisms, each modulated by a calibration weight, and feeds a single intermittency closure. "
+ "locally, by putting four co-resident mechanisms on one commensurable scale of onset "
+ "progress — each modulated by a calibration weight that acts the same way on all four — and "
+ "firing at the first station where any of them completes, then feeding a single intermittency "
+ "closure. "
  "Unlike e^N codes (TS only) or correlation RANS models (which require case-by-case re-tuning "
  "and a full CFD solve), UTSS reproduces natural, bypass, separation and cross-flow transition "
  "with ONE calibration set at panel-method cost. Every one of the four branches is the "
@@ -681,8 +702,15 @@ for f,c in [("val_T3A","Validation — ERCOFTAC T3A flat plate (Tu = 3.0 %, bypa
     image(f"06_validation/plots/{f}.png", width=5.9, cap=c)
 
 h2("11.2  NLF(1)-0416 aerofoil — 86 transition locations")
-para("The largest single body of evidence in this work, and the one on which nothing is "
- "calibrated. Transition locations were digitised from Fig. 9 of the source report at four "
+para("The largest single body of evidence in this work, and genuinely out of sample. That "
+ "was not always true: the anchor of the natural branch — the one quantity that branch takes "
+ "from measurement — used to be chosen at whatever value put the most of these 86 predictions "
+ "inside the experimental bracket, which made this a calibration set while this section, the "
+ "figure below and the project README all called it otherwise. It is now set on the "
+ "Schubauer & Skramstad plate alone, which it reproduces to 0.07 %, and the cost of that is "
+ "reported rather than absorbed: the mean absolute error here rises from 0.0319c to 0.0334c "
+ "and the bracket count falls from 51 to 50, which is what happens when a constant stops "
+ "being fitted to the set it is scored on. Transition locations were digitised from Fig. 9 of the source report at four "
  "chord Reynolds numbers on both surfaces, and each condition is matched by trimming the "
  "incidence to the measured lift coefficient. The experiment brackets transition between "
  "adjacent orifices 0.05c apart, so its own uncertainty is ±0.025c and a prediction inside "
@@ -709,19 +737,34 @@ para("The cross-flow coefficient is set on the first of these two experiments an
  "C1 = 200 would be a per-case re-tune of the kind this work is claiming not to need. The "
  "spread between the two columns is the limitation, stated rather than averaged away. "
  "Nothing else in the model differs between the two columns.")
+_cfs = pd.read_csv("06_validation/crossflow_criticals_summary.csv")
+_cfs = _cfs[_cfs.criterion == "surrogate Re_theta2"].set_index("dataset")
+_cfe = pd.read_csv("06_validation/crossflow_criticals_summary.csv")
+_cfe = _cfe[_cfe.criterion != "surrogate Re_theta2"].set_index("dataset")
+_dag = _cfs.loc["Dagenhart & Saric (calibration)"]
+_bol = _cfs.loc["Boltz et al. (independent)"]
+_poo = _cfs.loc["Both facilities pooled"]
+_pooe = _cfe.loc["Both facilities pooled"]
 para("What each experiment requires of the criterion is measured rather than asserted "
  "(@@TAB:cf_criticals@@). The march is run with every branch disabled so that it reaches the measured "
  "transition station, and the criterion is evaluated there. Dagenhart & Saric require a "
- "critical Re_θ2 of 165 with a 17.2 % coefficient of variation over six chord Reynolds "
- "numbers; Boltz et al. require 234 with 4.0 % over four sweep angles and a factor of three in chord "
+ "critical Re_θ2 of %.0f with a %.1f %% coefficient of variation over six chord Reynolds "
+ "numbers; Boltz et al. require %.0f with %.1f %% over four sweep angles and a factor of three in chord "
  "Reynolds number. Each facility is therefore internally consistent — the second markedly so — "
- "and the two differ by 42 %. That is the shape of a receptivity difference rather than of a "
+ "and the two differ by %.0f %%. That is the shape of a receptivity difference rather than of a "
  "criterion with the wrong form: stationary cross-flow vortices are seeded by leading-edge "
- "roughness, and neither report documents the surface finish. Two attempts to close the gap "
- "fail and are recorded rather than dropped. Replacing the constant surrogate by the exact "
+ "roughness, and neither report documents the surface finish. THREE attempts to close the gap "
+ "fail and are recorded rather than dropped. Solving the swept sections in the plane normal "
+ "to the leading edge, which is the correct mean flow and had not been done, widens the gap "
+ "rather than closing it — it was the strongest remaining physical candidate and it is now "
+ "tested rather than argued about. Replacing the constant surrogate by the exact "
  "Falkner-Skan-Cooke factor K(λ) makes matters worse, taking the pooled coefficient of "
- "variation from 21 to 82 % and inverting the ratio between the two sets. Giving the "
+ "variation from %.0f to %.0f %% and inverting the ratio between the two sets. Giving the "
  "cross-flow branch its own "
+ % (_dag.mean_critical_value, _dag.coeff_of_variation_pct,
+    _bol.mean_critical_value, _bol.coeff_of_variation_pct,
+    100.0*(_bol.mean_critical_value - _dag.mean_critical_value)/_dag.mean_critical_value,
+    _poo.coeff_of_variation_pct, _pooe.coeff_of_variation_pct) +
  "amplification threshold, separate from the one Mack's relation supplies for "
  "Tollmien-Schlichting waves — which is defensible, since a stationary cross-flow vortex is "
  "not seeded by free-stream turbulence — moves the independent set only from 55 to 51 % as "
@@ -827,10 +870,22 @@ table_from_csv("06_validation/ablations.csv",
 para("Calibration. The solver is calibrated through the single constant set of @@TAB:calibration@@. The "
  "critical amplification factor is not among the constants: it follows from the free-stream "
  "turbulence intensity by Mack's correlation, clamped to the 0.0008-0.0298 range over which "
- "that correlation is quoted, and so returns 8.18 for any stream quieter than 0.08 %. The SAME "
- "constants reproduce every validation dataset — five flat plates, two swept wings and 86 "
+ "that correlation is quoted. The SAME "
+ "constants reproduce every dataset here — five flat plates, two swept wings and 86 "
  "aerofoil conditions — demonstrating that no case-specific physics tuning is required, which "
  "is the essence of the universality claim.")
+para("Which sets are calibration and which are validation. The constants are frozen across "
+ "every case, but three of them were SET on data in these tables, and a universality claim is "
+ "only worth what its out-of-sample evidence is worth, so this is stated rather than left to "
+ "be inferred. N_anchor, the units offset of the amplification scale, is set on the "
+ "Schubauer & Skramstad plate. tu_hist, the weight on the flow history of Tu in the "
+ "Abu-Ghannam & Shaw correlation, is set on the three ERCOFTAC T3 plates, which are the only "
+ "bypass data here. CF_ratio, the cross-flow surrogate, is set on the Dagenhart & Saric wing. "
+ "Everything else is out of sample: ERCOFTAC T3C4, which is the only test of the separation "
+ "branch; all 86 NLF(1)-0416 conditions, which are the only test of the natural branch on a "
+ "real aerofoil; and the Boltz et al. swept wing, which is the only independent test of the "
+ "cross-flow branch. One constant per branch, each set on the smallest dataset that "
+ "determines it, with the largest dataset for each branch held back.", italic=True, size=10)
 h2("11.6  Sources and references")
 para("All data sources used for validation, for calibration of the closures, and for the "
  "case-study definition are recorded below.")
@@ -846,8 +901,10 @@ table_from_csv("06_validation/aerofoil_nlf0416_source.csv",
 # ======================================================================
 h1("12.  Contribution to Knowledge")
 bullet("A single unified transition kernel (Eq. E13) that locally selects the governing "
-       "mechanism among natural-TS, bypass, separation-induced and cross-flow transition by a "
-       "minimum-effective-onset rule — reproducing all regimes with one calibration set.")
+       "mechanism among natural-TS, bypass, separation-induced and cross-flow transition by "
+       "putting all four on one scale of onset progress and firing at the first to complete — "
+       "reproducing all regimes with one calibration set, and continuous in the free-stream "
+       "turbulence across the natural/bypass handover.")
 bullet("An amplification database in place of an envelope correlation: 61,600 Orr-Sommerfeld "
        "eigenvalue solutions on the Falkner-Skan family, tabulated against shape factor, "
        "momentum-thickness Reynolds number and frequency, with the march carrying one "

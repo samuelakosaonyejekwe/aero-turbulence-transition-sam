@@ -58,6 +58,16 @@ _WEIGHT = {"validation": 100, "solution": 40, "post": 25, "mesh": 12,
            "geometry": 8, "docx": 8, "equations": 3, "verify": 3}
 
 
+def _physical_cores():
+    n = os.cpu_count() or 1
+    try:
+        with open("/sys/devices/system/cpu/cpu0/topology/thread_siblings_list") as fh:
+            sibs = len([s for s in fh.read().strip().replace("-", ",").split(",") if s])
+        return max(1, n // max(1, sibs))
+    except OSError:
+        return max(1, n // 2)
+
+
 def _env(jobs):
     e = dict(os.environ)
     # one BLAS thread per worker; see the module docstring
@@ -65,6 +75,12 @@ def _env(jobs):
               "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
         e[k] = "1"
     e["MPLBACKEND"] = "Agg"
+    # A stage may fan out internally - gen_validation runs its four ablation
+    # configurations concurrently - and that pool must not be sized as though
+    # it had the machine to itself, or two stages each spawning two workers
+    # oversubscribe two physical cores twice over.  The budget is divided here
+    # and gen_validation reads it.
+    e["UTSS_JOBS"] = str(max(1, _physical_cores() // max(1, jobs)))
     return e
 
 
@@ -76,7 +92,11 @@ def run_stage(name, args, env):
         extra = ["--no-ablations"]
     t0 = time.time()
     with open(log, "w") as fh:
-        p = subprocess.run([sys.executable, os.path.join(ROOT, script)] + extra,
+        # -u so the log fills as the stage runs.  Python buffers stdout when
+        # it is a file rather than a terminal, so without this a stage's log is
+        # empty until it exits - which is exactly when you want to look at it,
+        # and exactly when looking is no longer useful.
+        p = subprocess.run([sys.executable, "-u", os.path.join(ROOT, script)] + extra,
                            cwd=ROOT, env=env, stdout=fh,
                            stderr=subprocess.STDOUT)
     dt = time.time() - t0

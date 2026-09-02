@@ -1,8 +1,8 @@
 quantity,model,measured,note
 separation station x [m],1.236,1.295,model / first station at the C_f floor
-reattachment station x [m],1.318,1.395,model / last station at the C_f floor
-bubble length [m],0.082,0.1,measured length is a lower bound
-dtheta/dx across the bubble [1/m],1.880e-03,5.906e-03,momentum integral is exact given U_e and H
-shape factor at reattachment,3.44,5.17,"model bounded by the attached Falkner-Skan branch, H <= 3.997"
+reattachment station x [m],1.288,1.395,model / last station at the C_f floor
+bubble length [m],0.052,0.1,measured length is a lower bound
+dtheta/dx across the bubble [1/m],1.891e-03,5.906e-03,momentum integral is exact given U_e and H
+shape factor at reattachment,3.39,5.17,"model bounded by the attached Falkner-Skan branch, H <= 3.997"
 dU_e/dx over the bubble [1/s],-0.3782,-0.38,smoothing spline against the tabulated points
 max |U_e spline - tabulated| [m/s],0.011,0.01,"tabulated to 0.01 m/s, so the spline is within quotation"

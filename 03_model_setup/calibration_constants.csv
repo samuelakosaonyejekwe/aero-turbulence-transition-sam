@@ -1,18 +1,19 @@
 constant,value,role,calibration_source
-A_TS,1.0,TS/natural onset weight,unity; validated on Schubauer-Skramstad and NLF(1)-0416 upper surface
+A_TS,1.0,TS/natural onset progress weight,"unity, not fitted; the natural branch's one measured quantity is N_anchor, set on Schubauer-Skramstad alone, and the 86 NLF(1)-0416 conditions are out of sample"
 A_BP,1.0,bypass onset weight,unity; validated on ERCOFTAC T3A/T3A-/T3B
 A_SEP,1.0,separation-induced weight,unity; validated on T3C4 and NLF(1)-0416 lower surface
 A_CF,1.0,crossflow weight,unity; Arnal C1 criterion
-N_crit,from Tu,e^N amplification factor,"Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored -0.50 (FITTED jointly on S&S and 86 aerofoil pts); 8.18 for Tu<0.08%"
+N_crit,from Tu,e^N amplification factor,"Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored -1.10 (FITTED jointly on S&S and 86 aerofoil pts); 7.58 for Tu<0.08%"
 N_floor,0.5,lower clamp on N_crit at high Tu,clamp; bypass governs there
-Tu_TS_max,0.1,upper Tu for the attached-flow TS branch,complement of the bypass gate
+Tu_BP_lo,0.1,Tu [%] below which the bypass correlation carries no weight,lower edge of the natural/bypass blend; below it the e^N branch alone governs
+Tu_BP_hi,0.25,Tu [%] above which the bypass correlation carries all the weight,"upper edge of the same blend.  Replaces the single Tu_TS_max gate, which made the predicted transition location a step function of Tu; the window is wider than the spread of any case here, so no result in this study is blended"
 C_len,9.0,"transition-length scale, Re_lambda = C_len Re_x_t^0.75",Dhawan & Narasimha (1958) published value; not fitted here
 CF_C1,150.0,crossflow critical Re_theta2,"Arnal et al.; facility-dependent: 150 fits Dagenhart (14.7%), 200 fits Boltz (18.4%)"
 cf_amp,True,"crossflow closed by an amplification integral, not a local threshold",rate computed (0.0435); threshold is the same N_crit; adds no constant
 CF_ratio,0.47,theta2/theta surrogate for crossflow,FITTED on Dagenhart & Saric; independent check in Sec. IV.C
 sigma_sep,from table,shear-layer amplification rate in a bubble,"computed on the reverse-flow Falkner-Skan branch; 0.0435, not fitted"
 two_eq,True,two-equation laminar march (momentum + kinetic energy),closures from the Falkner-Skan family; no fitted constant
-N_anchor,0.5,offset on Mack's N_crit,unit conversion to the present amplification rates; set jointly on S&S and the 86 NLF(1)-0416 conditions
+N_anchor,1.1,offset on Mack's N_crit,"unit conversion from Mack's 1977 growth rates to the present tabulated ones; set on the Schubauer-Skramstad plate ALONE, which it reproduces to 0.07 %. It was previously set jointly on that plate and the 86 NLF(1)-0416 conditions, which made that set a calibration set while three places in this project described it as one on which nothing is calibrated"
 C_mu,0.09,k-epsilon constant in the free-stream turbulence decay,"standard value 0.09; with C_eps2 it fixes Tu(x) from the rig's integral length scale, and neither is fitted here"
 C_eps2,1.92,k-epsilon constant in the free-stream turbulence decay,standard value 1.92; sets the decay exponent of isotropic grid turbulence
 bubble,True,separation branch closed by marching the detached shear layer,True is the model; False is the 'no bubble closure' ablation
@@ -23,5 +24,7 @@ H_sep,0.0,declare laminar separation on the solved shape factor instead of on la
 tu_hist,0.6,"weight on the flow-history average of Tu, Tu_eff = Tu_avg^w Tu_local^(1-w)",FITTED on the three ERCOFTAC plates; no effect where Tu does not decay
 lam_sep,-0.09,Thwaites parameter at laminar separation,Thwaites (1949) published value; not fitted
 sep_floor,120.0,min separation-induced onset Re_theta (ablation path only),superseded by the bubble closure; reachable only with bubble=False
-n_freq,40,frequencies carried by the e^N integration,discretisation parameter; onset moves <0.2% over 24-64
+d_omega,1.03,max ratio between adjacent frequencies in the e^N integration,"discretisation, stated as a RESOLUTION rather than a count: with a fixed count of 40 the Schubauer-Skramstad onset moved 5 % between 24 and 64 frequencies and did not settle.  At this spacing Re_x,tr is unchanged from 1.10 down to 1.0075"
+n_freq_min,40,floor on the frequency count,guards a degenerate range
+n_freq_max,400,cap on the frequency count,guards a degenerate range
 CF_N,0.0,separate amplification threshold for the crossflow branch (ablation path only),"0 = use the same N_crit as every other branch; exposed to test whether a roughness-seeded branch needs its own threshold, and it does not - see 06_validation/crossflow_criticals_summary.csv"
