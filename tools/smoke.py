@@ -263,6 +263,36 @@ def bubble_closure():
 
 
 @check
+def bubble_can_reattach_laminar():
+    """a bubble in a gradient that recovers reattaches instead of absorbing"""
+    from utss_solver import solve_flat_plate
+    # decelerate to separate, then accelerate: the classic short bubble in a
+    # gradient that relaxes.  Before laminar reattachment existed the layer
+    # could only transition or be declared burst at the trailing edge.
+    n = 600
+    s = np.linspace(1e-4, 1.5, n)
+    Ue = 1.9 - 0.9*np.exp(-((s - 0.75)/0.16)**2)     # dip and recovery
+    from utss_solver import march_bl
+    r = march_bl(s, Ue, 1.5e-5, Tu_pct=0.05)
+    # i_sep is the sticky record of the first separation and must survive the
+    # reattachment that clears the live bubble state
+    assert r["i_sep"] is not None, "no separation in the decelerating region"
+    assert not r["bubble_burst"], "reattached, yet still reported as burst"
+    assert r.get("n_reattach", 0) >= 1, (
+        "the bubble never reattached even though the gradient recovers; the "
+        "separated state is still absorbing")
+    # the amplification accumulated across the dead air must not be thrown away
+    nf = np.asarray(r["n_factor"], float)
+    i0 = r["i_sep"]
+    assert np.nanmax(nf[i0:]) > 0.0, "amplification vanished at reattachment"
+    tail = nf[min(i0 + 40, n - 1):]
+    assert tail.size and np.nanmax(tail) >= 0.9*np.nanmax(nf[:i0 + 40]), (
+        "the amplification factor collapsed after reattachment: the bubble's "
+        "own N was discarded instead of being carried into the attached "
+        "integral")
+
+
+@check
 def compressible_closures():
     """raising the Mach number delays transition and thins nothing to zero"""
     import case_config as C

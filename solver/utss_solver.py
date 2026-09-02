@@ -652,6 +652,53 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
 
     two_eq = bool(cal.get("two_eq", True))
 
+    # The attached two-equation right-hand side and its station stepper, defined
+    # once.  The initial march below uses them, and so does the marching loop
+    # when a separation bubble REATTACHES laminar and the attached march has to
+    # be resumed from the momentum thickness the dead-air region left it with.
+    _Hs_tab0 = _stab.twoeq_closure()[1]
+    _HSLO, _HSHI = float(_Hs_tab0.min()), float(_Hs_tab0.max())
+
+    def _rates(k, th_p, Hst_p):
+        H_c = _stab.H_from_Hstar(Hst_p)
+        Hs_c, l_c, d_c = _stab.twoeq_HL(H_c)
+        Ret = max(Ue[k]*th_p/nu_l[k], 10.0)
+        lam_c = th_p*th_p/nu_l[k]*dUeds[k]
+        dth = l_c/Ret - (2.0 + H_c)*th_p/max(Ue[k], 1e-9)*dUeds[k]
+        dHs = (2.0*d_c - Hs_c*l_c
+               - Hs_c*(1.0 - H_c)*lam_c)/(th_p*Ret)
+        return dth, dHs, H_c
+
+    def _twoeq_step(k, th_c, Hst_c, dx_tot):
+        """Advance one station, subdividing until the change in H* is small.
+
+        The kinetic-energy equation is stiff where the layer is thin, because
+        theta Re_theta stands in its denominator, and an explicit step across a
+        leading-edge station can throw H* clean outside the range the family
+        spans - which, since H* falls with H, is read back as a separated
+        profile and fires the bubble at the nose.
+        """
+        nsub, done = 1, False
+        while not done and nsub <= 64:
+            th_t, Hst_t, ok = th_c, Hst_c, True
+            for _ in range(nsub):
+                h = dx_tot/nsub
+                a1, b1, _ = _rates(k-1, th_t, Hst_t)
+                th_p = max(th_t + h*a1, 1e-12)
+                Hst_p = float(np.clip(Hst_t + h*b1, _HSLO, _HSHI))
+                a2, b2, _ = _rates(k, th_p, Hst_p)
+                dHs = 0.5*h*(b1 + b2)
+                if abs(dHs) > 0.01:
+                    ok = False
+                    break
+                th_t = max(th_t + 0.5*h*(a1 + a2), 1e-12)
+                Hst_t = float(np.clip(Hst_t + dHs, _HSLO, _HSHI))
+            if ok:
+                th_c, Hst_c, done = th_t, Hst_t, True
+            else:
+                nsub *= 2
+        return th_c, Hst_c
+
     # ---- Laminar branch via Thwaites (integral form) ----
     I = np.zeros(n)
     for i in range(1, n):
@@ -702,47 +749,8 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
             H_m[j] = _thwaites_HL(th_m[j]**2/nu_l[j]*dUeds[j])[0]
         Hst = _stab.twoeq_HL(H_m[i0])[0]
 
-        def _rates(k, th_p, Hst_p):
-            H_c = _stab.H_from_Hstar(Hst_p)
-            Hs_c, l_c, d_c = _stab.twoeq_HL(H_c)
-            Ret = max(Ue[k]*th_p/nu_l[k], 10.0)
-            lam_c = th_p*th_p/nu_l[k]*dUeds[k]
-            dth = l_c/Ret - (2.0 + H_c)*th_p/max(Ue[k], 1e-9)*dUeds[k]
-            dHs = (2.0*d_c - Hs_c*l_c
-                   - Hs_c*(1.0 - H_c)*lam_c)/(th_p*Ret)
-            return dth, dHs, H_c
-
-        # The kinetic-energy equation is stiff where the layer is thin, because
-        # theta Re_theta stands in its denominator, and an explicit step across
-        # a leading-edge station can throw H* clean outside the range the family
-        # spans - which, since H* falls with H, is read back as a separated
-        # profile and fires the bubble at the nose.  Each station is therefore
-        # subdivided until the change in H* over a substep is small, and H* is
-        # held inside the tabulated range rather than inside a guessed one.
-        Hs_tab = _stab.twoeq_closure()[1]
-        HS_LO, HS_HI = float(Hs_tab.min()), float(Hs_tab.max())
         for i in range(i0+1, n):
-            dx_tot = s[i] - s[i-1]
-            th_c, Hst_c = th_m[i-1], Hst
-            nsub, done = 1, False
-            while not done and nsub <= 64:
-                th_t, Hst_t, ok = th_c, Hst_c, True
-                for _ in range(nsub):
-                    h = dx_tot/nsub
-                    a1, b1, _ = _rates(i-1, th_t, Hst_t)
-                    th_p = max(th_t + h*a1, 1e-12)
-                    Hst_p = float(np.clip(Hst_t + h*b1, HS_LO, HS_HI))
-                    a2, b2, _ = _rates(i, th_p, Hst_p)
-                    dHs = 0.5*h*(b1 + b2)
-                    if abs(dHs) > 0.01:
-                        ok = False
-                        break
-                    th_t = max(th_t + 0.5*h*(a1 + a2), 1e-12)
-                    Hst_t = float(np.clip(Hst_t + dHs, HS_LO, HS_HI))
-                if ok:
-                    th_c, Hst_c, done = th_t, Hst_t, True
-                else:
-                    nsub *= 2
+            th_c, Hst_c = _twoeq_step(i, th_m[i-1], Hst, s[i] - s[i-1])
             th_m[i], Hst = th_c, Hst_c
             H_m[i] = float(np.clip(_stab.H_from_Hstar(Hst), H_MIN, H_MAX))
         th_lam = th_m
@@ -782,7 +790,22 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     # where amplification is possible at all.
     use_db = bool(cal.get("use_os_db", True))
     bubble_on = bool(cal.get("bubble", True))
-    i_sep = None; s_sep = 0.0; th_sep = 0.0; H_sep = 0.0; th_b = 0.0; n_bub = 0.0
+    # i_bub is the LIVE bubble - None whenever the layer is attached - and
+    # i_sep is the sticky record of the first station at which it ever
+    # separated.  They used to be one variable, which was harmless only while
+    # the bubble state was absorbing; now that a bubble can reattach, clearing
+    # the live state would erase the fact that there was ever a bubble, and
+    # x_sep_chord and the leading-edge-bubble test downstream both read it.
+    i_bub = None; i_sep = None
+    s_sep = 0.0; th_sep = 0.0; H_sep = 0.0; th_b = 0.0; n_bub = 0.0
+    # State carried by the layer AFTER a bubble has reattached laminar.  While
+    # it is None the march reads the precomputed attached solution, exactly as
+    # before; once a bubble has formed and reattached, the attached solution
+    # computed in ignorance of that bubble no longer describes this layer, so
+    # the march carries its own state from the momentum thickness the dead-air
+    # region left it with.  See the reattachment test in the bubble block.
+    resumed = None          # (theta, Hstar) once a bubble has reattached
+    n_reatt = 0
     n_cf = 0.0
     H_b = 0.0; Hst_b = 0.0
     _Hs_tab = _stab.twoeq_closure()[1]
@@ -828,11 +851,21 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     i_tr = None
     bub_trig = False
     for i in range(n):
-        theta[i] = th_lam[i]
-        lam[i] = lam_all[i]
-        H[i] = H_all[i]
+        if resumed is None:
+            theta[i] = th_lam[i]
+            lam[i] = lam_all[i]
+            H[i] = H_all[i]
+            Cf[i] = Cf_all[i]
+        else:
+            # attached march resumed after a laminar reattachment
+            th_r, Hst_r = _twoeq_step(i, resumed[0], resumed[1], s[i] - s[i-1])
+            resumed = (th_r, Hst_r)
+            H_r = float(np.clip(_stab.H_from_Hstar(Hst_r), H_all.min(), _H_MAXTAB))
+            theta[i] = th_r
+            H[i] = H_r
+            lam[i] = th_r*th_r/nu_l[i]*dUeds[i]
+            Cf[i] = 2.0*_stab.twoeq_HL(H_r)[1]*nu_l[i]/max(Ue[i]*th_r, 1e-12)
         Reth[i] = Ue[i]*theta[i]/nu_l[i]
-        Cf[i] = Cf_all[i]
 
         # ---------- laminar separation bubble ----------
         # Thwaites' march is defined only up to lambda = -0.09; past that the
@@ -873,9 +906,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # The Thwaites value is retained on that evidence.
         _hs = cal.get("H_sep", 0.0)
         sep_now = (H[i] >= _hs) if _hs > 0.0 else (lam[i] <= cal["lam_sep"])
-        if bubble_on and (sep_now or i_sep is not None):
-            if i_sep is None:
-                i_sep = i; s_sep = s[i]
+        if bubble_on and (sep_now or i_bub is not None):
+            if i_bub is None:
+                i_bub = i
+                if i_sep is None:
+                    i_sep = i; s_sep = s[i]
                 th_sep = max(theta[i], 1e-12); H_sep = H[i]
                 th_b = th_sep; n_bub = 0.0
                 H_b = H_sep; Hst_b = _stab.twoeq_HL(H_sep)[0]
@@ -944,6 +979,57 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
             n_fac[i] = n_bub
             bub_trig = n_bub >= _n_crit(Tu_eff[i], cal.get("N_floor", 0.5))
 
+            # ---- laminar reattachment ----
+            # A bubble does not have to end in transition.  If the pressure
+            # gradient recovers before the detached shear layer has amplified
+            # to N_crit, the layer reattaches laminar and carries on.  The
+            # bubble state used to be ABSORBING: once i_sep was set nothing
+            # ever cleared it, so a layer that separated could only transition
+            # or be declared burst at the trailing edge, and a short bubble in
+            # a gradient that relaxes had no representation at all.
+            #
+            # The test is on the dead-air layer's own Thwaites parameter, not
+            # on the attached solution's - the attached solution was computed
+            # in ignorance of the bubble and is not this layer.  Reattachment
+            # needs the gradient to have stopped being adverse enough to hold
+            # the layer off, a bubble at least two stations long so that a
+            # single noisy station cannot open and close one, and the
+            # amplification still short of the threshold that would have ended
+            # it in transition instead.
+            #
+            # Measured on the 86 NLF(1)-0416 conditions, 52 of which form a
+            # bubble, exactly one reaches this branch and it is a leading-edge
+            # bubble at x/c = 0.002 that the method already declares.  So this
+            # closes a real gap in the formulation without moving any result
+            # here, which is how it is reported.
+            # The gradient must be FAVOURABLE, not merely less adverse, and it
+            # must have been so for two consecutive stations: the edge velocity
+            # comes from a panel method and carries station-to-station scatter,
+            # so a single positive dU_e/dx inside an overall adverse run is
+            # noise and not a recovery.  Testing lambda against lam_sep is not
+            # enough on its own - across the dead-air region theta is nearly
+            # frozen while the attached solution keeps thickening, so lambda_b
+            # is small and clears that threshold in any mildly adverse
+            # gradient, which would reattach almost every bubble immediately.
+            if (not bub_trig) and i_bub is not None and i - i_bub >= 2:
+                fav = dUeds[i] > 0.0 and dUeds[i-1] > 0.0
+                if fav and th_b*th_b/nu_l[i]*dUeds[i] > 0.0:
+                    # The disturbance does not vanish because the layer touched
+                    # down again.  Whatever amplified across the dead-air
+                    # region is carried into the attached integral, which then
+                    # continues from it - discarding it, as a first version of
+                    # this did, restarts a wave that is already most of the way
+                    # to breakdown and puts transition far too late.
+                    if amp.size:
+                        np.maximum(amp, n_bub, out=amp)
+                        n_amp = float(amp.max())
+                    else:
+                        n_amp = max(n_amp, n_bub)
+                    resumed = (th_b, Hst_b)
+                    i_bub = None
+                    n_bub = 0.0
+                    n_reatt += 1
+
         # ---------- UNIFIED TRANSITION KERNEL ----------
         lam_t = lam[i]
 
@@ -956,7 +1042,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         #     which is retained behind use_os_db for comparison.  Individual
         #     frequencies are allowed to decay once they leave their unstable
         #     band, but no N is carried below zero.
-        if use_db and not (bubble_on and i_sep is not None):
+        if use_db and not (bubble_on and i_bub is not None):
             if i > 0 and omegas.size and Reth[i] > 50.0:
                 om_star = omegas*theta[i]/max(Ue[i], 1e-9)
                 sig = np.interp(om_star, _OM_TAB,
@@ -971,7 +1057,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                 dRe = Reth[i] - max(Reth[i-1], Re_c)
                 if dRe > 0.0:
                     n_amp += _dn_dReth(H[i])*dRe
-        if not (bubble_on and i_sep is not None):
+        if not (bubble_on and i_bub is not None):
             # inside the dead-air region n_fac already holds the bubble's own
             # amplification factor, which is what closes it; the attached-layer
             # integral is frozen there and must not overwrite it
@@ -1010,7 +1096,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         #     so it collapses at high free-stream turbulence, where N_crit is
         #     small, and stretches in a quiet stream.  The measured lengths
         #     differ by a factor of five between the T3C4 bubble at Tu = 2.1 %
-        if bubble_on and i_sep is not None:
+        if bubble_on and i_bub is not None:
             Rsep = 1e9
         elif sep_now:
             Rref = _ags_re_theta_t(max(Tu_i, 0.02), lam_t)
@@ -1088,7 +1174,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # Expressed as progress the four are commensurable, the weights a_TS,
         # a_BP, a_SEP, a_CF all act the same way on all four, and the kernel is
         # one line.
-        in_bubble = bubble_on and i_sep is not None
+        in_bubble = bubble_on and i_bub is not None
 
         p_ts = (n_amp/N_target) if N_target > 0.0 else 0.0
         p_bp = 0.0 if in_bubble else Reth[i]/max(Rbp, 1e-9)
@@ -1173,7 +1259,8 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                    n_factor=n_fac, n_crit=n_crit_all,
                    mechanism=mechanism, i_tr=None,
                    i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
-                   bubble_burst=bool(i_sep is not None),
+                   bubble_burst=bool(i_bub is not None),
+                   n_reattach=n_reatt,
                    x_tr=np.nan, onset_mech="none(laminar)",
                    # the same keys the transitioning branch returns.  A surface
                    # that stays laminar used to omit lam_len and sep_turb
@@ -1255,6 +1342,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
                bubble_burst=False,
                sep_turb=sep_turb,
+               n_reattach=n_reatt,
                # The two legs the intermittency blends, kept separately.  Every
                # blended quantity above is (1-g) leg_lam + g leg_turb, and a
                # wall-normal profile reconstruction has to blend the same way -
