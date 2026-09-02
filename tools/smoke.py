@@ -343,7 +343,7 @@ def wall_normal_profiles():
     rc = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
                        W["MAC"], cr["Tu_pct"], sweep_deg=W["le_sweep_deg"],
                        mach=cr["mach"])
-    df = R.bl_profiles(rc)
+    df = R.bl_profiles(rc, write=False)
     assert len(df) > 0
     for st, g in df.groupby("station"):
         u = g.u_Ue.to_numpy(float)
