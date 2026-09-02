@@ -109,8 +109,18 @@ def pressure_field(cond,name):
     # singularity, so they carried velocities of order ten times free stream.
     from matplotlib.path import Path
     poly=np.column_stack([X,Y])
+    # Path.contains_points grows or shrinks the test region by `radius`
+    # according to the WINDING of the polygon, and these points run clockwise
+    # (TE -> lower -> LE -> upper -> TE), so the positive radius used here was
+    # shrinking the mask: it removed fewer cells than radius 0 and left a ring
+    # of them within a panel length of the surface, sitting on the panel
+    # singularity, which showed as speckle hugging the aerofoil on the C_p
+    # contour.  The sign is taken from the signed area so the region always
+    # grows, whichever way the points are ordered.
+    area=0.5*np.sum(X[:-1]*Y[1:]-X[1:]*Y[:-1])
+    grow=0.010 if area > 0 else -0.010
     inside=Path(poly).contains_points(np.column_stack([Xg.ravel(),Yg.ravel()]),
-                                      radius=0.004).reshape(Xg.shape)
+                                      radius=grow).reshape(Xg.shape)
     Cp=np.where(inside,np.nan,Cp)
     spd=np.sqrt(Vx**2+Vy**2); spd=np.where(inside,np.nan,spd)
     df=pd.DataFrame({"x_c":Xg.ravel(),"y_c":Yg.ravel(),"Cp":Cp.ravel(),
