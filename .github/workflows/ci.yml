@@ -14,6 +14,14 @@ name: checks
 # together and that the committed CSVs still say what the committed document
 # says.
 
+# Action versions.  GitHub deprecated Node 20 on its runners, and checkout@v4,
+# setup-python@v5 and cache@v4 target it - they were being force-run on Node 24
+# with a warning on every job.  These are the current majors and each declares
+# `using: node24` in its own action.yml, which was checked rather than assumed.
+# Bumping a major can change an action's defaults, so the run after this one is
+# the check: if the cache key still hits and the pinned environment still
+# installs, the bump is clean.
+
 on:
   push:
     branches: ["**"]
@@ -25,9 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -40,7 +48,7 @@ jobs:
         # Deterministic functions of the source, so they are keyed on it.  The
         # amplification database is committed; these two are not, because they
         # rebuild in fourteen seconds - but not on every job if we can help it.
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             solver/falkner_skan_family.npz
