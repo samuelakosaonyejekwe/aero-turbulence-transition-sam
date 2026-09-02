@@ -631,13 +631,21 @@ def _fs_solve_shear(fw, eta, guess, beta_guess):
 _FS_REVERSE = None
 
 
-def fs_reverse_family(fw_min=-0.075, n=90):
+def fs_reverse_family(fw_min=-0.120, n=150):
     """Profiles from separation into reverse flow, ordered by decreasing shear.
 
     Returns a list of (f''(0), beta, H, theta_eta, f', f'', f''') with f' the
     streamwise velocity in similarity units; on this branch f' is negative near
     the wall.  f''' comes from the similarity equation itself (see _fs_third)
     so that U'' never has to be formed by differentiating an interpolant.
+
+    fw_min = -0.120 reaches H = 6.23.  It was -0.075, which stops at H = 4.99,
+    and that limit is the reason the T3C4 bubble could not be modelled: the
+    measurement there reaches a shape factor of 5.17, so the family the march
+    reads from did not contain the profile the experiment was in.  The
+    continuation converges smoothly the whole way - the reverse flow is still
+    only four per cent of the edge velocity at H = 6.2 - so the old stopping
+    point was a choice and not a limit of the branch.
     """
     global _FS_REVERSE
     if _FS_REVERSE is not None:
@@ -1040,12 +1048,77 @@ def twoeq_HL(H):
             float(np.interp(x, Hg, D)))
 
 
-def H_from_Hstar(Hstar):
-    """Invert H*(H).  H* falls monotonically with H across the family."""
+_COMB_HSTAR = None
+
+
+def _combined_Hstar():
+    """(H, H*, l, d) along the combined attached + reverse family, ordered by H."""
+    global _COMB_HSTAR
+    if _COMB_HSTAR is None:
+        eta, prof = _combined_family()
+        H = np.array([p[0] for p in prof])
+        Hs, L, D = [], [], []
+        for h, th, u, up, upp in prof:
+            Hs.append(_trapz(u*(1.0 - u*u), eta)/th)
+            L.append(th*up[0])
+            D.append(th*_trapz(up*up, eta))
+        k = np.argsort(H)
+        _COMB_HSTAR = (H[k], np.array(Hs)[k], np.array(L)[k], np.array(D)[k])
+    return _COMB_HSTAR
+
+
+def twoeq_HL_combined(H):
+    """H*, l and d at a shape factor that may lie past separation.
+
+    twoeq_HL clips to the ATTACHED family, which is right for an attached layer
+    and wrong for the interior of a separation bubble.  This reads the same
+    three closures off the combined family, so the dead-air march can be closed
+    at the shape factor it has actually reached rather than at the largest one
+    the attached branch happens to contain.
+    """
+    Hg, Hs, L, D = _combined_Hstar()
+    x = float(np.clip(H, Hg[0], Hg[-1]))
+    return (float(np.interp(x, Hg, Hs)), float(np.interp(x, Hg, L)),
+            float(np.interp(x, Hg, D)))
+
+
+def H_from_Hstar(Hstar, H_prev=None):
+    """Invert H*(H).
+
+    On the ATTACHED branch H* falls monotonically with H and the inversion is
+    unique.  Across the whole family it is not: H* has a minimum at H = 4.027,
+    the fold where the attached and reverse-flow branches meet, and rises again
+    beyond it, so one H* names two profiles - one attached, one separated.
+
+    With nothing else to go on the attached root is the right one, and a bare
+    call returns it; the dead-air march used to be capped at the fold for
+    exactly this reason.  But a march KNOWS which branch it is on, because it
+    got there continuously, and passing the previous H resolves the ambiguity:
+    the root nearest H_prev is the one the layer is on.  That is what lets the
+    bubble march continue past H = 3.997 to the shape factors a real separation
+    bubble reaches.
+
+    The inversion is ill-conditioned on the reverse branch - H* moves by only
+    0.7 per cent between H = 4.03 and H = 4.99 - so it is used there to CARRY a
+    march that is already close, never to establish a shape factor from nothing.
+    The caller limits how far H may move in one step for the same reason.
+    """
     Hg, Hs, L, D = twoeq_closure()
-    o = np.argsort(Hs)
-    return float(np.interp(float(np.clip(Hstar, Hs[o][0], Hs[o][-1])),
-                           Hs[o], Hg[o]))
+    if H_prev is None:
+        o = np.argsort(Hs)
+        return float(np.interp(float(np.clip(Hstar, Hs[o][0], Hs[o][-1])),
+                               Hs[o], Hg[o]))
+    Hc, Hsc, _l, _d = _combined_Hstar()
+    x = float(np.clip(Hstar, float(Hsc.min()), float(Hsc.max())))
+    roots = []
+    for i in range(Hsc.size - 1):
+        a, b = float(Hsc[i]), float(Hsc[i+1])
+        if (a - x)*(b - x) <= 0.0 and a != b:
+            w = (x - a)/(b - a)
+            roots.append(float(Hc[i] + w*(Hc[i+1] - Hc[i])))
+    if not roots:
+        return float(Hc[int(np.argmin(np.abs(Hsc - x)))])
+    return float(min(roots, key=lambda r: abs(r - H_prev)))
 
 
 if __name__ == "__main__":
