@@ -1156,6 +1156,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                    i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
                    bubble_burst=bool(i_sep is not None),
                    x_tr=np.nan, onset_mech="none(laminar)",
+                   # the same keys the transitioning branch returns.  A surface
+                   # that stays laminar used to omit lam_len and sep_turb
+                   # entirely, so any consumer that read them had to know which
+                   # branch it was on or take a KeyError.
+                   lam_len=np.nan, sep_turb=None,
                    H_lam=H.copy(), theta_lam=theta.copy(),
                    H_turb=np.zeros(n), theta_turb=np.zeros(n))
         return out
@@ -1350,6 +1355,15 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         # last station it happened to reach.
         r["x_sep_chord"] = (float(xc[idx][r["i_sep"]])
                             if r.get("i_sep") is not None else np.nan)
+        # Turbulent separation, and the margin to it.  march_bl has always
+        # computed sep_turb - the first station at which the turbulent shape
+        # factor passes 2.6 - and nothing has ever read it, while the README
+        # and the report abstract both list "trailing-edge separation margin"
+        # among the quantities this study delivers.  It is an output now.
+        _st = r.get("sep_turb")
+        r["x_sep_turb_chord"] = (float(xc[idx][_st]) if _st is not None else np.nan)
+        r["H_te"] = float(r["H"][-1])
+        r["sep_margin_H"] = float(2.6 - r["H"][-1])
         r["bubble_burst"] = bool(r.get("bubble_burst", False))
         res[name] = r
 

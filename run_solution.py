@@ -57,7 +57,16 @@ def transition_summary(rc, rl):
                 Re_x_tr=f"{rex:.3e}", Re_theta_at_onset=round(reth,1) if has_tr else None,
                 mechanism=s["onset_mech"],
                 laminar_run_pct=round(xch*100,1),
-                Cf_te=round(float(s["Cf"][-1]),5)))
+                Cf_te=round(float(s["Cf"][-1]),5),
+                # Trailing-edge separation margin.  Both the README and the
+                # report's executive summary list this among the quantities
+                # the study delivers; until now nothing computed it into an
+                # output, though march_bl has always found the station.
+                H_te=round(float(s["H_te"]),3),
+                sep_margin_H=round(float(s["sep_margin_H"]),3),
+                x_sep_turb_c=(round(float(s["x_sep_turb_chord"]),3)
+                              if s["x_sep_turb_chord"]==s["x_sep_turb_chord"]
+                              else None)))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/transition_summary.csv",index=False)
     return df
 
@@ -79,11 +88,16 @@ def aero_polar():
 def spanwise():
     X,Y=C.nlf16_panel_points(130)
     eta=np.linspace(0.0,0.98,12); rows=[]
-    for e in eta:
+    ai=induced_angle_deg(eta)
+    for e,a_ind in zip(eta,ai):
         chord=W["root_chord"]+e*(W["tip_chord"]-W["root_chord"])
         Re=cr["U_inf"]*chord/cr["nu_inf"]
         twist=e*W["twist_tip_deg"]
-        aeff=cr["alpha_deg"]+twist
+        # effective, not geometric: the downwash of the wing these strips
+        # belong to is subtracted, from the same lifting-line solve that
+        # reports the wing C_L two tables earlier.  See induced_angle_deg.
+        ageo=cr["alpha_deg"]+twist
+        aeff=ageo-float(a_ind)
         r=solve_airfoil(X,Y,aeff,cr["U_inf"],cr["nu_inf"],chord,cr["Tu_pct"],
                         sweep_deg=W["le_sweep_deg"],mach=cr["mach"])
         u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
@@ -92,7 +106,11 @@ def spanwise():
         xu=u["x_tr_chord"]; xu=1.0 if xu!=xu else float(xu)
         xl=l["x_tr_chord"]; xl=1.0 if xl!=xl else float(xl)
         rows.append(dict(eta=round(e,3), y_m=round(e*W["span_b"]/2,3),
-            chord_m=round(chord,3), Re_local=round(Re,-2), alpha_eff_deg=round(aeff,2),
+            chord_m=round(chord,3), Re_local=round(Re,-2),
+            alpha_geom_deg=round(ageo,2),
+            alpha_induced_deg=round(float(a_ind),2),
+            alpha_eff_deg=round(aeff,2),
+            c_l_section=round(r["Cl"],4),
             xtr_upper_c=round(xu,3), xtr_lower_c=round(xl,3),
             Cd_section=round(r["Cd"],5),
             laminar_fraction=round(0.5*(xu+xl),3)))
@@ -125,8 +143,16 @@ def pressure_field(cond,name):
                                       radius=grow).reshape(Xg.shape)
     Cp=np.where(inside,np.nan,Cp)
     spd=np.sqrt(Vx**2+Vy**2); spd=np.where(inside,np.nan,spd)
-    df=pd.DataFrame({"x_c":Xg.ravel(),"y_c":Yg.ravel(),"Cp":Cp.ravel(),
-                     "Vx_ms":Vx.ravel(),"Vy_ms":Vy.ravel(),"speed_ms":spd.ravel()})
+    # Rounded to the precision these quantities are meaningful to, as every
+    # other CSV in this project is.  At full float64 this file was four
+    # megabytes of seventeen-significant-figure numbers whose last bits move
+    # with the BLAS thread count, so a regeneration that changed nothing
+    # physical still rewrote both field files and both .npz - which is a large
+    # part of why the history is four times the size of the working tree.
+    df=pd.DataFrame({"x_c":Xg.ravel().round(6),"y_c":Yg.ravel().round(6),
+                     "Cp":Cp.ravel().round(5),
+                     "Vx_ms":Vx.ravel().round(4),"Vy_ms":Vy.ravel().round(4),
+                     "speed_ms":spd.ravel().round(4)})
     df.to_csv(f"{SOL}/field_pressure_{name}.csv",index=False)
     np.savez(f"{SOL}/field_pressure_{name}.npz",Xg=Xg,Yg=Yg,Cp=Cp,Vx=Vx,Vy=Vy,spd=spd)
     return df
@@ -157,7 +183,13 @@ def bl_profiles(rc):
     flight condition.
     """
     import stability as _stab
-    g=cr["gamma_air"]; r_rec=cr["recovery_r"]; a_inf=cr["a_sound"]
+    g=cr["gamma_air"]; a_inf=cr["a_sound"]
+    # Recovery factor by state, not one value for the whole surface.  The
+    # profile reconstruction used the TURBULENT r = 0.89 at every station,
+    # including the laminar ones, while _ref_temp_nu inside the solver has
+    # always switched between Pr^(1/2) laminar and Pr^(1/3) turbulent.  The two
+    # halves of the same report disagreed about the recovery of the same layer.
+    _Pr=cr["Pr"]; r_lam=_Pr**0.5; r_turb=_Pr**(1.0/3.0)
     s=rc["surfaces"]["upper"]
     rows=[]; stations={"x/c=0.10":0.10,"x/c=0.30":0.30,
                        "x/c=0.60":0.60,"x/c=0.95":0.95}
@@ -190,6 +222,7 @@ def bl_profiles(rc):
         u_Ue=(1.0-gam)*f_l(y/max(d_l,1e-12))+gam*f_t(y/max(d_t,1e-12))
         u_Ue=np.clip(u_Ue,0.0,1.0)
         Ue=s["Ue"][i]; Me=Ue/a_inf
+        r_rec=(1.0-gam)*r_lam+gam*r_turb
         T_Te=1+r_rec*(g-1)/2*Me**2*(1-u_Ue**2)
         Tinf=cr["T_inf_K"]; Te=Tinf*(1+(g-1)/2*cr["mach"]**2)/(1+(g-1)/2*Me**2)
         Tabs=T_Te*Te
@@ -198,6 +231,7 @@ def bl_profiles(rc):
                 y_mm=round(et*delta*1e3,4),u_Ue=round(uu,4),
                 T_Te=round(tt,4),T_K=round(Ta,2),
                 Me_edge=round(Me,3),H_shape=round(float(s["H"][i]),3),
+                recovery_r=round(float(r_rec),4),
                 delta_mm=round(delta*1e3,4),
                 intermittency_gamma=round(gam,3),state=s["state"][i]))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/bl_profiles_cruise.csv",index=False)
@@ -307,8 +341,40 @@ def lifting_line(alpha_deg=None, n_terms=40):
     sumn=float(np.sum(ns*A**2))
     CDi=np.pi*AR*sumn
     e=A[0]**2/sumn
+    # Induced incidence at each collocation station, alpha_i = sum n A_n
+    # sin(n theta)/sin(theta).  The same solve that gives the wing lift gives
+    # the downwash, and the span-wise strip sweep needs it: a strip run at the
+    # GEOMETRIC incidence is a two-dimensional aerofoil, not a station on a
+    # finite wing.  Returned sorted in eta so a consumer can interpolate.
+    ai=(np.sin(np.outer(thk,ns))@(ns*A))/np.sin(thk)
+    k=np.argsort(eta)
     return dict(CL=float(CL), CDi=float(CDi), e=float(e), a0=a0,
-                alpha_L0=al0, sweep_c4=float(sweep_c4), a0_eff=a0_eff)
+                alpha_L0=al0, sweep_c4=float(sweep_c4), a0_eff=a0_eff,
+                eta_c=eta[k], alpha_i_deg=np.degrees(ai[k]))
+
+
+_LL_CACHE={}
+
+def induced_angle_deg(eta, alpha_deg=None):
+    """Downwash angle [deg] at span fraction eta, from the lifting-line solve.
+
+    The span-wise sweep and the 3-D field both run a two-dimensional section at
+    each station.  Doing that at the geometric incidence - root incidence plus
+    washout, which is what alpha_eff_deg used to report - leaves out the
+    downwash of the wing the stations belong to, and the report computes that
+    downwash two sections earlier: an AR = 8.7 wing at the cruise C_L carries
+    0.61 deg of it, against a root incidence of 1.5 deg.  Left out, the root
+    strip runs at c_l = 0.517 instead of 0.432 and the tip strip at 0.107
+    instead of 0.022, a factor of five.
+
+    Cached per incidence: the monoplane solve is one linear system but the
+    section lift-curve slope it needs costs three panel solves.
+    """
+    key=round(float(cr["alpha_deg"] if alpha_deg is None else alpha_deg),6)
+    if key not in _LL_CACHE:
+        _LL_CACHE[key]=lifting_line(key)
+    ll=_LL_CACHE[key]
+    return np.interp(np.asarray(eta,float), ll["eta_c"], ll["alpha_i_deg"])
 
 
 def _lifting_line_check():
@@ -325,16 +391,26 @@ def _lifting_line_check():
         M=(np.sin(np.outer(thk,ns))
            *(4.0*b/(a0*chord)[:,None] + ns[None,:]/np.sin(thk)[:,None]))
         A=np.linalg.solve(M,alpha_rad)
-        return np.pi*AR*A[0], A[0]**2/float(np.sum(ns*A**2))
+        ai=(np.sin(np.outer(thk,ns))@(ns*A))/np.sin(thk)
+        return np.pi*AR*A[0], A[0]**2/float(np.sum(ns*A**2)), ai
 
     N=60; AR=8.0; a0=2.0*np.pi
     thk=np.arange(1,N+1)*np.pi/(2.0*N); eta=np.abs(np.cos(thk))
     ell=np.sqrt(np.maximum(1.0-eta**2,1e-12))
     ell=ell*(1.0/AR)/(np.pi/4.0)                      # scale to the given AR
-    CL,e=solve(ell,np.full(N,np.radians(1.0)),AR)
+    CL,e,ai=solve(ell,np.full(N,np.radians(1.0)),AR)
     exact=a0/(1.0+a0/(np.pi*AR))*np.radians(1.0)
     assert abs(CL-exact)/exact < 1e-6, "elliptic C_L off: %g vs %g"%(CL,exact)
     assert abs(e-1.0) < 1e-6, "elliptic span efficiency off: %g" % e
+    # The downwash the span-wise strips are run at, against its closed form: on
+    # an elliptic planform the induced angle is CONSTANT across the span and
+    # equal to C_L/(pi AR).  This is the check that the strips are flown at the
+    # right incidence, and it is asserted here because the span-wise table has
+    # no other independent reference.
+    ai_exact=CL/(np.pi*AR)
+    assert abs(ai-ai_exact).max() < 1e-9, (
+        "elliptic induced angle is not constant at C_L/(pi AR): spread %.2e, "
+        "worst error %.2e" % (ai.max()-ai.min(), abs(ai-ai_exact).max()))
 
     tap=0.5; ch=(1.0+eta*(tap-1.0)); ch=ch*(1.0/AR)/(0.5*(1.0+tap))
     d=[solve(ch,np.radians(a+eta*(-3.0)),AR)[0] for a in (1.0,2.0,4.0)]

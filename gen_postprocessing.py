@@ -475,10 +475,17 @@ def build_3d_field():
     """Run solver at span stations, map Cp/Cf/gamma onto 3D wing surface."""
     etas=np.linspace(0.0,1.0,16)
     X,Y=C.nlf16_panel_points(130)
+    # Same effective incidence as the span-wise table of run_solution.py:
+    # geometric incidence less the downwash of the wing these strips belong to.
+    # Running the 3-D field at the geometric incidence while the table beside it
+    # used the effective one would put two different wings in the same report.
+    from run_solution import induced_angle_deg
+    ai=induced_angle_deg(etas)
     data={}
-    for e in etas:
+    for e,a_ind in zip(etas,ai):
         chord=W["root_chord"]+e*(W["tip_chord"]-W["root_chord"])
-        twist=e*W["twist_tip_deg"]; aeff=cr["alpha_deg"]+twist
+        twist=e*W["twist_tip_deg"]
+        aeff=cr["alpha_deg"]+twist-float(a_ind)
         # same Mach number as run_solution.py, so the 3-D contours show the
         # solution the surface CSVs of section 9 tabulate and not a second,
         # incompressible one
