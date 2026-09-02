@@ -1212,12 +1212,27 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         i = (cand[np.argmin(np.abs(xs[cand] - x_ref))] if len(cand)
              else len(xs) - 1)
         H_te = r["H"][i]; th_te = r["theta"][i]; Ue_te = r["Ue"][i]
+        r["theta_te_c"] = float(th_te/chord)
         return 2.0*th_te/chord*(Ue_te/U)**((H_te+5.0)/2.0)
     Cd = squire_young(res["upper"]) + squire_young(res["lower"])
+    # Squire-Young presumes a thin trailing-edge layer, and outside the
+    # attached-flow envelope this formulation stops providing one: at 16 deg
+    # and Re_c = 2e5 the march returns a momentum thickness of 1.34 chords and
+    # the formula duly returns C_d = 1.22, which is bluff-body drag from an
+    # aerofoil method.  A layer thicker than the body is long is not a marginal
+    # case to be reported with a caveat, it is arithmetic that has stopped
+    # meaning anything, so no number is offered.  This is not a tuned
+    # threshold: within the envelope and Reynolds range of this study the
+    # largest value reached is 0.028 chords, so the test never fires on any
+    # result reported here.
+    if max(res["upper"]["theta_te_c"], res["lower"]["theta_te_c"]) > 1.0:
+        Cd = float("nan")
 
     return dict(panel=dict(xc=xc, yc=yc, Cp=Cp, V=V, th=th, S=S,
                            i_stag=i_stag),
-                surfaces=res, Cl=Cl, Cd=Cd, alpha=alpha_deg)
+                surfaces=res, Cl=Cl, Cd=Cd, alpha=alpha_deg,
+                theta_te_c=max(res["upper"]["theta_te_c"],
+                               res["lower"]["theta_te_c"]))
 
 
 if __name__ == "__main__":
