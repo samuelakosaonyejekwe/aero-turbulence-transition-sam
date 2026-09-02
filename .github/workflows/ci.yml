@@ -68,14 +68,26 @@ jobs:
           python tools/pipeline.py --no-smoke --jobs 2 \
             --stages geometry,equations,mesh
 
-      - name: Nothing regenerated differently
-        # The cheap stages are deterministic, so a clean tree here is a real
-        # signal.  It is also the check that would have caught the CSVs being
-        # written at full float64, whose last bits moved with the BLAS thread
-        # count and made every regeneration a new blob.
+      - name: Data outputs regenerate identically
+        # The NUMBERS must reproduce, and on a clean runner with a fresh install
+        # of the pinned environment they do, bit for bit.  This is the check that
+        # would have caught the CSVs being written at full float64, whose last
+        # bits moved with the BLAS thread count and made every regeneration a new
+        # blob.
+        #
+        # Rendered images are deliberately NOT compared.  matplotlib output is
+        # not byte-reproducible across machines - font rasterisation depends on
+        # the freetype build and on which fonts are installed - so diffing PNGs
+        # here tests the runner, not the code.  The first version of this step
+        # did compare them and failed on nine drawings whose data was identical.
+        # The figure diff is still printed, because a figure that changes SHAPE
+        # is worth seeing; it just does not fail the build.
         run: |
-          git diff --stat
-          git diff --quiet || {
-            echo "::error::a generator did not reproduce its committed output"
+          echo "--- data files ---"
+          git diff --stat -- '*.csv'
+          git diff --quiet -- '*.csv' || {
+            echo "::error::a generator did not reproduce its committed CSVs"
             exit 1
           }
+          echo "--- rendered figures (informational; see the comment above) ---"
+          git diff --stat -- '*.png' | tail -3
