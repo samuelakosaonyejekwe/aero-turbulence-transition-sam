@@ -694,6 +694,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     state = np.array(["laminar"] * n, dtype=object)
     Re_th_t = np.full(n, np.nan)
     n_fac = np.zeros(n)
+    # the cross-flow amplification factor at every station.  It was a running
+    # scalar, so nothing downstream could ask what N_cf the layer had reached
+    # at a measured transition station - which is the quantity that says what
+    # each swept-wing experiment actually requires of the branch.
+    n_cf_arr = np.zeros(n)
     n_amp = 0.0
     mechanism = np.array(["-"] * n, dtype=object)
 
@@ -864,7 +869,13 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     _Hc, _Hsc, _lc, _dc = _stab._combined_Hstar()
     _HSB_LO, _HSB_HI = float(_Hsc.min()), float(_Hsc.max())
     _H_MAXCOMB = float(_Hc.max())
-    sig_cf = float(_stab.sigma_curve(_stab.H_REVERSE, 400.0).max())
+    # Cross-flow amplification rate.  Read at the local Re_theta rather than at
+    # a hard-coded 400 - the same correction made to the bubble rate.  It
+    # changes little, because this rate is nearly Reynolds-independent: 0.0417
+    # at Re_theta = 200 against 0.0461 at 8000.  That flatness is the point,
+    # and it is what limits this branch; see crossflow_receptivity.
+    def _sig_cf(Re):
+        return float(_stab.sigma_curve(_stab.H_REVERSE, Re).max())
     omegas = np.array([]); amp = np.array([])
     if use_db:
         om_lo, om_hi = _stab.omega_grid_bounds()
@@ -1192,7 +1203,8 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                 Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"],
                                     normal_frame)
             if Re_th2 >= cal["CF_C1"]*cal["A_CF"] and i > 0:
-                n_cf += (sig_cf/max(theta[i], 1e-12))*(s[i] - s[i-1])
+                n_cf += (_sig_cf(Reth[i])/max(theta[i], 1e-12))*(s[i] - s[i-1])
+            n_cf_arr[i] = n_cf
             Rcf = 1e9
         elif sweep_deg > 1.0:
             if cal.get("cf_exact", False):
@@ -1319,7 +1331,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # fully laminar to TE
         out = dict(s=s, Ue=Ue, theta=theta, H=H, Cf=Cf, Re_theta=Reth,
                    lam=lam, gamma=gamma, state=state, Re_theta_t=Re_th_t,
-                   n_factor=n_fac, n_crit=n_crit_all,
+                   n_factor=n_fac, n_crit=n_crit_all, n_cf=n_cf_arr,
                    mechanism=mechanism, i_tr=None,
                    i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
                    bubble_burst=bool(i_bub is not None),
@@ -1426,7 +1438,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
 
     out = dict(s=s, Ue=Ue, theta=theta, H=H, Cf=Cf, Re_theta=Reth,
                lam=lam, gamma=gamma, state=state, Re_theta_t=Re_th_t,
-               n_factor=n_fac, n_crit=n_crit_all,
+               n_factor=n_fac, n_crit=n_crit_all, n_cf=n_cf_arr,
                mechanism=mechanism, i_tr=i_tr, x_tr=s_tr,
                lam_len=lam_len, onset_mech=onset_mech,
                i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),

@@ -169,12 +169,12 @@ def march_output_contract():
     r = _plate()
     n = len(r["s"])
     need = ("s Ue theta H Cf Re_theta lam gamma state Re_theta_t n_factor "
-            "n_crit mechanism i_tr i_sep x_tr onset_mech H_lam theta_lam "
+            "n_crit n_cf mechanism i_tr i_sep x_tr onset_mech H_lam theta_lam "
             "H_turb theta_turb bubble_burst").split()
     for k in need:
         assert k in r, "march_bl output lost key %r" % k
     for k in ("s Ue theta H Cf Re_theta lam gamma Re_theta_t n_factor n_crit "
-              "state mechanism H_lam theta_lam H_turb theta_turb").split():
+              "n_cf state mechanism H_lam theta_lam H_turb theta_turb").split():
         assert len(r[k]) == n, "%s has length %d, stations %d" % (k, len(r[k]), n)
     for k in ("theta", "H", "Cf", "Re_theta", "gamma", "n_factor", "n_crit"):
         _finite(k, r[k])
