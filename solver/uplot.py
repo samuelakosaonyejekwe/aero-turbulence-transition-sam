@@ -96,7 +96,3 @@ def finish(fig, path, caption=None):
     plt.close(fig)
     return path
 
-
-def stamp(ax, tag="UTSS v1.0"):
-    ax.text(0.985, 0.04, tag, transform=ax.transAxes, ha="right", va="bottom",
-            fontsize=7.5, color=INK_SOFT, alpha=0.8)
