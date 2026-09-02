@@ -210,33 +210,36 @@ result in this work uses the frozen C1 = 150.
 
 ### Where the residuals come from
 
-Two effects account for the flat-plate residuals, and which one applies depends
-on which branch fires — a distinction the single summary table hides.
+**Not in the laminar branch.** Against the model's own marched momentum
+thickness at the same stations — not against flat-plate Blasius, which is the
+wrong reference for the one plate that has a pressure gradient — the measured
+laminar layer agrees to within 6 % on all four plates with C_f data, and to 2 %
+on T3C4.
 
-**Pre-transitional thickening.** Free-stream turbulence thickens a laminar layer
-before it transitions, and the laminar march carries no such mechanism. Where
-onset comes from the Abu-Ghannam & Shaw correlation the effect is already inside
-it, because that correlation was fitted to *measured* momentum-thickness
-Reynolds numbers; where onset comes from the model's own marched θ — on this set
-the separating T3C4 plate alone — it is not. The measured layer at T3C4 is 1.36×
-the Blasius momentum thickness at its own onset, the largest of the five, and
-scaling the prediction by that factor takes the error from −28.8 % to −3.3 %.
-The same scaling makes each of the three bypass plates *worse*, which is the
-signature of a double count and is what identifies the diagnosis rather than a
-convenient rescaling. Generated into
-`06_validation/residual_diagnostics.csv`.
+**T3C4 is the bubble.** Across the dead-air region the momentum integral is
+exact given the edge velocity and the shape factor, so three quantities are the
+whole of it (`06_validation/bubble_diagnostics.csv`). The edge velocity checks
+out: the smoothing spline reproduces the twelve tabulated points to 0.011 m/s —
+the precision they are quoted to — and their gradient across the bubble to
+0.5 %. The shape factor does not: the march reaches 3.44 against a measured
+5.17, because it is bounded by the attached Falkner–Skan branch, and that cap
+alone accounts for a factor 1.32 of the 2.3-fold shortfall in dθ/dx. The rest is
+length — 0.082 m modelled against a measured lower bound of 0.10 m — and the
+length is N_crit·θ_s/σ with all three computed rather than fitted. Relaxing the
+cap onto the reverse-flow profile the amplification rate is already read from
+moves T3C4 by 0.8 points and the 86 aerofoil conditions by 0.0004c; it is
+exposed as `cal["bub_rev_H"]` and left off.
 
-**Conditioning.** In a decaying stream the onset threshold rises while Re_θ
-grows only as the square root of distance, so the two curves close at a shallow
-angle. Shifting the bypass threshold by ±10 % moves the predicted transition
-location by a factor of 3.5 on T3A, 2.5 on T3A⁻ and 2.0 on T3B.
+**Conditioning.** Shifting the bypass threshold by ±10 % moves the predicted
+transition location by a factor of 3.5 on T3A, 2.5 on T3A⁻ and 2.0 on T3B
+(`06_validation/residual_diagnostics.csv`).
 
-For the cross-flow branch, one explanation is ruled out rather than doubted:
-within Dagenhart & Saric the required critical value *falls* with chord Reynolds
-number (−251 per decade, r = −0.88), while Boltz sits at six times the Reynolds
-number and requires 42 % *more*. The between-facility offset has the opposite
-sign to the within-facility trend, so no monotone function of Re_c carries one
-set into the other (`06_validation/crossflow_reynolds_trend.csv`). That leaves
+**Cross-flow.** One explanation is ruled out rather than doubted: within
+Dagenhart & Saric the required critical value *falls* with chord Reynolds number
+(−251 per decade, r = −0.88), while Boltz sits at six times the Reynolds number
+and requires 42 % *more*. The between-facility offset has the opposite sign to
+the within-facility trend, so no monotone function of Re_c carries one set into
+the other (`06_validation/crossflow_reynolds_trend.csv`). That leaves
 receptivity — the leading-edge finish neither report documents — by elimination.
 
 Sources recorded in `06_validation/sources_and_references.csv`.

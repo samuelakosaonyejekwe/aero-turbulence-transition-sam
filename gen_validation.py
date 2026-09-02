@@ -494,68 +494,118 @@ def crossflow_criticals(write=True, quiet=False):
 def residual_diagnostics(write=True, quiet=False):
     """Where the flat-plate residuals come from, measured rather than asserted.
 
-    Two effects account for them, and which one applies depends on which branch
-    fires - a distinction that is easy to miss because all five plates are
-    reported in the same table.
+    An earlier version of this function attributed the T3C4 residual to the
+    pre-transitional thickening a laminar layer undergoes in a turbulent free
+    stream, on the strength of the measured momentum thickness being 1.36 times
+    the flat-plate Blasius value at onset.  That comparison is wrong for T3C4,
+    because T3C4 is the one plate with a pressure gradient, and a laminar layer
+    in an adverse gradient is thicker than Blasius for a reason that has nothing
+    to do with turbulence.  Against the model's OWN laminar march - which
+    carries the gradient - the measured layer is within 2 per cent over the
+    whole laminar run.  The laminar branch is not where the T3C4 error is.
 
-    Pre-transitional thickening.  Free-stream turbulence thickens a laminar
-    layer before it transitions, and the laminar march carries no such
-    mechanism.  Where onset comes from the Abu-Ghannam & Shaw correlation the
-    effect is already inside it, because that correlation was fitted to
-    MEASURED momentum-thickness Reynolds numbers; where onset comes from the
-    model's own marched theta - which on this set is only the separating
-    T3C4 plate - it is not, and the shortfall shows up in full.  The column
-    Re_theta_meas_over_blasius already measures the thickening at each plate's
-    onset; multiplying the prediction by it is therefore a legitimate
-    correction on the separation branch and a double count on the bypass
-    branch, and the table below shows exactly that pattern.
+    What this reports instead:
 
-    Conditioning.  In a decaying stream the onset threshold rises while
-    Re_theta grows only as the square root of distance, so the two curves close
-    at a shallow angle and the crossing is sensitive.  The gain is measured by
-    shifting the threshold by +/-10 per cent and recording how far the
-    predicted transition LOCATION moves.
+      * laminar-run agreement, measured Re_theta against the marched value at
+        the same stations, over the stations upstream of the model's own onset.
+        This is the honest test of the laminar branch, and it passes on all four
+        plates that have C_f data.
+      * conditioning, for the plates the bypass branch governs: how far the
+        predicted transition LOCATION moves when the threshold is shifted by
+        ten per cent.
+      * for the separating plate, the bubble itself: its modelled length and
+        momentum growth against the measured ones.  That is where the T3C4
+        residual actually is.
     """
     rows = []
     for key in CASES:
         v = C.VALIDATION[key]; ex = EXP[key]
         r = solve_case(key)
         pred = float(r["Re_theta"][r["i_tr"]]); meas = ex["Re_theta_t"]
-        k = None
+        lam_ratio = None
         if ex["Cf"] is not None:
-            io = int(np.argmin(ex["Cf"]))
-            k = ex["Re_theta"][io]/(0.664*np.sqrt(ex["Re_x"][io]))
-        corr = pred*k if k else None
-        # conditioning: how far the LOCATION moves for a +/-10 % threshold shift
+            rx = np.asarray(ex["Re_x"], float)
+            rt = np.asarray(ex["Re_theta"], float)
+            m = rx < 0.98*float(r["Re_x"][r["i_tr"]])       # laminar stations
+            if m.any():
+                mod = np.interp(rx[m], r["Re_x"], r["Re_theta"])
+                lam_ratio = float(np.mean(rt[m]/mod))
         ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
         dec = ((ex["Re_x"], ex["Tu_local"]) if v.get("L_turb") is None
                and ex.get("Tu_local") is not None else None)
-        # The perturbation is applied to the BYPASS threshold, so the gain is
-        # only meaningful where the bypass branch is the one selected; on the
-        # separating and the natural plates it is identically zero, which is
-        # a statement about which branch fired and not about conditioning.
         gain = None
         if r["onset_mech"] == "bypass":
             xs = []
-            for a in (0.90, 1.10):
+            for a_ in (0.90, 1.10):
                 rr = solve_flat_plate(v["L"], v["U"], v["nu"], v["Tu_pct"],
                                       npts=900, dUe=v["dUe"],
                                       L_turb=v.get("L_turb"),
                                       Ue_dist=ue, Tu_decay=dec,
-                                      cal=dict(A_BP=a))
+                                      cal=dict(A_BP=a_))
                 xs.append(float(rr["x_tr"]) if rr["i_tr"] is not None else np.nan)
             gain = abs(xs[1]-xs[0])/float(r["x_tr"])/0.20
         rows.append(dict(
             case=v["name"], branch=r["onset_mech"],
             Re_theta_t_pred=round(pred, 1), Re_theta_t_exp=meas,
             err_pct=round(100*(pred-meas)/meas, 1),
-            meas_over_blasius=(round(k, 3) if k else None),
-            pred_x_thickening=(round(corr, 1) if corr else None),
-            err_pct_after_thickening=(round(100*(corr-meas)/meas, 1) if corr else None),
+            laminar_run_meas_over_march=(round(lam_ratio, 3) if lam_ratio else None),
+            n_laminar_stations=(int((np.asarray(ex["Re_x"], float)
+                                     < 0.98*float(r["Re_x"][r["i_tr"]])).sum())
+                                if ex["Cf"] is not None else 0),
             location_gain_bypass_threshold=(round(gain, 1) if gain else None)))
     df = pd.DataFrame(rows)
     if write:
         df.to_csv(f"{VAL}/residual_diagnostics.csv", index=False)
+    if not quiet:
+        print(df.to_string(index=False))
+    return df
+
+
+def bubble_diagnostics(key="T3C4", write=True, quiet=False):
+    """The separating plate's bubble, modelled against measured.
+
+    Across the dead-air region the momentum integral is exact given the edge
+    velocity and the shape factor - there is no wall stress to get wrong - so
+    the three quantities below are the whole of it.  The edge velocity is
+    verified against the twelve tabulated points; the shape factor is bounded
+    by the attached Falkner-Skan branch; and the length follows from
+    N_crit theta_s / sigma, all three computed rather than fitted.
+    """
+    ex = EXP[key]; r = solve_case(key)
+    x = np.asarray(ex["x_m"], float); ue = np.asarray(ex["Ue"], float)
+    rt = np.asarray(ex["Re_theta"], float); cf = np.asarray(ex["Cf"], float)
+    th = rt*C.VALIDATION[key]["nu"]/ue
+    # the dead-air plateau: the stations at the C_f floor
+    floor = cf <= 2.5*cf.min()
+    xi = x[floor]; ti = th[floor]
+    dth_meas = (ti[-1]-ti[0])/(xi[-1]-xi[0]) if len(xi) > 1 else np.nan
+    i0, i1 = r["i_sep"], r["i_tr"]
+    dth_mod = (r["theta"][i1]-r["theta"][i0])/(r["s"][i1]-r["s"][i0])
+    # edge velocity: does the smoothing spline reproduce the tabulated points?
+    du = np.interp(x, r["s"], r["Ue"]) - ue
+    m = (x >= 1.195) & (x <= 1.495)
+    g_meas = float(np.polyfit(x[m], ue[m], 1)[0])
+    k = (r["s"] >= 1.195) & (r["s"] <= 1.495)
+    g_mod = float(np.polyfit(r["s"][k], r["Ue"][k], 1)[0])
+    rows = [
+        ("separation station x [m]", round(float(r["s"][i0]), 3),
+         round(float(xi[0]), 3), "model / first station at the C_f floor"),
+        ("reattachment station x [m]", round(float(r["s"][i1]), 3),
+         round(float(xi[-1]), 3), "model / last station at the C_f floor"),
+        ("bubble length [m]", round(float(r["s"][i1]-r["s"][i0]), 3),
+         round(float(xi[-1]-xi[0]), 3), "measured length is a lower bound"),
+        ("dtheta/dx across the bubble [1/m]", f"{dth_mod:.3e}",
+         f"{dth_meas:.3e}", "momentum integral is exact given U_e and H"),
+        ("shape factor at reattachment", round(float(r["H"][i1]), 2), 5.17,
+         "model bounded by the attached Falkner-Skan branch, H <= 3.997"),
+        ("dU_e/dx over the bubble [1/s]", round(g_mod, 4), round(g_meas, 4),
+         "smoothing spline against the tabulated points"),
+        ("max |U_e spline - tabulated| [m/s]", round(float(np.abs(du).max()), 3),
+         0.01, "tabulated to 0.01 m/s, so the spline is within quotation"),
+    ]
+    df = pd.DataFrame(rows, columns=["quantity", "model", "measured", "note"])
+    if write:
+        df.to_csv(f"{VAL}/bubble_diagnostics.csv", index=False)
     if not quiet:
         print(df.to_string(index=False))
     return df
@@ -906,6 +956,7 @@ if __name__=="__main__":
     print(df_sw2.to_string(index=False))
     crossflow_criticals()
     residual_diagnostics()
+    bubble_diagnostics()
     df_nlf=run_nlf0416()
     print(nlf0416_summary(df_nlf).to_string(index=False))
     plot_nlf0416(df_nlf)
