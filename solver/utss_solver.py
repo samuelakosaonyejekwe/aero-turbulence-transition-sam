@@ -240,7 +240,7 @@ def _tu_decay(Tu0_pct, x, L_turb, U=None, cal=None):
     return Tu0*100.0*(1.0 + a*xx)**(-p)
 
 
-def _n_crit(Tu_pct, floor=0.5, anchor=0.50):
+def _n_crit(Tu_pct, floor=0.5, anchor=1.10):
     """Critical amplification factor from the free-stream turbulence level.
 
     Mack's correlation, N_crit = -8.43 - 2.4 ln(Tu) with Tu as a fraction,
@@ -258,11 +258,30 @@ def _n_crit(Tu_pct, floor=0.5, anchor=0.50):
     neutral point and published amplification rates to within a few per cent.
     A constant offset between the two scales is therefore expected, and fixing
     it is a change of units rather than a fit to any one case.  The offset is
-    the only quantity in the natural branch set by measurement.  It is chosen
-    jointly over every dataset in this work that the branch reaches - the
-    Schubauer-Skramstad plate and all 86 NLF(1)-0416 aerofoil conditions - and
-    0.50 is where the number of predictions falling inside the experimental
-    bracket is greatest, 54 of 86, with the flat plate at +5.6 per cent.
+    the only quantity in the natural branch set by measurement.
+
+    It is set on the Schubauer & Skramstad plate ALONE - the one measurement in
+    this work of natural transition on a flat plate - and 1.10 reproduces its
+    quoted onset, Re_theta_t = 1100, to 0.07 per cent.
+
+    It used to be chosen jointly over that plate AND all 86 NLF(1)-0416
+    aerofoil conditions, at whatever value put the most predictions inside the
+    experimental bracket.  That made the aerofoil set a calibration set, while
+    the figure it appears in, the docstring of the routine that produces it and
+    the README all described it as one on which nothing is calibrated.  Setting
+    the anchor on the plate alone makes those three statements true and leaves
+    all 86 aerofoil conditions genuinely out of sample.
+
+    The cost of that is real and is reported rather than buried: on the
+    aerofoil set the mean absolute error goes from 0.0319c to 0.0334c and the
+    count inside the +/-0.025c bracket from 51 to 50, which is what happens
+    when a constant stops being fitted to the set it is scored on.  The flat
+    plate goes from +5.6 per cent to +0.07 per cent.
+
+    Note that the quoted 1100 is itself approximate - the literature gives
+    Re_x,tr ~ 2.8e6 and Re_theta = 0.664 sqrt(Re_x) - so the anchor is quoted
+    to two figures rather than to the 1.1058 that would zero the residual
+    exactly, which would be fitting a rounded number.
     """
     Tu = min(max(float(Tu_pct)/100.0, 8.0e-4), 2.98e-2)
     return max(-8.43 - 2.4*np.log(Tu) - anchor, floor)
@@ -950,15 +969,22 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                 # the fold - so the inversion H = H(H*) the march depends on
                 # ceases to exist.  Only the amplification rate below is read
                 # from the reverse-flow branch, where no inversion is needed.
+                # Both equations are advanced from the SAME state.  The
+                # momentum thickness used to be updated first and the new value
+                # then used in the denominator of the kinetic-energy step while
+                # the Reynolds number beside it was still the old one - two
+                # time levels inside one Euler step, which is neither the
+                # explicit scheme the comment describes nor a consistent
+                # implicit one.  Every rate below is evaluated at the state the
+                # step starts from, and both variables are advanced together.
                 dx_b = s[i] - s[i-1]
                 Ret_b = max(Ue[i]*th_b/nu_l[i], 10.0)
                 lam_b = th_b*th_b/nu_l[i]*dUeds[i]
                 Hs_b, _l_b, d_b = _stab.twoeq_HL(H_b)
-                th_b = max(th_b - (2.0 + H_b)*th_b/max(Ue[i], 1e-9)*dUeds[i]*dx_b,
-                           1e-12)
-                Hst_b = float(np.clip(
-                    Hst_b + dx_b*(2.0*d_b - Hs_b*(1.0 - H_b)*lam_b)/(th_b*Ret_b),
-                    _HS_LO, _HS_HI))
+                dth_b = -(2.0 + H_b)*th_b/max(Ue[i], 1e-9)*dUeds[i]
+                dHst_b = (2.0*d_b - Hs_b*(1.0 - H_b)*lam_b)/(th_b*Ret_b)
+                th_b = max(th_b + dth_b*dx_b, 1e-12)
+                Hst_b = float(np.clip(Hst_b + dHst_b*dx_b, _HS_LO, _HS_HI))
                 H_b = float(np.clip(_stab.H_from_Hstar(Hst_b), H_sep, _H_MAXTAB))
                 if cal.get("bub_rev_H", False):
                     # The momentum equation across the dead-air region needs H,

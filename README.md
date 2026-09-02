@@ -119,6 +119,28 @@ and 3-D renders lives in [`05_postprocessing/`](05_postprocessing/) and
 
 ## Validation (one frozen constant set)
 
+**Which sets are calibration and which are validation.** The constants are
+frozen across every case, but three of them were *set* on data in this table,
+and saying which is part of reporting the result:
+
+| constant | set on | so these are |
+|---|---|---|
+| `N_anchor` — the e^N units offset | Schubauer & Skramstad plate | that plate is calibration |
+| `tu_hist` — flow-history weight in Abu-Ghannam & Shaw | ERCOFTAC T3A, T3A⁻, T3B | those three are calibration |
+| `CF_ratio` — cross-flow surrogate | Dagenhart & Saric 45° wing | that wing is calibration |
+
+Everything else is out of sample: **T3C4** (the separation branch), all **86
+NLF(1)-0416 aerofoil conditions**, and the **Boltz et al.** swept wing.
+
+`N_anchor` used to be chosen at whatever value put the most of those 86
+aerofoil predictions inside the experimental bracket, which made the largest
+body of evidence in this work a calibration set while three places in the
+project described it as one on which nothing is calibrated. It is now set on
+the Schubauer & Skramstad plate alone, which it reproduces to 0.07 %. The cost
+is reported rather than buried: the aerofoil mean absolute error goes from
+0.0319c to 0.0334c and the bracket count from 51 to 50 — which is what happens
+when a constant stops being fitted to the set it is scored on.
+
 Flat plates — onset momentum-thickness Reynolds number:
 
 | Case | Tu % | Re_θt exp | Re_θt UTSS | err | criterion |
@@ -131,8 +153,9 @@ Flat plates — onset momentum-thickness Reynolds number:
 
 Aerofoil — NLF(1)-0416, 86 transition locations digitised from NASA TP-1861
 Fig. 9, both surfaces, four chord Reynolds numbers, c_l from −1.03 to +1.62.
-Nothing is calibrated on this set; the experiment brackets transition within
-the 0.05c orifice pitch, so its own uncertainty is ±0.025c:
+Genuinely out of sample (see the calibration table above); the experiment
+brackets transition within the 0.05c orifice pitch, so its own uncertainty is
+±0.025c:
 
 | Set | Points | mean abs. err | bias | within ±0.025c |
 |-----|--------|---------------|------|----------------|
