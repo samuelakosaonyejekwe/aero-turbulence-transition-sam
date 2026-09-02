@@ -114,10 +114,16 @@ CAL = dict(
     bubble    = True,   # close the separation branch by continuing the
                         # amplification integral through the detached shear
                         # layer instead of transitioning at separation itself
-    bub_rev_H = False,  # let the shape factor in the dead-air momentum equation
-                        # follow the reverse-flow profile the amplification rate
-                        # is already read from, instead of being capped at the
-                        # attached Falkner-Skan separation value (see march_bl)
+    bub_sigma_local = False,  # read the dead-air amplification rate at the
+                        # marched shape factor instead of at the developed
+                        # reverse-flow profile.  Tried and rejected on the
+                        # NLF(1)-0416 set; see the note in march_bl.
+    # bub_rev_H is gone.  It relaxed the dead-air shape factor from its
+    # separation value towards a fixed H_REVERSE in step with the
+    # amplification, as a stand-in for a march that could not cross the fold in
+    # H*(H).  The march crosses it now - the inversion is resolved by branch
+    # rather than abandoned - so H is solved rather than interpolated between
+    # two guesses, and the option has nothing left to approximate.
     H_sep     = 0.0,    # if positive, laminar separation is declared where the
                         # solved shape factor reaches this value instead of
                         # where the Thwaites parameter reaches lam_sep.  With
@@ -848,6 +854,12 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     _Hs_tab = _stab.twoeq_closure()[1]
     _HS_LO, _HS_HI = float(_Hs_tab.min()), float(_Hs_tab.max())
     _H_MAXTAB = float(_stab.twoeq_closure()[0].max())
+    # The dead-air march runs on the COMBINED family, attached plus reverse
+    # flow, so its bounds are wider than the attached ones the wall-bounded
+    # march uses.
+    _Hc, _Hsc, _lc, _dc = _stab._combined_Hstar()
+    _HSB_LO, _HSB_HI = float(_Hsc.min()), float(_Hsc.max())
+    _H_MAXCOMB = float(_Hc.max())
     sig_cf = float(_stab.sigma_curve(_stab.H_REVERSE, 400.0).max())
     omegas = np.array([]); amp = np.array([])
     if use_db:
@@ -950,7 +962,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                     i_sep = i; s_sep = s[i]
                 th_sep = max(theta[i], 1e-12); H_sep = H[i]
                 th_b = th_sep; n_bub = 0.0
-                H_b = H_sep; Hst_b = _stab.twoeq_HL(H_sep)[0]
+                H_b = H_sep; Hst_b = _stab.twoeq_HL_combined(H_sep)[0]
             elif i > 0:
                 # The dead-air region is marched with the same two equations as
                 # the attached layer, with the wall shear set to zero.  Freezing
@@ -963,60 +975,58 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                 # separation to 3.44 at reattachment while Re_theta goes from
                 # 255 to 274.
                 #
-                # The march is bounded by the ATTACHED Falkner-Skan branch,
-                # H <= 3.997.  It cannot be continued onto the reverse-flow
-                # branch, because H*(H) turns there - H* rises again with H past
-                # the fold - so the inversion H = H(H*) the march depends on
-                # ceases to exist.  Only the amplification rate below is read
-                # from the reverse-flow branch, where no inversion is needed.
-                # Both equations are advanced from the SAME state.  The
-                # momentum thickness used to be updated first and the new value
-                # then used in the denominator of the kinetic-energy step while
-                # the Reynolds number beside it was still the old one - two
-                # time levels inside one Euler step, which is neither the
-                # explicit scheme the comment describes nor a consistent
-                # implicit one.  Every rate below is evaluated at the state the
-                # step starts from, and both variables are advanced together.
+                # The march now continues ONTO the reverse-flow branch.  It
+                # used to stop at the attached separation profile, H <= 3.997,
+                # because H*(H) folds there - H* has a minimum at H = 4.03 and
+                # rises again - so the inversion H = H(H*) is not unique past
+                # it.  But a march knows which branch it is on, because it got
+                # there continuously, so the inversion is resolved by taking
+                # the root nearest the shape factor the layer already had (see
+                # stability.H_from_Hstar).  The reverse branch is continued to
+                # H = 6.4, past the 5.17 the T3C4 hot films record, so the
+                # family now contains the profile the experiment was in.
+                #
+                # The inversion is ill-conditioned there - H* moves 0.7 per
+                # cent between H = 4.0 and H = 5.0 - so the step is limited to
+                # DH_MAX in H.  That is a numerical guard on a quantity the
+                # equation determines, not a physical bound on it.
+                #
+                # Both equations are advanced from the SAME state; the momentum
+                # thickness used to be updated first and then used in the
+                # denominator of the kinetic-energy step while the Reynolds
+                # number beside it was still the old one.
                 dx_b = s[i] - s[i-1]
                 Ret_b = max(Ue[i]*th_b/nu_l[i], 10.0)
                 lam_b = th_b*th_b/nu_l[i]*dUeds[i]
-                Hs_b, _l_b, d_b = _stab.twoeq_HL(H_b)
+                Hs_b, _l_b, d_b = _stab.twoeq_HL_combined(H_b)
                 dth_b = -(2.0 + H_b)*th_b/max(Ue[i], 1e-9)*dUeds[i]
                 dHst_b = (2.0*d_b - Hs_b*(1.0 - H_b)*lam_b)/(th_b*Ret_b)
                 th_b = max(th_b + dth_b*dx_b, 1e-12)
-                Hst_b = float(np.clip(Hst_b + dHst_b*dx_b, _HS_LO, _HS_HI))
-                H_b = float(np.clip(_stab.H_from_Hstar(Hst_b), H_sep, _H_MAXTAB))
-                if cal.get("bub_rev_H", False):
-                    # The momentum equation across the dead-air region needs H,
-                    # not H*, so it is not bound by the fold that stops the
-                    # kinetic-energy march: only the INVERSION H = H(H*) ceases
-                    # to exist there.  Capping it at the attached separation
-                    # value while reading the amplification rate off the
-                    # reverse-flow profile at H_REVERSE is the model
-                    # contradicting itself about which profile the detached
-                    # layer has.  With this on, H relaxes across the bubble
-                    # from its separation value towards that same reverse-flow
-                    # profile, in step with the amplification that measures how
-                    # far through the bubble the layer is.  No constant is
-                    # added: both ends are quantities the model already uses.
-                    _f = min(max(n_bub/max(_n_crit(Tu_eff[i],
-                                                   cal.get("N_floor", 0.5)),
-                                           1e-9), 0.0), 1.0)
-                    H_b = H_sep + _f*(_stab.H_REVERSE - H_sep)
-                # The amplification rate of the detached shear layer is read
-                # from the same table as everywhere else.  The tabulated
-                # Falkner-Skan family is continued past separation onto its
-                # reverse-flow branch, so a separated profile has a computed
-                # rate and the bubble closure carries no fitted constant.  It
-                # is evaluated on the developed reverse-flow profile rather
-                # than on the profile at the separation point: the momentum
-                # thickness is nearly frozen across the dead-air region but the
-                # shape factor is not, and the amplification is dominated by
-                # the developed layer.  The computed rate there is 0.042 to
-                # 0.045 over the Re_theta range these bubbles span, 0.0435 at
-                # Re_theta = 400, which is what the T3C4 and NLF(1)-0416 bubble
-                # lengths independently imply.
-                sig_b = float(_stab.sigma_curve(_stab.H_REVERSE, Reth[i]).max())
+                Hst_b = float(np.clip(Hst_b + dHst_b*dx_b, _HSB_LO, _HSB_HI))
+                H_new = _stab.H_from_Hstar(Hst_b, H_b)
+                DH_MAX = 0.25
+                H_b = float(np.clip(H_new, H_b - DH_MAX, H_b + DH_MAX))
+                H_b = float(np.clip(H_b, H_sep, _H_MAXCOMB))
+                # The amplification rate is read on the DEVELOPED reverse-flow
+                # profile, H_REVERSE, and not at the shape factor the march has
+                # reached.  That is a modelling statement and it is now a
+                # measured one.  With H marched across the fold it became
+                # possible to read the rate at the local H instead, which looks
+                # more principled - no constant - and it was tried: the T3C4
+                # bubble lengthens from 0.052 to 0.087 m, towards the measured
+                # 0.10, but the 86 NLF(1)-0416 conditions collapse from 50 to
+                # 21 inside the bracket and the mean error rises from 0.0334c
+                # to 0.0577c.  The reason is physical rather than numerical.
+                # The marched H is the INTEGRAL shape factor of the whole
+                # dead-air region, which is still near 3.4 while the detached
+                # shear layer riding on it is already inflectional; the local
+                # instability is set by that inflection, which exists from the
+                # moment the flow leaves the wall, not by the integral profile.
+                # The developed-profile rate is retained on that evidence, and
+                # cal["bub_sigma_local"] exposes the alternative so the test is
+                # reproducible rather than described.
+                _Hsig = H_b if cal.get("bub_sigma_local", False) else _stab.H_REVERSE
+                sig_b = float(_stab.sigma_curve(_Hsig, Reth[i]).max())
                 n_bub += max(sig_b, 0.0)/th_b*(s[i] - s[i-1])
             theta[i] = th_b; H[i] = H_b; Cf[i] = 0.0
             Reth[i] = Ue[i]*th_b/nu_l[i]

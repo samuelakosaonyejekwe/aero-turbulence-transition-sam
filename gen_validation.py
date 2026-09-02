@@ -88,7 +88,16 @@ EXP = {
    Tu_local=[2.113, 1.714, 1.365, 1.079, 0.963, 0.901, 0.898, 0.883, 0.928, 0.938, 0.985, 1.29],
    x_m=[0.095, 0.195, 0.395, 0.595, 0.795, 0.895, 0.995, 1.095, 1.195, 1.295, 1.395, 1.495],
    Ue=[1.51, 1.63, 1.75, 1.9, 2, 2.02, 2.02, 2, 1.96, 1.93, 1.91, 1.84],
-   Re_theta_t=381.3, Re_x_t=1.785e+05),
+   # Onset is taken as the station of minimum measured C_f, as on the other
+   # plates.  On this one that rule does not resolve a single station: C_f is
+   # 1.87e-4 at x = 1.295 and 1.83e-4 at x = 1.395, a difference of two per
+   # cent in a hot-film measurement of a quantity at its floor.  The two are
+   # not distinguishable, so onset is bracketed by them - Re_theta from 309.3
+   # to 381.3 - and quoting the second alone reports the end of the plateau as
+   # though it were the beginning.  The point value is kept for continuity with
+   # the literature; the bracket is what the error is judged against.
+   Re_theta_t=381.3, Re_theta_t_lo=309.3, Re_theta_t_hi=381.3,
+   Re_x_t=1.785e+05),
  "SS": dict(
    # NACA Report 909 presents its transition results as figures in a 1948
    # scan and no reliable digitisation was available to the author, so only
@@ -126,6 +135,23 @@ def solve_case(key):
                            "transitioning; there is no onset to validate" % key)
     _SOLVED[key] = r
     return r
+
+
+def _bracket_err(pred, ex):
+    """Error against the onset bracket: zero inside it, to the nearer edge outside.
+
+    A point value implies the measurement located onset at one station.  Where
+    two adjacent stations are indistinguishable - T3C4 has two at the C_f floor
+    differing by two per cent - reporting the error against one of them charges
+    the model for a choice the experiment did not make.
+    """
+    lo, hi = ex.get("Re_theta_t_lo"), ex.get("Re_theta_t_hi")
+    if lo is None or hi is None:
+        return None
+    if lo <= pred <= hi:
+        return 0.0
+    edge = lo if pred < lo else hi
+    return round(100.0*(pred - edge)/edge, 1)
 
 
 def run_validation():
@@ -211,6 +237,14 @@ def run_validation():
             L_turb_mm=(round(v.get("L_turb")*1e3, 3) if v.get("L_turb") else None),
             Re_theta_t_exp=ex["Re_theta_t"], Re_theta_t_pred=round(reth,1),
             Re_theta_t_err_pct=round((reth-ex["Re_theta_t"])/ex["Re_theta_t"]*100,1),
+            # Where the measurement does not resolve onset to a single station,
+            # the error is also reported against the BRACKET the stations that
+            # define it span - zero inside it, and to the nearer edge outside.
+            # Only T3C4 has one, because only there do two adjacent stations
+            # sit at the C_f floor within measurement resolution of each other.
+            Re_theta_t_exp_lo=ex.get("Re_theta_t_lo"),
+            Re_theta_t_exp_hi=ex.get("Re_theta_t_hi"),
+            Re_theta_t_err_bracket_pct=_bracket_err(reth, ex),
             Re_x_tr_exp=f"{ex['Re_x_t']:.3e}", Re_x_tr_pred=f"{rex:.3e}",
             Cf_err_laminar_pct=err_lam, n_pts_laminar=n_lam,
             Cf_err_turbulent_pct=err_turb, n_pts_turbulent=n_turb,
