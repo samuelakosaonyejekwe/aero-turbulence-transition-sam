@@ -8,6 +8,7 @@ and vectors, validation comparisons, calibration record and sources.
 No black: body text and headings use navy ink; tables use accent borders.
 """
 import os
+import re
 import pandas as pd
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
@@ -66,17 +67,60 @@ def bullet(t):
     p=doc.add_paragraph(style="List Bullet"); r=p.add_run(t); r.font.color.rgb=INK
     return p
 
+# ----------------------------------------------------------------------
+#  Figure and table numbering
+#
+#  These were written by hand, and hand numbering drifts as sections are
+#  inserted: the report reached the point of presenting "Fig. 8a" and "Fig. 8b"
+#  in section 6 before "Fig. 1" in section 7, and "Table 20a" after "Table 24".
+#  Numbers are now allocated in the order the captions are emitted, so they
+#  cannot fall out of order, and cross-references in the body are written as
+#  tokens that are substituted once every number is known.  A reference to
+#  Fig. 9 OF ANOTHER PAPER is ordinary text and is left alone, which hand
+#  renumbering would not have been safe with.
+_FIG = [0]; _TAB = [0]; _REF = {}
+
+def _fignum(key=None):
+    _FIG[0] += 1
+    if key: _REF["FIG:"+key] = "Fig. %d" % _FIG[0]
+    return _FIG[0]
+
+def _tabnum(key=None):
+    _TAB[0] += 1
+    if key: _REF["TAB:"+key] = "Table %d" % _TAB[0]
+    return _TAB[0]
+
+def resolve_refs(document):
+    """Substitute @@KIND:key@@ tokens once all numbers are allocated."""
+    def fix(par):
+        if "@@" not in par.text: return
+        for r in par.runs:
+            if "@@" in r.text:
+                r.text = re.sub(r"@@([A-Z]+:[a-z0-9_]+)@@",
+                                lambda m: _REF.get(m.group(1), m.group(1)), r.text)
+        if "@@" in par.text:            # split across runs: rebuild in run 0
+            t = re.sub(r"@@([A-Z]+:[a-z0-9_]+)@@",
+                       lambda m: _REF.get(m.group(1), m.group(1)), par.text)
+            par.runs[0].text = t
+            for e in par.runs[1:]: e.text = ""
+    for par in document.paragraphs: fix(par)
+    for t in document.tables:
+        for row in t.rows:
+            for c in row.cells:
+                for par in c.paragraphs: fix(par)
+
+
 def caption(t):
     p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
     r=p.add_run(t); r.italic=True; r.font.size=Pt(9); r.font.color.rgb=BLUE
     return p
 
-def image(path, width=6.3, cap=None):
+def image(path, width=6.3, cap=None, key=None):
     if not os.path.exists(path):
         para(f"[missing figure: {path}]", italic=True); return
     p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
     p.add_run().add_picture(path, width=Inches(width))
-    if cap: caption(cap)
+    if cap: caption("Fig. %d. %s" % (_fignum(key), cap))
 
 def equation(key, show_title=True):
     if key not in eq_index.index:
@@ -97,7 +141,7 @@ def equation(key, show_title=True):
         fr=p.add_run(row["latex"]); fr.font.color.rgb=INK
         print("  ! eq fallback", key, e)
 
-def table_from_csv(path, max_rows=40, ncols=None, cap=None, sample=False):
+def table_from_csv(path, max_rows=40, ncols=None, cap=None, sample=False, key=None):
     if not os.path.exists(path):
         para(f"[missing CSV: {path}]", italic=True); return
     # read as text: the CSVs carry their own formatting (Re_x written as
@@ -113,7 +157,7 @@ def table_from_csv(path, max_rows=40, ncols=None, cap=None, sample=False):
             df=df.head(max_rows)
         truncated=True
     else: truncated=False
-    add_table(df, cap)
+    add_table(df, cap, key=key)
     if truncated:
         para(f"(table sampled to {len(df)} rows; full data in {path})",
              italic=True, size=8.5)
@@ -142,7 +186,7 @@ def _one_table(df, size):
     return t
 
 
-def add_table(df, cap=None, max_cols=MAX_TABLE_COLS):
+def add_table(df, cap=None, max_cols=MAX_TABLE_COLS, key=None):
     """Render a table, splitting a wide one into legible column blocks.
 
     Word autofits a table to the text width, so a fifteen-column CSV dropped
@@ -155,6 +199,8 @@ def add_table(df, cap=None, max_cols=MAX_TABLE_COLS):
     repeat the first column, the one that identifies the row.
     """
     df=df.fillna("")
+    n = _tabnum(key) if cap else None
+    cap = ("Table %d. %s" % (n, cap)) if cap else None
     cols=list(df.columns)
     if len(cols) <= max_cols:
         _one_table(df, 8.5)
@@ -176,8 +222,8 @@ def add_table(df, cap=None, max_cols=MAX_TABLE_COLS):
         else:
             caption("(%s)" % tag)
 
-def manual_table(headers, rows, cap=None):
-    add_table(pd.DataFrame(rows, columns=headers), cap)
+def manual_table(headers, rows, cap=None, key=None):
+    add_table(pd.DataFrame(rows, columns=headers), cap, key=key)
 
 # ======================================================================
 #  TITLE PAGE
@@ -253,7 +299,7 @@ def _headline():
 
 
 manual_table(["Quantity","Predicted value"], _headline(),
- cap="Table 1. Headline predictions, read from the generated solution CSVs.")
+ cap="Headline predictions, read from the generated solution CSVs.")
 para("Validated against eight independent, credible published datasets with one "
  "universal calibration set — four ERCOFTAC flat plates (case 020), the Schubauer-Skramstad "
  "plate, the NLF(1)-0416 aerofoil at 86 conditions, and two swept wings — the solver "
@@ -378,7 +424,7 @@ manual_table(
   ["Robustness / convergence","Can fail in sep.","Stiff, costly","Very costly","Robust, direct"],
   ["Typical CPU cost","seconds","hours","days–weeks","< 1 second"],
   ["Suited to design loops","Partly","No","No","Yes"]],
- cap="Table 2. Capability comparison versus existing solver classes.")
+ cap="Capability comparison versus existing solver classes.")
 para("Novelty. The distinguishing element is the unified transition kernel "
  "(Eq. E13): a single closed expression that selects the governing transition mechanism "
  "locally by taking the minimum effective onset Reynolds number across four co-resident "
@@ -396,42 +442,42 @@ h1("6.  Case-Study Definition and Input Data")
 para("All input data required to run the prediction are tabulated below. The case is fully "
  "three-dimensional.")
 h2("6.1  Aircraft and wing geometry (input)")
-table_from_csv("01_geometry/geometry_definition.csv", cap="Table 3. Geometry definition (input).")
+table_from_csv("01_geometry/geometry_definition.csv", cap="Geometry definition (input).")
 h2("6.2  Flight conditions (input)")
-table_from_csv("03_model_setup/flow_conditions.csv", cap="Table 4. Flight / flow conditions (input).")
+table_from_csv("03_model_setup/flow_conditions.csv", cap="Flight / flow conditions (input).", key="flow_conditions")
 image("05_postprocessing/csv_plots/conditions_compare.png", width=6.4,
-      cap="Fig. 8a. Cruise vs climb flight-condition comparison (flow_conditions.csv).")
+      cap="Cruise vs climb flight-condition comparison (flow_conditions.csv).")
 h2("6.3  Fluid (material) properties (input)")
-table_from_csv("03_model_setup/material_properties.csv", cap="Table 5. Air properties (input).")
+table_from_csv("03_model_setup/material_properties.csv", cap="Air properties (input).")
 h2("6.4  Solver settings (input)")
-table_from_csv("03_model_setup/solver_settings.csv", cap="Table 6. Solver configuration (input).")
+table_from_csv("03_model_setup/solver_settings.csv", cap="Solver configuration (input).")
 h2("6.5  Universal calibration constants (input)")
 table_from_csv("03_model_setup/calibration_constants.csv",
-               cap="Table 7. Calibration constants and their sources (input).")
+               cap="Calibration constants and their sources (input).", key="calibration")
 image("05_postprocessing/csv_plots/calibration_constants.png", width=6.0,
-      cap="Fig. 8b. UTSS universal calibration constant set (calibration_constants.csv).")
+      cap="UTSS universal calibration constant set (calibration_constants.csv).")
 
 # ======================================================================
 h1("7.  Geometry and Engineering Drawings")
 para("The wing is drawn to standard third-angle orthographic projection. All drawings are "
  "dimensioned and to scale; views provided: section, plan, front, side, full orthographic "
  "sheet, isometric and structural section.")
-for f,c in [("dwg_01_airfoil_section","Fig. 1. UTSS-NLF16 aerofoil section (dimensioned)."),
-            ("dwg_02_planview","Fig. 2. Wing planform — plan (top) view, dimensioned."),
-            ("dwg_03_front_side","Fig. 3. Front and side orthographic views."),
-            ("dwg_04_orthographic","Fig. 4. Full third-angle orthographic projection sheet."),
-            ("dwg_05_isometric","Fig. 5. Isometric view of the wing."),
-            ("dwg_06_section_BB","Fig. 6. Structural sectional view B–B.")]:
+for f,c in [("dwg_01_airfoil_section","UTSS-NLF16 aerofoil section (dimensioned)."),
+            ("dwg_02_planview","Wing planform — plan (top) view, dimensioned."),
+            ("dwg_03_front_side","Front and side orthographic views."),
+            ("dwg_04_orthographic","Full third-angle orthographic projection sheet."),
+            ("dwg_05_isometric","Isometric view of the wing."),
+            ("dwg_06_section_BB","Structural sectional view B–B.")]:
     image(f"01_geometry/drawings/{f}.png", width=6.4, cap=c)
 h2("7.1  Geometry data (from CSV)")
 image("05_postprocessing/csv_plots/geo_airfoil.png", width=5.8,
-      cap="Fig. 7. Section geometry plotted from airfoil_UTSS-NLF16.csv.")
+      cap="Section geometry plotted from airfoil_UTSS-NLF16.csv.")
 image("05_postprocessing/csv_plots/geo_planform.png", width=5.8,
-      cap="Fig. 8. Span-wise geometry from wing_planform.csv.")
+      cap="Span-wise geometry from wing_planform.csv.")
 table_from_csv("01_geometry/wing_planform.csv", max_rows=21,
-               cap="Table 8. Wing planform stations (wing_planform.csv).")
+               cap="Wing planform stations (wing_planform.csv).")
 image("05_postprocessing/csv_plots/geo_sections_3d.png", width=5.8,
-      cap="Fig. 8c. Lofted 3-D wing sections (wing_sections_3d.csv).")
+      cap="Lofted 3-D wing sections (wing_sections_3d.csv).")
 
 # ======================================================================
 h1("8.  Mesh / Discretisation")
@@ -452,16 +498,16 @@ para("The surface is discretised with cosine-clustered streamwise nodes; a wall-
  "measurements themselves carry. The 260-panel grid is used for every case-study "
  "result; the tabulated validation sections are re-splined onto their own "
  "cosine-clustered grids of 400 and 440 panels.")
-table_from_csv("02_mesh/mesh_metrics.csv", cap="Table 9. Mesh metrics.")
+table_from_csv("02_mesh/mesh_metrics.csv", cap="Mesh metrics.")
 table_from_csv("02_mesh/mesh_independence.csv",
-               cap="Table 10. Panel-count sensitivity study.")
-for f,c in [("plots/mesh_01_surface","Fig. 9. Surface mesh and wall-normal stacks."),
-            ("plots/mesh_02_bl_normal","Fig. 10. Wall-normal reconstruction grid / y⁺."),
-            ("plots/mesh_03_independence","Fig. 11. Panel-count sensitivity of C_d and "
+               cap="Panel-count sensitivity study.")
+for f,c in [("plots/mesh_01_surface","Surface mesh and wall-normal stacks."),
+            ("plots/mesh_02_bl_normal","Wall-normal reconstruction grid / y⁺."),
+            ("plots/mesh_03_independence","Panel-count sensitivity of C_d and "
              "transition location.")]:
     image(f"02_mesh/{f}.png", width=5.8, cap=c)
 table_from_csv("02_mesh/bl_normal_grid.csv", max_rows=22, sample=True,
-               cap="Table 11. Wall-normal grid (bl_normal_grid.csv, sampled).")
+               cap="Wall-normal grid (bl_normal_grid.csv, sampled).")
 
 # ======================================================================
 h1("9.  Solution — Generated Engineering Output Data")
@@ -470,9 +516,9 @@ para("This section presents every generated output: numerical tables (CSV) and t
  "climb conditions.")
 h2("9.1  Transition prediction summary")
 table_from_csv("04_solution/transition_summary.csv",
-               cap="Table 12. Transition prediction summary (transition_summary.csv).")
+               cap="Transition prediction summary (transition_summary.csv).")
 image("05_postprocessing/csv_plots/transition_summary_bar.png", width=6.0,
-      cap="Fig. 12a. Predicted laminar-flow extent by case and surface (transition_summary.csv).")
+      cap="Predicted laminar-flow extent by case and surface (transition_summary.csv).")
 h2("9.2  Integrated forces and drag breakdown")
 para("The wing lift is obtained from Prandtl's lifting-line theory - Glauert's monoplane "
  "equation solved for the odd Fourier coefficients of the loading - using the section "
@@ -485,16 +531,16 @@ para("The wing lift is obtained from Prandtl's lifting-line theory - Glauert's m
  "the same solve. The implementation is checked against the one case with a closed-form "
  "answer - an elliptic planform, for which it returns e = 1 and the exact lift-curve slope "
  "to machine precision - every time the solution is regenerated.")
-para("The incidence in Table 4 is the SECTION design incidence, not the trim point of the "
+para("The incidence in @@TAB:flow_conditions@@ is the SECTION design incidence, not the trim point of the "
  "aircraft the planform belongs to: at 1.5° the wing carries 23.6 kN against an all-up "
- "weight of 83.4 kN, and level flight at MTOW would need 7.6°. Table 13 reports both, so "
+ "weight of 83.4 kN, and level flight at MTOW would need 7.6°. @@TAB:forces@@ reports both, so "
  "the two are not confused. Every transition result in this study is quoted at the design "
  "incidence and is unaffected by that distinction.", italic=True, size=10)
-table_from_csv("04_solution/integrated_forces.csv", cap="Table 13. Integrated forces, "
+table_from_csv("04_solution/integrated_forces.csv", key="forces", cap="Integrated forces, "
                "with the wing quantities from the lifting-line solve.")
-table_from_csv("04_solution/nlf_vs_turbulent.csv", cap="Table 14. NLF vs fully-turbulent drag.")
+table_from_csv("04_solution/nlf_vs_turbulent.csv", cap="NLF vs fully-turbulent drag.")
 image("05_postprocessing/csv_plots/nlf_vs_turbulent.png", width=5.4,
-      cap="Fig. 12. Drag benefit of predicted laminar flow vs fully-turbulent.")
+      cap="Drag benefit of predicted laminar flow vs fully-turbulent.")
 h2("9.2a  The transition-length closure and what the result owes to it")
 para("The extent of the transitional region is Dhawan and Narasimha's published correlation, "
  "Re_λ = 9 Re_x,t^0.75, with λ the distance over which the intermittency rises from 0.25 to "
@@ -516,50 +562,50 @@ para("The cruise wing transitions at Re_x,t = 3.7×10⁶, a factor of three beyo
  "twice the published value the layer no longer completes transition before the trailing "
  "edge, and there it would.")
 table_from_csv("04_solution/transition_length_sensitivity.csv",
-               cap="Table 14a. Sensitivity of the case-study result to the transition-length "
+               cap="Sensitivity of the case-study result to the transition-length "
                    "constant (transition_length_sensitivity.csv).")
 
 h2("9.3  Surface distributions — cruise")
-for f,c in [("cruise_Cp","Fig. 13. Pressure coefficient C_p — cruise."),
-            ("cruise_Cf","Fig. 14. Skin-friction C_f and laminar run — cruise."),
-            ("cruise_theta_H","Fig. 15. Momentum thickness θ and shape factor H — cruise."),
-            ("cruise_Retheta","Fig. 16. The governing transition criterion — cruise. "
+for f,c in [("cruise_Cp","Pressure coefficient C_p — cruise."),
+            ("cruise_Cf","Skin-friction C_f and laminar run — cruise."),
+            ("cruise_theta_H","Momentum thickness θ and shape factor H — cruise."),
+            ("cruise_Retheta","The governing transition criterion — cruise. "
              "Two of the four branches are Reynolds-number thresholds and two are "
              "amplification integrals, so both pairs are drawn; at cruise it is N "
              "reaching N_crit that fires, and no Re_θt threshold is active at any "
              "station."),
-            ("cruise_gamma","Fig. 17. Intermittency γ — cruise.")]:
+            ("cruise_gamma","Intermittency γ — cruise.")]:
     image(f"05_postprocessing/csv_plots/{f}.png", width=5.8, cap=c)
 table_from_csv("04_solution/surface_cruise_upper.csv", max_rows=30, sample=True,
-   cap="Table 15. Cruise upper-surface BL state (surface_cruise_upper.csv, sampled).")
+   cap="Cruise upper-surface BL state (surface_cruise_upper.csv, sampled).")
 table_from_csv("04_solution/surface_cruise_lower.csv", max_rows=30, sample=True,
-   cap="Table 16. Cruise lower-surface BL state (surface_cruise_lower.csv, sampled).")
+   cap="Cruise lower-surface BL state (surface_cruise_lower.csv, sampled).")
 h2("9.4  Surface distributions — climb (off-design, elevated Tu)")
-for f,c in [("climb_Cp","Fig. 18. Pressure coefficient C_p — climb."),
-            ("climb_Cf","Fig. 19. Skin-friction C_f and laminar run — climb."),
-            ("climb_Retheta","Fig. 19b. The governing transition criterion — climb: "
+for f,c in [("climb_Cp","Pressure coefficient C_p — climb."),
+            ("climb_Cf","Skin-friction C_f and laminar run — climb."),
+            ("climb_Retheta","The governing transition criterion — climb: "
              "here Re_θ crosses the falling Abu-Ghannam & Shaw bypass threshold "
              "while N is still far below N_crit."),
-            ("climb_gamma","Fig. 20. Intermittency γ — climb."),
-            ("compare_cruise_climb_Cf","Fig. 21. C_f cruise vs climb — regime-dependent transition.")]:
+            ("climb_gamma","Intermittency γ — climb."),
+            ("compare_cruise_climb_Cf","C_f cruise vs climb — regime-dependent transition.")]:
     image(f"05_postprocessing/csv_plots/{f}.png", width=5.8, cap=c)
 h2("9.5  Aerodynamic polars")
-table_from_csv("04_solution/aero_polar.csv", cap="Table 17. Aerodynamic polar (aero_polar.csv).")
+table_from_csv("04_solution/aero_polar.csv", cap="Aerodynamic polar (aero_polar.csv).")
 image("05_postprocessing/csv_plots/aero_polar.png", width=6.3,
-      cap="Fig. 22. Lift curve, drag polar, L/D and transition vs angle of attack.")
+      cap="Lift curve, drag polar, L/D and transition vs angle of attack.")
 h2("9.6  Span-wise distribution (3-D)")
 table_from_csv("04_solution/spanwise_distribution.csv",
-               cap="Table 18. Span-wise distribution (spanwise_distribution.csv).")
+               cap="Span-wise distribution (spanwise_distribution.csv).")
 image("05_postprocessing/csv_plots/spanwise_transition.png", width=5.8,
-      cap="Fig. 23. Span-wise transition front and section drag.")
+      cap="Span-wise transition front and section drag.")
 
 # ======================================================================
 h1("10.  Post-Processing — Contours, Profiles and 3-D Fields")
 h2("10.1  Pressure and velocity contours")
-for f,c in [("contour_Cp_cruise","Fig. 24. Pressure-coefficient contour — cruise."),
-            ("contour_speed_cruise","Fig. 25. Velocity magnitude and streamlines — cruise."),
-            ("vectors_cruise","Fig. 26. Velocity vector field — cruise."),
-            ("contour_Cp_climb","Fig. 27. Pressure-coefficient contour — climb.")]:
+for f,c in [("contour_Cp_cruise","Pressure-coefficient contour — cruise."),
+            ("contour_speed_cruise","Velocity magnitude and streamlines — cruise."),
+            ("vectors_cruise","Velocity vector field — cruise."),
+            ("contour_Cp_climb","Pressure-coefficient contour — climb.")]:
     image(f"05_postprocessing/contours/{f}.png", width=6.2, cap=c)
 h2("10.2  Boundary-layer velocity and temperature profiles")
 para("The profiles are reconstructed from the marched state and not from an assumed shape. "
@@ -570,19 +616,19 @@ para("The profiles are reconstructed from the marched state and not from an assu
  "the similarity profile and δ = θ(n+1)(n+2)/n for the power law. Temperature profiles then "
  "follow from the compressible Crocco–Busemann relation (Eq. E21), showing wall-recovery "
  "heating through the boundary layer.")
-for f,c in [("bl_velocity_profiles","Fig. 28. Boundary-layer velocity profiles."),
-            ("bl_temperature_profiles","Fig. 29. Boundary-layer temperature profiles (K)."),
-            ("bl_temperature_ratio","Fig. 30. Normalised temperature profiles T/T_e.")]:
+for f,c in [("bl_velocity_profiles","Boundary-layer velocity profiles."),
+            ("bl_temperature_profiles","Boundary-layer temperature profiles (K)."),
+            ("bl_temperature_ratio","Normalised temperature profiles T/T_e.")]:
     image(f"05_postprocessing/profiles/{f}.png", width=5.5, cap=c)
 table_from_csv("04_solution/bl_profiles_cruise.csv", max_rows=28, sample=True,
-   cap="Table 19. BL velocity/temperature profiles (bl_profiles_cruise.csv, sampled).")
+   cap="BL velocity/temperature profiles (bl_profiles_cruise.csv, sampled).")
 h2("10.3  Three-dimensional surface contours and vectors")
 para("The full 3-D wing surface is coloured by the predicted fields; the transition front is "
  "directly visible as the laminar-to-turbulent boundary on the intermittency contour.")
-for f,c in [("td_Cp","Fig. 31. 3-D wing surface contour — pressure C_p."),
-            ("td_Cf","Fig. 32. 3-D wing surface contour — skin friction C_f (×10³)."),
-            ("td_gamma","Fig. 33. 3-D wing surface contour — intermittency γ (transition front)."),
-            ("td_skinfriction_vectors","Fig. 34. Upper-surface flow direction coloured by C_f "
+for f,c in [("td_Cp","3-D wing surface contour — pressure C_p."),
+            ("td_Cf","3-D wing surface contour — skin friction C_f (×10³)."),
+            ("td_gamma","3-D wing surface contour — intermittency γ (transition front)."),
+            ("td_skinfriction_vectors","Upper-surface flow direction coloured by C_f "
               "(chordwise only — the strip formulation carries no span-wise wall shear).")]:
     image(f"05_postprocessing/three_d/{f}.png", width=6.2, cap=c)
 
@@ -601,14 +647,14 @@ para("To qualify as universal, the solver is validated against every published d
  "16 % is then charged with the whole laminar-to-turbulent step in C_f over the interval "
  "between the two onsets.")
 table_from_csv("06_validation/validation_summary.csv",
-               cap="Table 20. Validation summary — predicted vs published Re_θt.")
+               cap="Validation summary — predicted vs published Re_θt.")
 h2("11.1  Flat plates")
-for f,c in [("val_T3A","Fig. 35. Validation — ERCOFTAC T3A flat plate (Tu = 3.0 %, bypass)."),
-            ("val_T3AM","Fig. 36. Validation — ERCOFTAC T3A⁻ flat plate (Tu = 0.87 %, bypass)."),
-            ("val_T3B","Fig. 37. Validation — ERCOFTAC T3B flat plate (Tu = 6.0 %, bypass)."),
-            ("val_T3C4","Fig. 38. Validation — ERCOFTAC T3C4 flat plate (laminar separation bubble)."),
-            ("val_SS","Fig. 39. Validation — Schubauer & Skramstad natural transition (Tu = 0.03 %)."),
-            ("val_combined_Re_theta_t","Fig. 40. Universal validation — Re_θt across all five plates.")]:
+for f,c in [("val_T3A","Validation — ERCOFTAC T3A flat plate (Tu = 3.0 %, bypass)."),
+            ("val_T3AM","Validation — ERCOFTAC T3A⁻ flat plate (Tu = 0.87 %, bypass)."),
+            ("val_T3B","Validation — ERCOFTAC T3B flat plate (Tu = 6.0 %, bypass)."),
+            ("val_T3C4","Validation — ERCOFTAC T3C4 flat plate (laminar separation bubble)."),
+            ("val_SS","Validation — Schubauer & Skramstad natural transition (Tu = 0.03 %)."),
+            ("val_combined_Re_theta_t","Universal validation — Re_θt across all five plates.")]:
     image(f"06_validation/plots/{f}.png", width=5.9, cap=c)
 
 h2("11.2  NLF(1)-0416 aerofoil — 86 transition locations")
@@ -620,13 +666,13 @@ para("The largest single body of evidence in this work, and the one on which not
  "that band cannot be distinguished from the measurement. Both the natural (TS) and the "
  "separation-induced branches are selected on this set.")
 table_from_csv("06_validation/aerofoil_nlf0416_summary.csv",
-               cap="Table 21. NLF(1)-0416 error statistics by surface "
+               cap="NLF(1)-0416 error statistics by surface "
                    "(aerofoil_nlf0416_summary.csv).")
 image("06_validation/plots/val_aerofoil_nlf0416.png", width=6.4,
-      cap="Fig. 41. Transition location against lift coefficient at four chord "
+      cap="Transition location against lift coefficient at four chord "
           "Reynolds numbers, measurement bars = the ±0.025c orifice bracket.")
 table_from_csv("06_validation/aerofoil_nlf0416.csv", max_rows=30, sample=True,
-               cap="Table 22. NLF(1)-0416 point-by-point comparison "
+               cap="NLF(1)-0416 point-by-point comparison "
                    "(aerofoil_nlf0416.csv, sampled).")
 
 h2("11.3  Swept wings — the cross-flow branch")
@@ -641,7 +687,7 @@ para("The cross-flow coefficient is set on the first of these two experiments an
  "spread between the two columns is the limitation, stated rather than averaged away. "
  "Nothing else in the model differs between the two columns.")
 para("What each experiment requires of the criterion is measured rather than asserted "
- "(Table 25). The march is run with every branch disabled so that it reaches the measured "
+ "(@@TAB:cf_criticals@@). The march is run with every branch disabled so that it reaches the measured "
  "transition station, and the criterion is evaluated there. Dagenhart & Saric require a "
  "critical Re_θ2 of 165 with a 17.2 % coefficient of variation over six chord Reynolds "
  "numbers; Boltz et al. require 234 with 4.0 % over four sweep angles and a factor of three in chord "
@@ -661,16 +707,16 @@ para("What each experiment requires of the criterion is measured rather than ass
  "that the threshold is nearly redundant with C1 itself, so the two constants cannot be "
  "separated by these data.")
 table_from_csv("06_validation/swept_wing_crossflow.csv",
-               cap="Table 23. Cross-flow validation, 45° swept NLF(2)-0415 "
+               cap="Cross-flow validation, 45° swept NLF(2)-0415 "
                    "(Dagenhart & Saric — the calibration set).")
 image("06_validation/plots/val_swept_crossflow.png", width=5.9,
-      cap="Fig. 42. Transition location against chord Reynolds number, 45° swept "
+      cap="Transition location against chord Reynolds number, 45° swept "
           "NLF(2)-0415.")
 table_from_csv("06_validation/swept_wing_independent.csv",
-               cap="Table 24. Independent swept-wing check, NACA 64(2)A015 (Boltz et al.) "
+               cap="Independent swept-wing check, NACA 64(2)A015 (Boltz et al.) "
                    "at both ends of the reported cross-flow band — nothing calibrated here.")
 image("06_validation/plots/val_swept_independent.png", width=5.9,
-      cap="Fig. 43. Transition location against sweep angle, NACA 64(2)A015, "
+      cap="Transition location against sweep angle, NACA 64(2)A015, "
           "with the C1 = 150–200 band shaded.")
 
 h2("11.3a  Where the flat-plate residuals come from")
@@ -686,7 +732,7 @@ para("The laminar branch is not where they are. Compared against the model's own
  "a laminar layer in an adverse gradient is thicker than Blasius for a reason that has "
  "nothing to do with turbulence, and against the march that carries the gradient the "
  "agreement is 2 %.")
-para("The T3C4 residual is in the bubble, and Table 20b localises it. Across the dead-air "
+para("The T3C4 residual is in the bubble, and @@TAB:bubble@@ localises it. Across the dead-air "
  "region the momentum integral is exact given the edge velocity and the shape factor — there "
  "is no wall stress to get wrong — so three quantities are the whole of it. The edge "
  "velocity is verified: the smoothing spline reproduces the twelve tabulated points to "
@@ -707,20 +753,20 @@ para("Conditioning. In a decaying stream the onset threshold rises while Re_θ g
  "factor of 3.5 on T3A, 2.5 on T3A⁻ and 2.0 on T3B. A correlation accurate to ten per cent "
  "cannot locate transition to ten per cent in such a flow.")
 table_from_csv("06_validation/residual_diagnostics.csv",
-               cap="Table 20a. The laminar branch against the measurements, and the "
+               cap="The laminar branch against the measurements, and the "
                    "sensitivity of the crossing (residual_diagnostics.csv).")
-table_from_csv("06_validation/bubble_diagnostics.csv",
-               cap="Table 20b. The T3C4 bubble, modelled against measured "
+table_from_csv("06_validation/bubble_diagnostics.csv", key="bubble",
+               cap="The T3C4 bubble, modelled against measured "
                    "(bubble_diagnostics.csv). The momentum integral across the dead-air "
                    "region is exact given U_e and H, so these are the whole of the residual.")
 
 h2("11.4  What the two swept-wing experiments require of the criterion")
-table_from_csv("06_validation/crossflow_criticals_summary.csv",
-               cap="Table 25. What each swept-wing experiment requires of the cross-flow "
+table_from_csv("06_validation/crossflow_criticals_summary.csv", key="cf_criticals",
+               cap="What each swept-wing experiment requires of the cross-flow "
                    "criterion, evaluated at the measured transition station "
                    "(crossflow_criticals_summary.csv).")
 table_from_csv("06_validation/crossflow_criticals.csv",
-               cap="Table 26. Point-by-point cross-flow criterion values at the measured "
+               cap="Point-by-point cross-flow criterion values at the measured "
                    "transition stations (crossflow_criticals.csv).")
 para("One explanation can be ruled out rather than merely doubted. If the difference "
  "between the two facilities were a Reynolds-number effect the criterion is missing, the "
@@ -735,7 +781,7 @@ para("One explanation can be ruled out rather than merely doubted. If the differ
  "documents — as the explanation, and it is now a measurement rather than an appeal to the "
  "literature.")
 para("Two numbers in this section have to be reconciled or they look inconsistent: the "
- "band is reported as C1 = 150–200, while Table 25 says the independent facility requires a "
+ "band is reported as C1 = 150–200, while @@TAB:cf_criticals@@ says the independent facility requires a "
  "critical Re_θ2 of 234. They are different quantities. C1 does not fire the branch; it "
  "starts the amplification integral, which then decides where transition is placed, so the "
  "EFFECTIVE critical value at the predicted station is higher than C1. Measured at the four "
@@ -744,7 +790,7 @@ para("Two numbers in this section have to be reconciled or they look inconsisten
  "the upper end of the band still leaves an 18.4 % error in location on the independent set, "
  "and it is the honest reason the band is offered as a bound rather than as a value.")
 table_from_csv("06_validation/crossflow_reynolds_trend.csv",
-               cap="Table 26a. The required critical value against chord Reynolds number "
+               cap="The required critical value against chord Reynolds number "
                    "within each facility (crossflow_reynolds_trend.csv). The trends have "
                    "opposite signs to the offset between the facilities.")
 
@@ -753,9 +799,9 @@ para("Each of the three elements that distinguish this formulation is switched o
  "everything else held fixed, and the same two datasets the natural branch reaches are re-run. "
  "The table is regenerated by gen_validation.py and is not quoted from memory.")
 table_from_csv("06_validation/ablations.csv",
-               cap="Table 27. Ablation study (ablations.csv): Schubauer-Skramstad onset error "
+               cap="Ablation study (ablations.csv): Schubauer-Skramstad onset error "
                    "and the 86 aerofoil conditions, one closure removed at a time.")
-para("Calibration. The solver is calibrated through the single constant set of Table 7. The "
+para("Calibration. The solver is calibrated through the single constant set of @@TAB:calibration@@. The "
  "critical amplification factor is not among the constants: it follows from the free-stream "
  "turbulence intensity by Mack's correlation, clamped to the 0.0008-0.0298 range over which "
  "that correlation is quoted, and so returns 8.18 for any stream quieter than 0.08 %. The SAME "
@@ -766,13 +812,13 @@ h2("11.6  Sources and references")
 para("All data sources used for validation, for calibration of the closures, and for the "
  "case-study definition are recorded below.")
 table_from_csv("06_validation/sources_and_references.csv", max_rows=40,
-               cap="Table 28. Validation, calibration and case-study sources.")
+               cap="Validation, calibration and case-study sources.")
 table_from_csv("06_validation/swept_wing_source.csv",
-               cap="Table 29. Cross-flow calibration dataset provenance.")
+               cap="Cross-flow calibration dataset provenance.")
 table_from_csv("06_validation/swept_wing_independent_source.csv",
-               cap="Table 30. Independent swept-wing dataset provenance.")
+               cap="Independent swept-wing dataset provenance.")
 table_from_csv("06_validation/aerofoil_nlf0416_source.csv",
-               cap="Table 31. Aerofoil dataset provenance.")
+               cap="Aerofoil dataset provenance.")
 
 # ======================================================================
 h1("12.  Contribution to Knowledge")
@@ -861,7 +907,7 @@ para(f"Total generated data/figure files: {len(inv)} "
      f"(CSV: {sum(1 for r in inv if r[1]=='CSV')}, "
      f"PNG: {sum(1 for r in inv if r[1]=='PNG')}, "
      f"NPZ: {sum(1 for r in inv if r[1]=='NPZ')}).")
-manual_table(["file","type"], inv, cap="Table A1. Generated-output inventory.")
+manual_table(["file","type"], inv, cap="Generated-output inventory.")
 
 # ======================================================================
 h1("Appendix B.  Parameter / Metric CSVs Rendered as Figures")
@@ -875,6 +921,7 @@ for f,c in [("table_geometry_definition","Fig. B1. geometry_definition.csv."),
             ("table_integrated_forces","Fig. B5. integrated_forces.csv.")]:
     image(f"05_postprocessing/csv_plots/{f}.png", width=5.9, cap=c)
 
+resolve_refs(doc)
 doc.save("case.docx")
 print("case.docx written:", os.path.getsize("case.docx")//1024, "KB")
 print("figures embedded across", len(inv), "generated files")
