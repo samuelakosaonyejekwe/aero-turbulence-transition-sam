@@ -7,3 +7,4 @@ solver/falkner_skan_family.npz
 solver/falkner_skan_reverse.npz
 solver/_amp_slabs/
 .pipeline/
+04_solution/field_pressure_*.npz

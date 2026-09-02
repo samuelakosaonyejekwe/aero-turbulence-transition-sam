@@ -355,8 +355,19 @@ def _solution_field(case):
     field is used instead, so the contours in the report are the solution the
     report tabulates.
     """
-    d=np.load(f"{SOL}/field_pressure_{case}.npz")
-    return (d["Xg"],d["Yg"],d["Cp"],d["Vx"],d["Vy"],d["spd"])
+    # Read from the CSV, which is the tracked, human-readable form of this
+    # field.  The .npz beside it holds the same numbers a second time; it is a
+    # convenience for re-loading and is no longer tracked, because np.savez
+    # stamps the zip entries with the current time, so an identical field
+    # produced a different 1.8 MB blob on every regeneration.  Between the two
+    # field files that was 8 MB of new objects per run that changed nothing.
+    df=pd.read_csv(f"{SOL}/field_pressure_{case}.csv")
+    ny=int(df["y_c"].nunique()); nx=len(df)//ny
+    if ny*nx != len(df):
+        raise ValueError("field CSV for %s is not a complete rectangular grid: "
+                         "%d rows, %d distinct y" % (case, len(df), ny))
+    r=lambda c: df[c].to_numpy(float).reshape(ny, nx)
+    return (r("x_c"), r("y_c"), r("Cp"), r("Vx_ms"), r("Vy_ms"), r("speed_ms"))
 
 def _body(ax, px, py, ring_c=0.010):
     """Draw the aerofoil so that it covers the cells the field masked out.

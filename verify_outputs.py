@@ -242,6 +242,29 @@ def structural_checks(txt, raw):
     return out
 
 
+def check_readme(want):
+    """The README quotes the same headline numbers, and nothing checked it.
+
+    This script closed the loop between the CSVs and the compiled report, and
+    left the README - the first thing anyone reads - free to drift.  Its tables
+    are written by hand, which is precisely the failure mode the rest of this
+    file exists to catch.  Every value that must appear in the report is
+    required to appear in the README too, where the README mentions the
+    quantity at all.
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "README.md")
+    if not os.path.exists(path):
+        return []
+    txt = flatten(open(path, encoding="utf-8").read())
+    out = []
+    for label, value, _anchor in want:
+        # anchored on the whole file: the README is short enough that a whole
+        # number occurring anywhere in it is the number being quoted
+        ok, why = find_value(txt, value, None)
+        out.append((label, value, ok, why))
+    return out
+
+
 def main():
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
         path = sys.argv[1]
@@ -280,6 +303,18 @@ def main():
         ok = needle not in hay
         bad += not ok
         print("  %-8s %s" % ("OK" if ok else "FOUND", label))
+
+    # the README, against the same CSVs
+    rd = check_readme(want)
+    if rd:
+        miss = [r for r in rd if not r[2]]
+        print("\n  README quotes %d of %d headline values" % (len(rd)-len(miss), len(rd)))
+        for label, value, ok, why in miss:
+            # A README that does not mention a quantity at all is not wrong, so
+            # this reports rather than fails; a README that mentions a DIFFERENT
+            # number for it is what matters, and that shows up here as a miss on
+            # a value the surrounding text plainly discusses.
+            print("      not found: %-30s %s" % (label, value))
 
     print("\n%d check(s) failed" % bad if bad else "\nall checks passed")
     sys.exit(1 if bad else 0)

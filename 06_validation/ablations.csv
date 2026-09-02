@@ -1,5 +1,5 @@
 configuration,SS_err_pct,mean_abs_err_c,within_bracket,points,within_bracket_pct
-no bubble closure,5.6,0.0607,19,86,22.1
-one-equation laminar march,-4.7,0.0388,44,86,51.2
-Drela-Giles envelope,-6.6,0.0451,39,86,45.3
-full model,5.6,0.0373,52,86,60.5
+no bubble closure,0.1,0.0629,19,86,22.1
+one-equation laminar march,-10.2,0.0418,42,86,48.8
+Drela-Giles envelope,-11.7,0.0432,45,86,52.3
+full model,0.1,0.0334,50,86,58.1

@@ -69,11 +69,15 @@ EQS = [
  ("E12b","4.3  Unified transition kernel (novel)","Separation bubble: reattachment condition",
    r"N_{bub} = \int_{x_s}^{x_r} \frac{\sigma(H_{rev}, Re_\theta)}{\theta}\,dx' = N_{crit}, \quad "
    r"\sigma(H_{rev}) \approx 0.0435"),
- ("E13","4.3  Unified transition kernel (novel)","Unified minimum-onset transition kernel",
-   r"Re_{\theta t}^{*} = \min\left(a_{TS}Re_{\theta t}^{TS},\, a_{BP}Re_{\theta t}^{BP},\, "
-   r"a_{SEP}Re_{\theta t}^{SEP},\, a_{CF}Re_{\theta t}^{CF}\right)"),
- ("E14","4.3  Unified transition kernel (novel)","Transition trigger",
-   r"Re_\theta(x_t) \ge Re_{\theta t}^{*}"),
+ ("E13","4.3  Unified transition kernel (novel)","Unified transition kernel: onset where the first mechanism completes",
+   r"x_t = \min\left\{\, x \;:\; \max_{m}\; a_m\, p_m(x) \ge 1 \,\right\}, "
+   r"\quad m \in \{TS,\; BP,\; SEP,\; CF\}"),
+ ("E13b","4.3  Unified transition kernel (novel)","The four onset progresses, each reaching unity at its own onset",
+   r"p_{TS} = \frac{N}{N_{crit}}, \quad p_{BP} = \frac{Re_\theta}{Re_{\theta t}^{AGS}}, "
+   r"\quad p_{SEP} = \frac{N_{bub}}{N_{crit}}, \quad p_{CF} = \frac{N_{cf}}{N_{crit}}"),
+ ("E14","4.3  Unified transition kernel (novel)","Natural / bypass blend across the validity window",
+   r"p_{nat} = (1-w)\,p_{TS} + w\,p_{BP}, \quad "
+   r"w = 3t^{2}-2t^{3}, \quad t = \mathrm{clip}\!\left(\frac{Tu - Tu_{lo}}{Tu_{hi}-Tu_{lo}},0,1\right)"),
  # ---- 4.4  Transitional & turbulent boundary layer -------------------
  ("E15","4.4  Transitional & turbulent boundary layer","Narasimha universal intermittency",
    r"\gamma(x) = 1 - \exp\left[-0.412\,\xi^{2}\right], \quad \xi = \frac{x-x_t}{\lambda_{tr}}"),

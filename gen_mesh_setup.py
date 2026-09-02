@@ -64,9 +64,9 @@ def bl_normal_grid():
     # straight into the document - the report carried 202 of them - and its
     # last bits moved with the BLAS thread count, so a regeneration that
     # changed nothing physical still produced a different file.
-    df=pd.DataFrame({"layer":np.arange(N),"y_m":y.round(9),
+    df=pd.DataFrame({"layer":np.arange(N),"y_mm":(y*1e3).round(4),
                      "y_plus":yplus.round(4),
-                     "cell_dy_m":np.gradient(y).round(10),
+                     "cell_dy_mm":(np.gradient(y)*1e3).round(5),
                      "growth_ratio":gr_arr.round(4)})
     df.to_csv(f"{MESH}/bl_normal_grid.csv",index=False)
     return df,u_tau,y1,gr,N
@@ -125,7 +125,7 @@ def mesh_metrics(df_surf,df_bl,u_tau,y1,gr,N):
         ("Max streamwise spacing",f"{ds_max_c*1e3:.3f}","1e-3 c"),
         ("Max streamwise spacing at MAC",f"{ds_max_m*1e3:.3f}","mm"),
         ("LE clustering ratio",f"{ds_max_c/ds_min_c:.1f}","-"),
-        ("BL grid outer extent",f"{df_bl['y_m'].max()*1e3:.2f}","mm"),
+        ("BL grid outer extent",f"{df_bl['y_mm'].max():.2f}","mm"),
         ("Friction velocity u_tau (TE)",f"{u_tau:.3f}","m/s"),
         ("Max cell aspect ratio (at MAC)",f"{(ds_max_m/y1):.0f}","-"),
         ("Discretisation type",
@@ -150,7 +150,7 @@ def plot_surface_mesh(df_surf,df_bl):
         iu=np.argmin(np.abs(co["xu"]-xq))
         nx,ny=-np.gradient(co["yu"])[iu], np.gradient(co["xu"])[iu]
         nn=np.hypot(nx,ny); nx,ny=nx/nn,ny/nn
-        yy=df_bl["y_m"].values[::4]*6  # exaggerate for visibility
+        yy=df_bl["y_mm"].values[::4]*6e-3  # exaggerate for visibility
         ax.plot(co["xu"][iu]+nx*yy, co["yu"][iu]+ny*yy,color=PALETTE[2],lw=0.7)
         ax.scatter(co["xu"][iu]+nx*yy, co["yu"][iu]+ny*yy,s=3,color=PALETTE[3])
     ax.set_aspect("equal"); ax.set_xlim(-0.05,1.05); ax.set_ylim(-0.15,0.18)
@@ -161,8 +161,8 @@ def plot_surface_mesh(df_surf,df_bl):
 
 def plot_bl_grid(df_bl):
     fig,ax=new_fig(7.5,5)
-    ax.hlines(df_bl["y_m"]*1e3, 0, 1, color=PALETTE[0], lw=0.8)
-    ax.scatter(np.full(len(df_bl),0.5), df_bl["y_m"]*1e3, s=12, color=PALETTE[1])
+    ax.hlines(df_bl["y_mm"], 0, 1, color=PALETTE[0], lw=0.8)
+    ax.scatter(np.full(len(df_bl),0.5), df_bl["y_mm"], s=12, color=PALETTE[1])
     ax2=ax.twinx()
     ax2.plot(np.full(len(df_bl),0.5), df_bl["y_plus"], "o-", color=PALETTE[4],
              label="y+ at wall-normal nodes")
@@ -269,7 +269,8 @@ def setup_tables():
     import inspect
     N_anchor = inspect.signature(_n_crit).parameters["anchor"].default
     calrows=[
-        ("A_TS",CAL["A_TS"],"TS/natural onset weight","unity; validated on Schubauer-Skramstad and NLF(1)-0416 upper surface"),
+        ("A_TS",CAL["A_TS"],"TS/natural onset progress weight",
+         "unity, not fitted; the natural branch's one measured quantity is N_anchor, set on Schubauer-Skramstad alone, and the 86 NLF(1)-0416 conditions are out of sample"),
         ("A_BP",CAL["A_BP"],"bypass onset weight","unity; validated on ERCOFTAC T3A/T3A-/T3B"),
         ("A_SEP",CAL["A_SEP"],"separation-induced weight","unity; validated on T3C4 and NLF(1)-0416 lower surface"),
         ("A_CF",CAL["A_CF"],"crossflow weight","unity; Arnal C1 criterion"),
@@ -318,7 +319,12 @@ def setup_tables():
         ("lam_sep",CAL["lam_sep"],"Thwaites parameter at laminar separation","Thwaites (1949) published value; not fitted"),
         ("sep_floor",CAL["sep_floor"],"min separation-induced onset Re_theta (ablation path only)",
          "superseded by the bubble closure; reachable only with bubble=False"),
-        ("n_freq",CAL["n_freq"],"frequencies carried by the e^N integration","discretisation parameter; onset moves <0.2% over 24-64"),
+        ("d_omega",CAL["d_omega"],"max ratio between adjacent frequencies in the e^N integration",
+         "discretisation, stated as a RESOLUTION rather than a count: with a fixed count of 40 "
+         "the Schubauer-Skramstad onset moved 5 % between 24 and 64 frequencies and did not "
+         "settle.  At this spacing Re_x,tr is unchanged from 1.10 down to 1.0075"),
+        ("n_freq_min",CAL["n_freq_min"],"floor on the frequency count","guards a degenerate range"),
+        ("n_freq_max",CAL["n_freq_max"],"cap on the frequency count","guards a degenerate range"),
         ("CF_N",CAL["CF_N"],"separate amplification threshold for the crossflow branch (ablation path only)",
          "0 = use the same N_crit as every other branch; exposed to test whether a "
          "roughness-seeded branch needs its own threshold, and it does not - see "

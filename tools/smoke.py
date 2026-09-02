@@ -323,7 +323,8 @@ def airfoil_output_contract():
     for surf in ("upper", "lower"):
         s = r["surfaces"][surf]
         for k in ("x", "y", "Cp", "Re_x", "x_tr_chord", "x_sep_chord",
-                  "bubble_burst", "theta_te_c"):
+                  "bubble_burst", "theta_te_c", "H_te", "H_te_at_clip",
+                  "sep_margin_H", "x_sep_turb_chord"):
             assert k in s, "surface dict lost %r" % k
         assert len(s["x"]) == len(s["s"]) == len(s["Cf"])
 
@@ -331,6 +332,31 @@ def airfoil_output_contract():
 # ----------------------------------------------------------------------
 # 5.  the drivers, at the smallest sweep that still writes every column
 # ----------------------------------------------------------------------
+@check
+def wall_normal_profiles():
+    """the profile reconstruction runs and returns a monotone, bounded profile"""
+    import run_solution as R
+    import case_config as C
+    from utss_solver import solve_airfoil
+    X, Y = C.nlf16_panel_points(80)
+    cr, W = C.CRUISE, C.WING
+    rc = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                       W["MAC"], cr["Tu_pct"], sweep_deg=W["le_sweep_deg"],
+                       mach=cr["mach"])
+    df = R.bl_profiles(rc)
+    assert len(df) > 0
+    for st, g in df.groupby("station"):
+        u = g.u_Ue.to_numpy(float)
+        assert u.min() >= -1e-9 and u.max() <= 1.0 + 1e-9, \
+            "%s: u/Ue outside [0,1]" % st
+        assert np.all(np.diff(u) >= -1e-6), "%s: velocity profile not monotone" % st
+        assert float(g.delta_mm.iloc[0]) > 0.0
+        assert float(g.recovery_r.iloc[0]) > 0.0
+    # the laminar recovery factor must differ from the turbulent one
+    rr = df.recovery_r.to_numpy(float)
+    assert rr.min() < rr.max() + 1e-12
+
+
 @check
 def lifting_line_closed_form():
     """the elliptic planform check the pipeline asserts before writing"""

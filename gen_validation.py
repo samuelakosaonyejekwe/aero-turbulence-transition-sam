@@ -206,7 +206,9 @@ def run_validation():
         else:
             ratio=None; err_lam=err_turb=None; n_lam=n_turb=0
         summ.append(dict(case=v["name"], Tu_inlet_pct=v["Tu_pct"],
-            L_turb_mm=(v.get("L_turb")*1e3 if v.get("L_turb") else None),
+            # quoted to the precision the rigs are characterised to; raw, this
+            # printed 1.5299999999999998 into the report
+            L_turb_mm=(round(v.get("L_turb")*1e3, 3) if v.get("L_turb") else None),
             Re_theta_t_exp=ex["Re_theta_t"], Re_theta_t_pred=round(reth,1),
             Re_theta_t_err_pct=round((reth-ex["Re_theta_t"])/ex["Re_theta_t"]*100,1),
             Re_x_tr_exp=f"{ex['Re_x_t']:.3e}", Re_x_tr_pred=f"{rex:.3e}",
