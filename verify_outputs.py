@@ -75,6 +75,14 @@ def flatten(txt):
     the line breaks.  The raw text is kept as well, for the one check that is
     ABOUT line breaks (a table cell squeezed until it breaks mid-token).
     """
+    # Typographic characters normalised to their ASCII equivalents.  The
+    # document and the README are typeset, so a negative number is written with
+    # a UNICODE MINUS (U+2212) and not a hyphen, and a numeric parser looking
+    # for "-14.2" does not find "\u221214.2".  The same applies to the various
+    # dashes and to the non-breaking space inside a figure like "1 234".
+    txt = (txt.replace("\u2212", "-").replace("\u2013", "-")
+              .replace("\u2014", "-").replace("\u00a0", " ")
+              .replace("\u2019", "'"))
     return re.sub(r"\s+", " ", txt)
 
 
@@ -186,6 +194,22 @@ def checks():
         ("ablation, no bubble closure",
          str(int(abl.loc["no bubble closure", "within_bracket"])), T_ABL),
     ]
+    # The swept-wing errors are quoted in the narrative and were left stale once
+    # before, after the sections began being solved in the plane normal to the
+    # leading edge.  They are checked now.
+    sw1 = pd.read_csv("06_validation/swept_wing_crossflow.csv")
+    sw2 = pd.read_csv("06_validation/swept_wing_independent.csv")
+    T_SW = "Swept wings"
+    want += [
+        ("swept, calibration mean err", f"{sw1.err_pct.abs().mean():.1f}", T_SW),
+        ("swept, independent C1=150", f"{sw2.err_pct_C1_150.abs().mean():.1f}", T_SW),
+        ("swept, independent C1=200", f"{sw2.err_pct_C1_200.abs().mean():.1f}", T_SW),
+    ]
+    # and the T3C4 bracket error, which is the headline for that plate now
+    t3 = vsum[vsum.case.str.contains("T3C4")]
+    if len(t3) and t3.Re_theta_t_err_bracket_pct.notna().all():
+        want.append(("T3C4 bracket error",
+                     f"{float(t3.Re_theta_t_err_bracket_pct.iloc[0]):.1f}", None))
     for _, r in vsum.iterrows():
         want.append(("Re_theta_t, " + r.case.split(" flat plate")[0],
                      f"{r.Re_theta_t_pred:g}", T_VSUM))
