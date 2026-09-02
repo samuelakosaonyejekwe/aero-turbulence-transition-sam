@@ -895,9 +895,15 @@ para("Two limitations bound that claim and are stated here rather than left to b
  "The cross-flow critical constant does not transfer between facilities: the two independent "
  "swept-wing experiments support the functional form of the criterion, and the measured data "
  "collapse on it, but reproducing the second requires a critical value 42 % larger than the "
- "first. And the method is an attached-flow formulation with an incidence envelope of about "
- "+/-8.5 deg on a real section; beyond that the laminar march separates near the leading edge "
- "and the result should not be relied on.")
+ "first. And the method is an attached-flow formulation, so it has an incidence envelope — but "
+ "that envelope is asymmetric and is set by the section, not by a round number. On the "
+ "NLF(1)-0416 it declares its first condition at −9.5° of incidence, where the upper-surface "
+ "layer separates within two per cent of chord, and it handles the same section down to −12.0° "
+ "without complaint; at positive incidence nothing in the 86 conditions, which reach +8.7°, is "
+ "declared, and a leading-edge bubble does not appear on the upper surface of the section "
+ "itself until about +14°. Three of the 86 fall outside it and the method says so rather than "
+ "returning a location. An earlier version of this report quoted ±8.5°, which was a plotting "
+ "threshold rather than a measured envelope.")
 
 # ======================================================================
 h1("Appendix A.  Complete Generated-Output Inventory")
