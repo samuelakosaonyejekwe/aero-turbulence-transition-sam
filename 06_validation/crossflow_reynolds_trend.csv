@@ -1,3 +1,3 @@
 dataset,n_points,Re_c_min,Re_c_max,mean_required,slope_per_decade_Re_c,correlation
-Dagenhart & Saric (calibration),6,1.92e+06,3.73e+06,153.1,-248.6,-0.902
+Dagenhart & Saric (calibration),6,1.92e+06,3.73e+06,153.1,-249.5,-0.901
 Boltz et al. (independent),4,9.50e+06,2.70e+07,233.8,32.1,0.58
