@@ -175,7 +175,10 @@ def plot_surface(case):
     ax2=ax.twinx()
     ax2.plot(mbu["x_c"],mbu["H_shape"],ls="--",color=PALETTE[3],lw=1.8,label="H upper")
     ax2.plot(mbl["x_c"],mbl["H_shape"],ls=":",color=PALETTE[1],lw=2.0,label="H lower")
-    ax2.set_ylabel("shape factor H"); ax2.set_ylim(1.3,3.0)
+    ax2.set_ylabel("shape factor H")
+    # head-room for the legend, which used to clip the leading-edge H peak
+    ax2.set_ylim(1.3, max(3.0, float(max(mbu["H_shape"].max(),
+                                         mbl["H_shape"].max()))*1.12))
     ax2.axhline(2.6,color=PALETTE[5],lw=0.9,alpha=0.6)
     ax2.text(0.55,2.64,"H ≈ 2.6 (incipient separation)",fontsize=10,
              color=PALETTE[5],ha="center")
@@ -286,8 +289,15 @@ def plot_spanwise():
     ax.set_xlabel("span fraction η"); ax.set_ylabel("transition x_tr/c")
     ax.set_title("Span-wise transition front (laminar-flow extent)")
     ax2=ax.twinx()
-    ax2.plot(s["eta"],s["Cd_section"]*1e4,"^--",color=PALETTE[1],label="C_d section")
+    cd=s["Cd_section"]*1e4
+    ax2.plot(s["eta"],cd,"^--",color=PALETTE[1],label="C_d section")
     ax2.set_ylabel("section C_d [counts]",color=PALETTE[1])
+    # The span-wise C_d wobble is the panel-discretisation scatter of Sec. 8,
+    # under a count peak to peak.  Autoscaling drew it as a dramatic sawtooth
+    # filling the axis; the range is held to at least +/-5 % of the mean so the
+    # picture matches the size of the effect.
+    m=float(cd.mean()); half=max(float(cd.max()-cd.min())*0.75, 0.05*m)
+    ax2.set_ylim(m-half, m+half)
     l1,la1=ax.get_legend_handles_labels(); l2,la2=ax2.get_legend_handles_labels()
     ax.legend(l1+l2,la1+la2,fontsize=10,loc="center left")
     finish(fig,f"{CSVP}/spanwise_transition.png")
@@ -337,6 +347,7 @@ def plot_contours(case):
     fig,ax=new_fig(10,5.6)
     lv=np.linspace(np.nanpercentile(Cp,2),np.nanpercentile(Cp,99),28)
     cf=ax.contourf(Xg,Yg,Cp,levels=lv,cmap=FIELD_CMAP,extend="both")
+    ax.grid(False)          # no grid lines over a filled field
     ax.contour(Xg,Yg,Cp,levels=lv[::4],colors=[INK_SOFT],linewidths=0.4,alpha=0.6)
     ax.fill(polyx,polyy,color="white",ec=INK,lw=1.5,zorder=4)
     cb=fig.colorbar(cf,ax=ax,shrink=0.85,pad=0.02); cb.set_label("C_p")
@@ -349,6 +360,7 @@ def plot_contours(case):
     fig,ax=new_fig(10,5.6)
     lv=np.linspace(np.nanpercentile(spd,2),np.nanpercentile(spd,99),26)
     cf=ax.contourf(Xg,Yg,spd,levels=lv,cmap=CF_CMAP,extend="both")
+    ax.grid(False)          # no grid lines over a filled field
     try:
         ax.streamplot(Xg,Yg,np.nan_to_num(Vx),np.nan_to_num(Vy),density=1.1,
                       color=INK_SOFT,linewidth=0.6,arrowsize=0.7)
@@ -363,6 +375,7 @@ def plot_contours(case):
     # vector field (quiver) near surface
     fig,ax=new_fig(10,5.6)
     sk=(slice(None,None,5),slice(None,None,4))
+    ax.grid(False)          # no grid lines over the vector field
     q=ax.quiver(Xg[sk],Yg[sk],Vx[sk],Vy[sk],spd[sk],cmap=FIELD_CMAP,
                 scale=2600,width=0.0026)
     ax.fill(polyx,polyy,color="white",ec=INK,lw=1.5,zorder=4)
@@ -474,7 +487,12 @@ def plot_3d(field):
         av=np.concatenate([a.ravel() for a in allv])
         vmin,vmax=(vmnmx if vmnmx else (np.nanpercentile(av,2),np.nanpercentile(av,98)))
         norm=Normalize(vmin,vmax)
-        for surf in ["upper","lower"]:
+        # lower surface first.  plot_surface paints in call order, not by
+        # depth, so drawing the lower one last covered the upper one: the
+        # field the reader saw from a viewpoint above the wing was the
+        # UNDERSIDE, while the report and the manuscript both describe the
+        # upper-surface field.
+        for surf in ["lower","upper"]:
             XX,YY,ZZ,VV=surfgrids[surf]
             fc=cmap(norm(VV))
             ax.plot_surface(XX,YY,ZZ,facecolors=fc,rstride=1,cstride=1,
@@ -598,11 +616,18 @@ def plot_remaining_csvs():
     ax.set_xscale("symlog",linthresh=0.01,linscale=0.6)
     ax.set_xlabel("constant value (symmetric-log scale)")
     for b,v in zip(bars,cc["num"]):
+        # a constant of exactly zero has no bar; its label belongs just to the
+        # right of the axis, not out on the negative side where it read as a
+        # negative constant
         off = 1.12 if v > 0 else 1.6
-        ax.text(v*off if abs(v)>0.02 else (0.03 if v>0 else -0.05),
-                b.get_y()+b.get_height()/2,f"{v:g}",
-                va="center",ha="left" if v>0 else "right",
-                fontsize=9,color=INK)
+        if v >= 0:
+            x = v*off if v > 0.02 else 0.03
+            ha = "left"
+        else:
+            x = v*off if abs(v) > 0.02 else -0.05
+            ha = "right"
+        ax.text(x, b.get_y()+b.get_height()/2, f"{v:g}",
+                va="center", ha=ha, fontsize=9, color=INK)
     ax.set_xlim(-0.6,600)
     ax.axvline(0.0,color=INK_SOFT,lw=0.9)
     ax.invert_yaxis()
@@ -635,7 +660,9 @@ def plot_remaining_csvs():
     # --- 7e. parameter/metric CSVs rendered as clean table-figures ---
     import textwrap
     def render_table_figure(csv,title,outpath,wrapcol=34,fontsize=9.5):
-        df=pd.read_csv(csv).fillna("")
+        # as text: the CSVs carry their own formatting, and re-parsing turns
+        # Re_MAC written as 6.414e+06 into 6414000.0
+        df=pd.read_csv(csv, dtype=str).fillna("")
         def wrap(x):
             x=str(x)
             return "\n".join(textwrap.wrap(x,wrapcol)) if len(x)>wrapcol else x

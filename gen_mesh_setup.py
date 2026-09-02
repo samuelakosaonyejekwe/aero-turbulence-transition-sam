@@ -212,6 +212,7 @@ def setup_tables():
          "across the dead-air region"),
         ("  cross-flow","C1 on Re_theta2, closed by an amplification integral"),
         ("Intermittency closure","Narasimha universal (gamma)"),
+        ("Transition length","Dhawan & Narasimha, Re_lambda = 9 Re_x_t^0.75"),
         ("Turbulent BL closure","Head entrainment + Ludwieg-Tillmann Cf"),
         ("Laminar separation criterion","Thwaites lambda <= -0.09"),
         ("Turbulent separation flag","H > 2.6"),

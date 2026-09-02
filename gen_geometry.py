@@ -54,7 +54,7 @@ def dim_linear(ax, p1, p2, offset, text, side=1, fs=10, color=DIM,
                horiz=None):
     """Dimension with extension lines, arrowheads and centred text."""
     p1 = np.array(p1, float); p2 = np.array(p2, float)
-    d = p2 - p1; L = np.hypot(*d)
+    d = p2 - p1
     if horiz is None:
         horiz = abs(d[0]) >= abs(d[1])
     if horiz:
@@ -71,9 +71,11 @@ def dim_linear(ax, p1, p2, offset, text, side=1, fs=10, color=DIM,
                 arrowprops=dict(arrowstyle="<->", color=color, lw=1.0))
     mid = 0.5*(a1+a2)
     rot = 0 if horiz else 90
-    dx = 0 if horiz else (0.012*(1 if side>0 else -1))
-    dy = (0.012*(1 if side>0 else -1)) if horiz else 0
-    ax.text(mid[0]+dx, mid[1]+dy, text, color=color, fontsize=fs,
+    # The label sits ON the dimension line and masks it with its own white
+    # box, which is the drafting convention and, unlike the fixed 0.012 offset
+    # this used to add, means the same thing on a unit-chord section and on a
+    # seventeen-metre span.
+    ax.text(mid[0], mid[1], text, color=color, fontsize=fs,
             ha="center", va="center", rotation=rot,
             bbox=dict(boxstyle="round,pad=0.12", fc="white", ec="none",
                       alpha=0.9))
@@ -91,19 +93,43 @@ def angle_dim(ax, vertex, p_a, p_b, text, r=0.4, color=DIM, fs=10):
 
 
 def title_block(ax, title, dwg_no, scale="NTS", view=""):
+    """Drafting title block, laid out so the two halves cannot collide.
+
+    The left block and the right block were both written on one row at a fixed
+    font size, and on the narrower sheets they overlapped: GEO-002 rendered
+    "SECTION UTSS-NLF16" and "DWG GEO-002" on top of each other as
+    "UTSS-NLFDWG GEO-002".  The right block is now measured against the left
+    and, if it does not fit beside it, split onto its own second row; if it
+    still does not fit the whole block is shrunk until it does.
+    """
     fig = ax.figure
     ax.set_title(title, fontsize=14, fontweight="normal", color=INK, pad=12)
     fig.subplots_adjust(bottom=0.22, top=0.90)
-    fig.text(0.012, 0.065,
-             f"PROJECT: AETHER-NLF 25  |  NLF WING  |  SECTION {C.WING['section']}",
-             fontsize=10, color=INK_SOFT)
-    fig.text(0.012, 0.030,
-             "DRAWN BY: AKOSA SAMUEL ONYEJEKWE",
-             fontsize=10, color=INK_SOFT)
-    fig.text(0.988, 0.065,
-             f"DWG {dwg_no}   SCALE {scale}   {view}   3rd-ANGLE   "
-             f"UNITS m (noted)   UTSS-CASE-2026",
-             fontsize=10, color=INK_SOFT, ha="right")
+    left1 = fig.text(0.012, 0.065,
+                     f"PROJECT: AETHER-NLF 25  |  NLF WING  |  "
+                     f"SECTION {C.WING['section']}",
+                     fontsize=10, color=INK_SOFT)
+    left2 = fig.text(0.012, 0.030, "DRAWN BY: AKOSA SAMUEL ONYEJEKWE",
+                     fontsize=10, color=INK_SOFT)
+    rparts = [f"DWG {dwg_no}   SCALE {scale}   {view}".strip(),
+              "3rd-ANGLE   UNITS m (noted)   UTSS-CASE-2026"]
+    right1 = fig.text(0.988, 0.065, "   ".join(rparts),
+                      fontsize=10, color=INK_SOFT, ha="right")
+    right2 = None
+
+    def clash(a, b, gap=10.0):
+        fig.canvas.draw()
+        return a.get_window_extent().x1 + gap > b.get_window_extent().x0
+
+    if clash(left1, right1):
+        right1.set_text(rparts[0])
+        right2 = fig.text(0.988, 0.030, rparts[1], fontsize=10,
+                          color=INK_SOFT, ha="right")
+        fs = 10.0
+        while fs > 6.5 and (clash(left1, right1) or clash(left2, right2)):
+            fs -= 0.5
+            for t in (left1, left2, right1, right2):
+                t.set_fontsize(fs)
     # thin border frame
     fig.patches.append(plt.Rectangle((0.006,0.012),0.988,0.974,
                        transform=fig.transFigure, fill=False,
@@ -211,17 +237,21 @@ def draw_airfoil_section(co):
     r_le = float(np.mean(co["yt"][_m]/np.sqrt(x[_m])))**2/2.0
 
     # --- horizontal chord dimension (clear, below everything) ---
-    dim_linear(ax, (0,-0.175),(1,-0.175), -0.045,
+    # bottom-most row of the sheet, below the specification box and clear of
+    # the legend, which the dimension line used to run straight through
+    dim_linear(ax, (0,-0.225),(1,-0.225), -0.045,
                "CHORD  c (reference)   |   MAC = %.3f m" % C.WING["MAC"],
                side=-1, fs=10)
     # --- x(t_max) horizontal dimension (clear, above) ---
-    dim_linear(ax, (0,0.150),(xt,0.150), 0.028, f"x(t_max) = {xt:.2f} c", side=1, fs=10)
+    dim_linear(ax, (0,0.205),(xt,0.205), 0.028, f"x(t_max) = {xt:.2f} c", side=1, fs=10)
     # --- t_max vertical thickness arrow + leadered label in clear space ---
     ax.plot([xt,xt],[yl_t,yu_t], color=HID, lw=0.8, ls=(0,(4,3)))
     ax.annotate("", xy=(xt,yu_t), xytext=(xt,yl_t),
                 arrowprops=dict(arrowstyle="<->", color=DIM, lw=1.2))
-    ax.annotate(f"t_max = {tmax:.3f} c\n({tmax*100:.1f} %)", xy=(xt,yl_t),
-                xytext=(xt+0.085,-0.135), color=DIM, fontsize=10, ha="left",
+    # leadered clear of the specification box below it, which used to strike
+    # the "(16.0 %)" line through
+    ax.annotate(f"t_max = {tmax:.3f} c  ({tmax*100:.1f} %)", xy=(xt,yl_t),
+                xytext=(xt+0.16,-0.115), color=DIM, fontsize=10, ha="left",
                 va="center", arrowprops=dict(arrowstyle="->", color=DIM, lw=0.9))
     # --- leading & trailing edge callouts (clear of geometry) ---
     ax.annotate(f"rounded NLF leading edge\nr_LE = {r_le:.3f} c  ·  favourable"
@@ -236,12 +266,15 @@ def draw_airfoil_section(co):
           f"t/c = {tmax:.3f} @ {xt:.2f} c   ·   c_l = {section_cl():.2f} "
           f"at α = {C.CRUISE['alpha_deg']:.1f}°, M = {C.CRUISE['mach']:.2f}\n"
           "aft-loaded camber   ·   sharp T.E.")
-    ax.text(0.015, -0.205, spec, fontsize=10, color=INK,
+    ax.text(0.015, -0.222, spec, fontsize=10, color=INK,
             va="bottom", ha="left",
             bbox=dict(boxstyle="round,pad=0.4", fc="#eef4fa", ec=INK_SOFT, lw=0.9))
-    ax.legend(loc="lower right", fontsize=10, framealpha=0.9)
+    # pinned above the chord dimension rather than in the axes corner, where it
+    # sat on top of it
+    ax.legend(loc="lower right", bbox_to_anchor=(1.0, 0.14),
+              fontsize=10, framealpha=0.9)
 
-    ax.set_xlim(-0.06, 1.10); ax.set_ylim(-0.24, 0.21)
+    ax.set_xlim(-0.06, 1.10); ax.set_ylim(-0.30, 0.27)
     ax.set_aspect("equal", adjustable="box"); ax.grid(False)
     ax.set_xlabel("x / c"); ax.set_ylabel("y / c")
     title_block(ax, f"AEROFOIL SECTION  {C.WING['section']}  (16% NLF)",
@@ -251,7 +284,9 @@ def draw_airfoil_section(co):
 
 def draw_planview(df_pl):
     W = C.WING
-    fig, ax = plt.subplots(figsize=(10.5, 8.2))
+    # proportioned to the planform: with an equal aspect on a 10.5 x 8.2 sheet
+    # the wing filled a wide band and left the bottom half of the sheet empty
+    fig, ax = plt.subplots(figsize=(12.5, 5.6))
     y = df_pl["y_m"].values; xle = df_pl["x_le_m"].values
     xte = df_pl["x_te_m"].values
     # full span mirror
@@ -283,11 +318,14 @@ def draw_planview(df_pl):
     ax.text(3.0, xte.max()+0.35, "B", color=PALETTE[1], ha="center", fontsize=11, fontweight="normal")
     ax.text(3.0, xle[0]-0.4, "B", color=PALETTE[1], ha="center", fontsize=11, fontweight="normal")
     ax.set_xlabel("span-wise  y  [m]"); ax.set_ylabel("stream-wise  x  [m]")
-    ax.set_aspect("equal"); ax.invert_yaxis(); ax.grid(False)
+    ax.set_aspect("equal"); ax.grid(False)
+    # room below the trailing edge for the data box, which used to sit on the
+    # planform outline (y inverted: stream-wise x increases downward)
+    ax.set_ylim(xte.max()+1.6, xle[0]-1.7)
     ax.set_title("")
     txt = (f"S = {W['area_S']:.2f} m²   AR = {W['AR']:.2f}   "
            f"λ = {W['taper']:.2f}   MAC = {W['MAC']:.2f} m")
-    ax.text(0.5, 0.05, txt, transform=ax.transAxes, ha="center", va="bottom",
+    ax.text(0.5, 0.04, txt, transform=ax.transAxes, ha="center", va="bottom",
             fontsize=10, color=INK, bbox=dict(boxstyle="round", fc="#eef4fa", ec=INK_SOFT))
     title_block(ax, "WING PLANFORM  -  PLAN VIEW (TOP)", "GEO-002", "1:120", "PLAN")
     finish_dwg(fig, f"{DWG}/dwg_02_planview.png")
@@ -296,7 +334,9 @@ def draw_planview(df_pl):
 def draw_front_side(df_pl):
     W = C.WING
     y = df_pl["y_m"].values; z = df_pl["z_dihedral_m"].values
-    fig, axes = plt.subplots(1, 2, figsize=(13.5, 4.6))
+    # sized to the two views: at 13.5 x 4.6 with an equal aspect the panels
+    # were short bands with empty thirds above and below them
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 3.9))
     # FRONT VIEW (dihedral)
     ax = axes[0]
     Y = np.concatenate([-y[::-1], y]); Z = np.concatenate([z[::-1], z])
@@ -314,7 +354,9 @@ def draw_front_side(df_pl):
     dim_linear(ax, (-W['span_b']/2,-0.35),(W['span_b']/2,-0.35), -0.25,
                f"b = {W['span_b']:.2f} m", side=-1)
     ax.set_aspect("equal", adjustable="box")
-    ax.set_ylim(z.min()-0.55, z.max()+1.5)
+    # the span dimension sits at z = -0.60; the lower limit has to clear it,
+    # or its arrows and label are cut off by the axes frame
+    ax.set_ylim(min(z.min(), -0.35) - 0.55, z.max()+1.5)
     ax.set_xlabel("y [m]"); ax.set_ylabel("z [m]")
     ax.set_title("FRONT VIEW (looking aft)  -  dihedral", color=INK, fontsize=11)
     ax.grid(False)
@@ -326,9 +368,10 @@ def draw_front_side(df_pl):
         cc = sub["chord_m"]; xle = sub["x_le_m"]
         ax.plot(xle+co["xu"]*cc, co["yu"]*cc, color=col, lw=1.8, label=f"{lab} c={cc:.2f}m")
         ax.plot(xle+co["xl"]*cc, co["yl"]*cc, color=col, lw=1.8)
-    ax.legend(loc="upper left", fontsize=10, framealpha=0.92)
     ax.set_aspect("equal"); ax.invert_xaxis()
-    ax.set_ylim(top=ax.get_ylim()[1]+0.06)
+    # head-room for the legend, which otherwise sits on the tip section
+    _lo, _hi = ax.get_ylim(); ax.set_ylim(_lo, _hi + 0.55*(_hi-_lo))
+    ax.legend(loc="upper left", fontsize=10, framealpha=0.92)
     ax.set_xlabel("x [m] (LE right)"); ax.set_ylabel("z [m]")
     ax.set_title("SIDE VIEW  -  root & tip sections", color=INK, fontsize=11)
     ax.grid(False)
@@ -405,7 +448,10 @@ def _iso_wing(ax, df_pl):
             xr=0.25+xq*np.cos(a)-yq*np.sin(a); yr=xq*np.sin(a)+yq*np.cos(a)
             return xl+xr*cc, np.full_like(xs,yy), zz+yr*cc
         Us.append(place(co["xu"],co["yu"])); Ls.append(place(co["xl"],co["yl"]))
-    for surf,col in [(Us,PALETTE[0]),(Ls,PALETTE[2])]:
+    # lower surface first: plot_surface paints in call order rather than by
+    # depth, so drawing the lower one last covered the upper one and the whole
+    # wing read as the teal of the underside from a viewpoint above it
+    for surf,col in [(Ls,PALETTE[2]),(Us,PALETTE[0])]:
         X=np.array([s[0] for s in surf]); Y=np.array([s[1] for s in surf]); Z=np.array([s[2] for s in surf])
         ax.plot_surface(X,Y,Z,color=col,alpha=0.55,linewidth=0,antialiased=True,shade=True)
     ax.set_xlabel("x",fontsize=10); ax.set_ylabel("y",fontsize=10); ax.set_zlabel("z",fontsize=10)
@@ -416,13 +462,18 @@ def _iso_wing(ax, df_pl):
 
 
 def draw_isometric(df_pl):
-    fig = plt.figure(figsize=(10,7.5))
+    # 10 x 7.5 left the wing in a band across the middle with the top and
+    # bottom thirds empty, and the single-line caption ran off both edges of
+    # the sheet; the caption is now two lines and the view is raised so the
+    # UPPER surface it names is the one facing the reader
+    fig = plt.figure(figsize=(10,6.2))
     ax = fig.add_subplot(111, projection="3d")
     _iso_wing(ax, df_pl)
+    ax.view_init(elev=26, azim=-58)
     ax.set_title("AETHER-NLF 25 WING  -  ISOMETRIC VIEW  (DWG GEO-005)",
                  color=INK, fontweight="normal")
-    fig.text(0.5,0.02,"Upper surface (blue)  /  Lower surface (teal)  -  lofted from "
-             f"{C.WING['section']} sections  |  half-span shown  |  "
+    fig.text(0.5,0.03,"Upper surface (blue)  /  Lower surface (teal)  -  lofted from "
+             f"{C.WING['section']} sections  |  half-span shown\n"
              "DRAWN BY: AKOSA SAMUEL ONYEJEKWE",
              ha="center", color=INK_SOFT, fontsize=10)
     fig.savefig(f"{DWG}/dwg_05_isometric.png", dpi=170, facecolor="white")
@@ -439,8 +490,23 @@ def draw_section_BB(df_pl):
     co=C.nlf16_coords(n=240)
     xu,yu = co["xu"]*chord, co["yu"]*chord
     xl,yl = co["xl"]*chord, co["yl"]*chord
-    def yU(xq): return np.interp(xq, xu, yu)
-    def yL(xq): return np.interp(xq, xl[::-1], yl[::-1])
+    def _surface(xs, ys):
+        """Interpolator for one surface, on a sorted, de-duplicated abscissa.
+
+        np.interp requires an increasing xp and gives no warning when it does
+        not get one.  The lower surface was passed xl[::-1], which is
+        DECREASING, so yL returned 0.0 at every station: the inner skin line,
+        both lower spar caps and the whole lower stringer row were drawn flat
+        along the chord line instead of on the surface.  The upper surface is
+        not monotone either - near the nose the thickness term moves points
+        back past their neighbours - so both are sorted here.
+        """
+        k = np.argsort(xs); a, b = np.asarray(xs)[k], np.asarray(ys)[k]
+        keep = np.concatenate([[True], np.diff(a) > 0])
+        a, b = a[keep], b[keep]
+        return lambda xq: np.interp(xq, a, b)
+    yU = _surface(xu, yu)
+    yL = _surface(xl, yl)
 
     # ---- outer skin (OML) ----
     ax.plot(xu,yu,color=OUT,lw=2.4); ax.plot(xl,yl,color=OUT,lw=2.4)
@@ -471,35 +537,40 @@ def draw_section_BB(df_pl):
         ax.plot(xq, yL(xq)+tsk, marker="s", ms=4, color=PALETTE[4])
 
     # ---- dimensions : spar stations from LE + chord ----
-    ax.plot([0,0],[ -0.05*chord, 0.30*chord], color=CTR, lw=0.8, ls=(0,(6,3)))
-    dim_linear(ax,(0,0.34*chord),(x_fs*chord,0.34*chord),0.03*chord,
+    ax.plot([0,0],[ -0.05*chord, 0.38*chord], color=CTR, lw=0.8, ls=(0,(6,3)))
+    dim_linear(ax,(0,0.24*chord),(x_fs*chord,0.24*chord),0.03*chord,
                f"{x_fs:.2f} c", side=1, fs=10)
-    dim_linear(ax,(0,0.46*chord),(x_rs*chord,0.46*chord),0.03*chord,
+    dim_linear(ax,(0,0.34*chord),(x_rs*chord,0.34*chord),0.03*chord,
                f"{x_rs:.2f} c", side=1, fs=10)
-    dim_linear(ax,(0,-0.24*chord),(chord,-0.24*chord),-0.05*chord,
+    dim_linear(ax,(0,-0.28*chord),(chord,-0.28*chord),-0.05*chord,
                f"CHORD  c (y = {yc:.1f} m) = {chord:.3f} m", side=-1, fs=10)
-    dim_linear(ax,(x_fs*chord,-0.16*chord),(x_rs*chord,-0.16*chord),-0.04*chord,
+    dim_linear(ax,(x_fs*chord,-0.11*chord),(x_rs*chord,-0.11*chord),-0.04*chord,
                f"integral wing box = {(x_rs-x_fs)*chord:.3f} m", side=-1, fs=10)
 
-    # ---- material callouts placed at three DISTINCT, non-overlapping spots ----
+    # ---- material callouts, each in its own band of clear head-room --------
+    # These sit in DATA coordinates, so they have to stay inside the limits set
+    # below; at 0.60c they were pushed outside the frame and printed across the
+    # drawing title.
     ax.annotate("FRONT SPAR\n(Al-Li web + caps)", xy=(0.20*chord, yU(0.20*chord)-tsk),
-                xytext=(0.06*chord, 0.60*chord), color=PALETTE[1], fontsize=10,
+                xytext=(0.10*chord, 0.44*chord), color=PALETTE[1], fontsize=10,
                 ha="center", va="center",
                 arrowprops=dict(arrowstyle="->", color=PALETTE[1], lw=0.9))
     ax.annotate("CFRP skin\n(t ≈ 12 mm)", xy=(0.42*chord, yU(0.42*chord)),
-                xytext=(0.42*chord, 0.62*chord), color=PALETTE[0], fontsize=10,
+                xytext=(0.46*chord, 0.30*chord), color=PALETTE[0], fontsize=10,
                 ha="center", va="center",
                 arrowprops=dict(arrowstyle="->", color=PALETTE[0], lw=0.9))
     ax.annotate("REAR SPAR\n(Al-Li web + caps)", xy=(0.65*chord, yU(0.65*chord)-tsk),
-                xytext=(0.86*chord, 0.60*chord), color=PALETTE[1], fontsize=10,
+                xytext=(0.84*chord, 0.44*chord), color=PALETTE[1], fontsize=10,
                 ha="center", va="center",
                 arrowprops=dict(arrowstyle="->", color=PALETTE[1], lw=0.9))
+    # leadered below the section: above it there is no band left, and at
+    # -0.34c it used to sit on the CHORD dimension text
     ax.annotate("stringers (Z-section)", xy=(0.82*chord, yL(0.82*chord)+tsk),
-                xytext=(0.74*chord,-0.34*chord), color=PALETTE[4], fontsize=10,
+                xytext=(0.62*chord,-0.20*chord), color=PALETTE[4], fontsize=10,
                 ha="center", arrowprops=dict(arrowstyle="->", color=PALETTE[4], lw=0.9))
 
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xlim(-0.16, chord+0.16); ax.set_ylim(-0.42*chord, 0.78*chord)
+    ax.set_xlim(-0.16, chord+0.16); ax.set_ylim(-0.40*chord, 0.52*chord)
     ax.set_xlabel("x [m]  (chord-wise)"); ax.set_ylabel("z [m]")
     title_block(ax,f"WING STRUCTURAL SECTION  B-B  (y = {yc:.1f} m)",
                 "GEO-006","1:15","SECTION")
