@@ -817,10 +817,17 @@ def closure_F(lam):
     Writing the momentum-integral equation in terms of Z = theta^2 gives
     dZ/dx = (nu/U_e) F(lambda) with lambda = (Z/nu) dU_e/dx.  Thwaites replaced
     F by the straight line 0.45 - 6 lambda, which is what makes his method
-    integrable in closed form and is the approximation that his separation
-    value lambda = -0.090 was chosen to compensate.  Using the exact F removes
-    both: the march is then consistent with the exact closure functions, and
-    separation occurs at the exact Falkner-Skan value.
+    integrable in closed form and is the approximation his separation value
+    lambda = -0.090 was chosen to compensate; the exact family separates at
+    -0.0681.
+
+    This is the exact right-hand side, for comparison rather than for the
+    march: the default laminar branch is the two-equation march, which uses
+    neither form, and the one-equation fallback behind cal["two_eq"] = False
+    keeps Thwaites' own fit so that the ablation measures his method and not a
+    hybrid.  Measured against the line in the module self-test, the two agree
+    to 2 per cent at zero pressure gradient and 5 per cent through the adverse
+    range, and part company by 17 per cent in a favourable one.
     """
     L, H, l = thwaites_closure()
     x = float(np.clip(lam, L[0], L[-1]))
@@ -986,6 +993,25 @@ if __name__ == "__main__":
     print("Blasius neutral point: solver Re_theta = %.0f (accepted 200.5), "
           "tabulated grid Re_theta = %.0f  %s"
           % (_n, _tab, "OK" if abs(_n - 200.5) < 5.0 else "FAIL"))
+
+    # 3b. the single-frequency lookup must agree with the curve the march reads
+    _c = sigma_curve(3.0, 500.0)
+    _, _, _Os, _ = load_database()
+    _d = max(abs(sigma_lookup(3.0, 500.0, float(o)) - v) for o, v in zip(_Os, _c))
+    print("sigma_lookup vs sigma_curve at (H=3.0, Re_theta=500): max |diff| = "
+          "%.1e, out of band -> %.1f  %s"
+          % (_d, sigma_lookup(3.0, 500.0, 1.0), "OK" if _d == 0.0 else "FAIL"))
+
+    # 3c. the exact momentum-integral right-hand side against Thwaites' line.
+    #     Thwaites replaced F(lambda) = 2l - 2(2+H)lambda by 0.45 - 6 lambda,
+    #     which is what makes his method integrable in closed form.  The two
+    #     agree where he fitted them and part company near separation, which is
+    #     why his separation value (-0.090) is not the exact one (-0.0681).
+    print("momentum-integral F(lambda): exact vs Thwaites' 0.45 - 6 lambda")
+    for _l in (0.05, 0.0, -0.03, -0.06, lambda_sep()):
+        _F = closure_F(_l); _T = 0.45 - 6.0*_l
+        print("   lambda = %+7.4f   exact %+7.4f   Thwaites %+7.4f   %+6.1f %%"
+              % (_l, _F, _T, 100.0*(_T - _F)/abs(_F) if _F else float("nan")))
 
     # 4. the tabulated cross-flow factor against a direct similarity solve.
     #    beta = 0 is excluded from the relative comparison and checked on its

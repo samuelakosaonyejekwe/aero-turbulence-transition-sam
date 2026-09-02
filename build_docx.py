@@ -57,7 +57,6 @@ fr.font.size=Pt(8.5); fr.font.color.rgb=BLUE
 # ----------------------------------------------------------------------
 def h1(t): doc.add_heading(t, level=1)
 def h2(t): doc.add_heading(t, level=2)
-def h3(t): doc.add_heading(t, level=3)
 
 def para(t, italic=False, bold=False, size=11):
     p=doc.add_paragraph(); r=p.add_run(t); r.italic=italic; r.bold=bold
