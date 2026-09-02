@@ -493,7 +493,11 @@ h2("9.3  Surface distributions — cruise")
 for f,c in [("cruise_Cp","Fig. 13. Pressure coefficient C_p — cruise."),
             ("cruise_Cf","Fig. 14. Skin-friction C_f and laminar run — cruise."),
             ("cruise_theta_H","Fig. 15. Momentum thickness θ and shape factor H — cruise."),
-            ("cruise_Retheta","Fig. 16. Transition criterion Re_θ vs Re_θt — cruise."),
+            ("cruise_Retheta","Fig. 16. The governing transition criterion — cruise. "
+             "Two of the four branches are Reynolds-number thresholds and two are "
+             "amplification integrals, so both pairs are drawn; at cruise it is N "
+             "reaching N_crit that fires, and no Re_θt threshold is active at any "
+             "station."),
             ("cruise_gamma","Fig. 17. Intermittency γ — cruise.")]:
     image(f"05_postprocessing/csv_plots/{f}.png", width=5.8, cap=c)
 table_from_csv("04_solution/surface_cruise_upper.csv", max_rows=30, sample=True,
@@ -503,6 +507,9 @@ table_from_csv("04_solution/surface_cruise_lower.csv", max_rows=30, sample=True,
 h2("9.4  Surface distributions — climb (off-design, elevated Tu)")
 for f,c in [("climb_Cp","Fig. 18. Pressure coefficient C_p — climb."),
             ("climb_Cf","Fig. 19. Skin-friction C_f and laminar run — climb."),
+            ("climb_Retheta","Fig. 19b. The governing transition criterion — climb: "
+             "here Re_θ crosses the falling Abu-Ghannam & Shaw bypass threshold "
+             "while N is still far below N_crit."),
             ("climb_gamma","Fig. 20. Intermittency γ — climb."),
             ("compare_cruise_climb_Cf","Fig. 21. C_f cruise vs climb — regime-dependent transition.")]:
     image(f"05_postprocessing/csv_plots/{f}.png", width=5.8, cap=c)

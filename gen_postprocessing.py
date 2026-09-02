@@ -185,18 +185,48 @@ def plot_surface(case):
     ax.set_title(f"Momentum thickness & shape factor — {case}")
     finish(fig,f"{CSVP}/{case}_theta_H.png")
 
-    # --- Re_theta vs Re_theta_t (transition criterion) ---
+    # --- the criterion that actually governs -------------------------------
+    # Two of the four branches are Reynolds-number thresholds and two are
+    # amplification integrals, so a figure that plots only Re_theta against
+    # Re_theta_t shows nothing on a case that transitions naturally: the
+    # threshold is simply absent there.  Both are drawn, the amplification
+    # factor on its own axis, and the mechanism is named in the title so the
+    # reader knows which pair to read.
+    lam_only=up[up["x_c"]<=(up["x_c"][up.index[up["intermittency_gamma"]>1e-6][0]]
+                            if len(up.index[up["intermittency_gamma"]>1e-6])
+                            else up["x_c"].max())]
     fig,ax=new_fig(8.6,5.2)
-    ax.plot(up["x_c"],up["Re_theta"],color=PALETTE[0],lw=2.2,label="Re_θ (upper)")
-    ax.plot(up["x_c"],up["Re_theta_trans"],color=PALETTE[3],lw=1.8,ls="--",
-            label="Re_θt onset criterion")
+    ax.plot(up["x_c"],up["Re_theta"],color=PALETTE[0],lw=2.2,label="Re_θ")
+    has_thr=up["Re_theta_trans"].notna().any()
+    if has_thr:
+        ax.plot(up["x_c"],up["Re_theta_trans"],color=PALETTE[3],lw=1.8,ls="--",
+                label="Re_θt threshold (bypass / cross-flow)")
+    ax.set_ylim(0, max(float(lam_only["Re_theta"].max()),
+                       float(up["Re_theta_trans"].max() if has_thr else 0.0))*1.35)
+    ax2=ax.twinx()
+    ax2.plot(up["x_c"],up["n_factor"],color=PALETTE[4],lw=2.2,label="N (amplification)")
+    ax2.plot(up["x_c"],up["n_crit"],color=PALETTE[5],lw=1.6,ls=":",label="N_crit")
+    ax2.set_ylabel("amplification factor N",color=PALETTE[4])
+    ax2.set_ylim(0, max(float(up["n_crit"].max()), float(up["n_factor"].max()))*1.35)
     it=up.index[up["intermittency_gamma"]>1e-6]
     if len(it):
-        xt=up["x_c"][it[0]]; ax.scatter([xt],[up["Re_theta"][it[0]]],s=80,
-            color=PALETTE[1],zorder=5,label="transition onset")
-    ax.set_xlabel("x/c"); ax.set_ylabel("Re_θ")
-    ax.set_title(f"Transition criterion: Re_θ crosses Re_θt — {case} upper")
-    ax.legend(fontsize=10); finish(fig,f"{CSVP}/{case}_Retheta.png")
+        xt=up["x_c"][it[0]]
+        ax.axvline(xt,color=PALETTE[1],ls="-.",lw=1.3)
+        ax.scatter([xt],[up["Re_theta"][it[0]]],s=80,color=PALETTE[1],zorder=5,
+                   label="transition onset")
+    # Show the run over which the criterion is live.  On the climb case
+    # transition is at 0.025c, so the whole crossing sits in the leftmost three
+    # per cent of a full-chord axis and cannot be read.
+    if len(it):
+        ax.set_xlim(-0.01, min(1.0, max(3.0*float(up["x_c"][it[0]]), 0.2)))
+    ax.set_xlabel("x/c"); ax.set_ylabel("Re_θ",color=PALETTE[0])
+    mech=(up["state"].iloc[-1] if not len(it) else
+          pd.read_csv(f"{SOL}/transition_summary.csv")
+            .query("case==@case.upper() and surface=='upper'")["mechanism"].iloc[0])
+    ax.set_title(f"Transition criterion — {case} upper (governing mechanism: {mech})")
+    l1,la1=ax.get_legend_handles_labels(); l2,la2=ax2.get_legend_handles_labels()
+    ax.legend(l1+l2,la1+la2,fontsize=9,loc="upper left",framealpha=0.93)
+    finish(fig,f"{CSVP}/{case}_Retheta.png")
 
     # --- intermittency ---
     fig,ax=new_fig(8.6,4.6)

@@ -645,6 +645,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
     Tu_eff = (Tu_avg if _w >= 1.0 else
               (Tu_arr if _w <= 0.0 else
                np.maximum(Tu_avg, 1e-9)**_w * np.maximum(Tu_arr, 1e-9)**(1.0-_w)))
+    # The critical amplification factor at every station.  It depends only on
+    # the local effective turbulence intensity, so it is formed for the whole
+    # surface here rather than only up to the station the march stops at: a
+    # consumer plotting N against N_crit needs both defined everywhere.
+    n_crit_all = np.array([_n_crit(t, cal.get("N_floor", 0.5)) for t in Tu_eff])
 
     # ---- frequency set for the e^N integration ----
     # A physical frequency is fixed along the layer while theta grows and U_e
@@ -915,7 +920,13 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
         # the only thing that can end it.
         in_bubble = bubble_on and i_sep is not None
         Rt = 1e9 if in_bubble else min(Rbp, Rsep, Rcf)
-        Re_th_t[i] = Rt
+        # 1e9 is the internal "this branch cannot fire here" sentinel.  It used
+        # to be written straight into the output, so a case that transitions on
+        # the amplification integral - every natural-transition case - reported
+        # an onset Reynolds number of a billion, and the report's transition-
+        # criterion figure autoscaled to 1e9 and drew Re_theta as a flat line
+        # along the axis.  Absent is absent: it leaves as NaN.
+        Re_th_t[i] = np.nan if Rt >= 1e8 else Rt
         trig_ts = bool(ts_live and n_amp >= N_target)
         _Ncf = (float(cal.get("CF_N", 0.0)) or
                 _n_crit(Tu_eff[i], cal.get("N_floor", 0.5)))
@@ -941,7 +952,8 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
         # fully laminar to TE
         out = dict(s=s, Ue=Ue, theta=theta, H=H, Cf=Cf, Re_theta=Reth,
                    lam=lam, gamma=gamma, state=state, Re_theta_t=Re_th_t,
-                   n_factor=n_fac, mechanism=mechanism, i_tr=None,
+                   n_factor=n_fac, n_crit=n_crit_all,
+                   mechanism=mechanism, i_tr=None,
                    i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
                    bubble_burst=bool(i_sep is not None),
                    x_tr=np.nan, onset_mech="none(laminar)",
@@ -1010,7 +1022,8 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
 
     out = dict(s=s, Ue=Ue, theta=theta, H=H, Cf=Cf, Re_theta=Reth,
                lam=lam, gamma=gamma, state=state, Re_theta_t=Re_th_t,
-               n_factor=n_fac, mechanism=mechanism, i_tr=i_tr, x_tr=s_tr,
+               n_factor=n_fac, n_crit=n_crit_all,
+               mechanism=mechanism, i_tr=i_tr, x_tr=s_tr,
                lam_len=lam_len, onset_mech=onset_mech,
                i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
                bubble_burst=False,
