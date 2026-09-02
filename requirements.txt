@@ -5,12 +5,13 @@
 # resolves to whatever is current on the day it is run.  Two of these pins are
 # load-bearing rather than cautious.
 #
-#   numpy   - the amplification database, the Falkner-Skan family and every
-#             quadrature in solver/ are built with numpy.trapezoid, which
-#             exists from 1.22 onward; numpy.trapz, its former spelling, is
-#             deprecated in numpy 2 and slated for removal.  The code uses the
-#             current spelling, so it runs on both, but the floating-point
-#             results are pinned to the version they were generated with.
+#   numpy   - numpy 2.0 renamed trapz to trapezoid and deprecated the old
+#             spelling, which is slated for removal.  solver/stability.py binds
+#             whichever exists (`_trapz`), so the code runs on 1.x and 2.x
+#             alike; the pin is here because the floating-point results - the
+#             Falkner-Skan family, and the amplification database built from it
+#             - belong to the version that generated them, not because the
+#             source needs this one.
 #   scipy   - solve_bvp settles the Falkner-Skan family, including the
 #             reverse-flow branch that the separation-bubble amplification rate
 #             is read from.  A different solver version can converge to the

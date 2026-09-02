@@ -246,7 +246,12 @@ def setup_tables():
          "-%.2f (FITTED jointly on S&S and 86 aerofoil pts); %.2f for Tu<0.08%%"
          % (N_anchor, _n_crit(0.05))),
         ("N_floor",CAL["N_floor"],"lower clamp on N_crit at high Tu","clamp; bypass governs there"),
-        ("Tu_TS_max",CAL["Tu_TS_max"],"upper Tu for the attached-flow TS branch","complement of the bypass gate"),
+        ("Tu_BP_lo",CAL["Tu_BP_lo"],"Tu [%] below which the bypass correlation carries no weight",
+         "lower edge of the natural/bypass blend; below it the e^N branch alone governs"),
+        ("Tu_BP_hi",CAL["Tu_BP_hi"],"Tu [%] above which the bypass correlation carries all the weight",
+         "upper edge of the same blend.  Replaces the single Tu_TS_max gate, which made the "
+         "predicted transition location a step function of Tu; the window is wider than the "
+         "spread of any case here, so no result in this study is blended"),
         ("C_len",CAL["C_len"],"transition-length scale, Re_lambda = C_len Re_x_t^0.75",
          "Dhawan & Narasimha (1958) published value; not fitted here"),
         ("CF_C1",CAL["CF_C1"],"crossflow critical Re_theta2",

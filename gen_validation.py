@@ -415,7 +415,13 @@ def crossflow_criticals(write=True, quiet=False):
     import stability as _st
     from utss_solver import _re_theta2
     # every branch off, so the laminar march reaches the measured station
-    NOCF = dict(CF_C1=1e12, A_TS=1e6, Tu_TS_max=-1.0, bubble=False)
+    # Every branch off, so the laminar march runs past the measured station
+    # instead of transitioning before it.  A_TS scales the amplification
+    # PROGRESS, so switching the natural branch off means a small weight, not
+    # a large one; the old value here was 1e6, which was inert only because
+    # the Tu_TS_max gate beside it was already holding the branch shut.
+    NOCF = dict(CF_C1=1e12, A_TS=1e-9, Tu_BP_lo=1e9, Tu_BP_hi=2e9,
+                bubble=False)
 
     def probe(X, Y, al, U, nu, c, tu, sw, x_meas):
         r = solve_airfoil(X, Y, al, U, nu, c, tu, sweep_deg=sw, cal=NOCF)
@@ -785,7 +791,61 @@ ABLATIONS = [
 ]
 
 
-def run_ablations(write=True, quiet=False):
+def _limit_blas_threads():
+    """One BLAS thread per worker process.
+
+    The solves here are dense linear algebra on matrices a few hundred square,
+    where threaded BLAS buys almost nothing, so letting each of N worker
+    processes start its own thread pool oversubscribes the machine and makes
+    the whole sweep slower than running it serially.  Set before numpy is
+    touched in the child.
+    """
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+              "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+        os.environ[k] = "1"
+
+
+def _default_jobs():
+    """Physical cores, not logical ones, and never more than the work available.
+
+    os.cpu_count() reports hyperthreads.  Dense linear algebra does not gain
+    from them and contends for the same execution units, so the sibling count
+    is divided out where it can be read.  UTSS_JOBS overrides.
+    """
+    env = os.environ.get("UTSS_JOBS")
+    if env:
+        return max(1, int(env))
+    n = os.cpu_count() or 1
+    try:
+        with open("/sys/devices/system/cpu/cpu0/topology/thread_siblings_list") as fh:
+            sibs = len([s for s in fh.read().strip().replace("-", ",").split(",") if s])
+        n = max(1, n // max(1, sibs))
+    except OSError:
+        n = max(1, n // 2)
+    return max(1, min(n, 4))
+
+
+def _ablation_job(arg):
+    """One ablation, solved end to end in its own process.  Module level so it
+    pickles; see run_ablations for why it is run that way."""
+    name, cal = arg
+    half = C.NLF0416["orifice_pitch"]/2.0
+    ss = C.VALIDATION["SS"]; ss_exp = EXP["SS"]["Re_theta_t"]
+    r = solve_flat_plate(ss["L"], ss["U"], ss["nu"], ss["Tu_pct"], npts=900,
+                         dUe=ss["dUe"], L_turb=ss.get("L_turb"),
+                         cal=(cal or None))
+    ss_err = (100.0*(float(r["Re_theta"][r["i_tr"]]) - ss_exp)/ss_exp
+              if r["i_tr"] is not None else float("nan"))
+    d = run_nlf0416(quiet=True, write=False, cal=(cal or None))
+    inside = int((d.err_c.abs() <= half).sum())
+    return dict(configuration=name,
+                SS_err_pct=round(ss_err, 1),
+                mean_abs_err_c=round(float(np.mean(np.abs(d.err_c))), 4),
+                within_bracket=inside, points=len(d),
+                within_bracket_pct=round(100.0*inside/len(d), 1))
+
+
+def run_ablations(write=True, quiet=False, jobs=None):
     """Re-run the two datasets the natural branch reaches with one closure
     switched off at a time.
 
@@ -793,26 +853,33 @@ def run_ablations(write=True, quiet=False):
     write=False into run_nlf0416, and the flat plate is solved directly.  The
     table this writes is the evidence for the claim that each element earns its
     place, and it is regenerated rather than quoted from memory.
+
+    The four configurations are independent - each is 86 aerofoil solves plus
+    one plate, and none of them reads what another writes - so they are run
+    concurrently.  This is the single most expensive thing in the validation
+    (154 s of the 213 s the stage takes), and it is embarrassingly parallel.
+    The worker count defaults to the PHYSICAL core count, not the logical one:
+    these solves are dense linear algebra on a few hundred square matrices, so
+    hyperthreads add contention rather than throughput, and each worker is held
+    to one BLAS thread for the same reason.  Ordering is restored afterwards so
+    the table does not depend on which worker finished first.
     """
-    half = C.NLF0416["orifice_pitch"]/2.0
-    ss = C.VALIDATION["SS"]; ss_exp = EXP["SS"]["Re_theta_t"]
-    rows = []
-    for name, cal in ABLATIONS:
-        r = solve_flat_plate(ss["L"], ss["U"], ss["nu"], ss["Tu_pct"], npts=900,
-                             dUe=ss["dUe"], L_turb=ss.get("L_turb"),
-                             cal=(cal or None))
-        ss_err = (100.0*(float(r["Re_theta"][r["i_tr"]]) - ss_exp)/ss_exp
-                  if r["i_tr"] is not None else float("nan"))
-        d = run_nlf0416(quiet=True, write=False, cal=(cal or None))
-        inside = int((d.err_c.abs() <= half).sum())
-        rows.append(dict(configuration=name,
-                         SS_err_pct=round(ss_err, 1),
-                         mean_abs_err_c=round(float(np.mean(np.abs(d.err_c))), 4),
-                         within_bracket=inside, points=len(d),
-                         within_bracket_pct=round(100.0*inside/len(d), 1)))
-        if not quiet:
+    order = [n for n, _ in ABLATIONS]
+    if jobs is None:
+        jobs = _default_jobs()
+    if jobs > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(max_workers=jobs,
+                                 initializer=_limit_blas_threads) as ex:
+            rows = list(ex.map(_ablation_job, ABLATIONS))
+    else:
+        rows = [_ablation_job(a) for a in ABLATIONS]
+    rows.sort(key=lambda r: order.index(r["configuration"]))
+    if not quiet:
+        for r in rows:
             print("ablation %-28s S&S %+5.1f%%  mean |err| %.4fc  %d/%d"
-                  % (name, ss_err, rows[-1]["mean_abs_err_c"], inside, len(d)))
+                  % (r["configuration"], r["SS_err_pct"], r["mean_abs_err_c"],
+                     r["within_bracket"], r["points"]))
     out = pd.DataFrame(rows)
     if write:
         out.to_csv(f"{VAL}/ablations.csv", index=False)
