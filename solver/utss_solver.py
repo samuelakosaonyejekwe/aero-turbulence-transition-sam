@@ -509,6 +509,48 @@ def _smooth_gradient(y, x, half=5):
 
 
 
+def _edge_from_cp(Cp, mach, gamma=1.4):
+    """Edge velocity ratio and edge Mach number from the corrected C_p.
+
+    The panel solution returns an INCOMPRESSIBLE surface velocity V and then
+    corrects the pressure with Karman-Tsien.  Taking the edge velocity as that
+    uncorrected V, as this did, leaves the boundary layer running on a
+    different flow from the one the loads are computed from: at M = 0.42 the
+    corrected C_p at the suction peak implies U_e/U_inf = 1.3475 while the
+    march was handed 1.3090, an error of 2.9 per cent in the edge velocity and
+    in its GRADIENT, which is what drives lambda and hence the whole transition
+    kernel.  The pressure was compressible and the boundary layer it fed was
+    not.
+
+    Both follow from the corrected pressure by the isentropic relations, with
+    no new constant.  From C_p,
+
+        p/p_inf = 1 + (gamma/2) M_inf^2 C_p,
+        M_e^2   = (2/(gamma-1)) [ (1 + (gamma-1)/2 M_inf^2)
+                                  (p/p_inf)^(-(gamma-1)/gamma) - 1 ],
+        T_e/T_inf = (1 + (gamma-1)/2 M_inf^2)/(1 + (gamma-1)/2 M_e^2),
+        U_e/U_inf = (M_e/M_inf) sqrt(T_e/T_inf).
+
+    M_e formed this way also fixes a second error: the reference-temperature
+    closures used to be given M_e = U_e/a_inf, the FREE-STREAM speed of sound,
+    when the edge gas is at T_e and the correct divisor is a_e.  Here M_e comes
+    out of the pressure directly and never needs a speed of sound at all.
+
+    As M_inf -> 0 this returns U_e/U_inf = sqrt(1 - C_p) and M_e = 0, so the
+    incompressible cases are untouched.
+    """
+    Cp = np.asarray(Cp, float)
+    if mach <= 1e-6:
+        return np.sqrt(np.maximum(1.0 - Cp, 1e-12)), np.zeros_like(Cp)
+    g = gamma
+    p_ratio = np.maximum(1.0 + 0.5*g*mach*mach*Cp, 1e-6)
+    t0 = 1.0 + 0.5*(g - 1.0)*mach*mach
+    Me2 = np.maximum((2.0/(g - 1.0))*(t0*p_ratio**(-(g - 1.0)/g) - 1.0), 0.0)
+    Me = np.sqrt(Me2)
+    T_ratio = t0/(1.0 + 0.5*(g - 1.0)*Me2)
+    return (Me/mach)*np.sqrt(np.maximum(T_ratio, 1e-12)), Me
+
+
 def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True):
     """Eckert reference-temperature factor for the kinematic viscosity.
 
@@ -538,7 +580,8 @@ def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True):
     return Tstar_Te**(1.0 + omega)
 
 
-def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
+def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
+             Me=None):
     """
     March the boundary layer along one surface.
       s    : arc length from stagnation/leading edge [m]  (increasing)
@@ -570,7 +613,19 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
     dUeds = _smooth_gradient(Ue, s)
 
     # Compressible closures: properties at Eckert's reference temperature.
-    Me = (Ue/a_sound if a_sound > 1e-6 else np.zeros(n))
+    # Edge Mach number.  Supplied by the caller where the inviscid solution
+    # knows it - solve_airfoil gets it from the corrected pressure, see
+    # _edge_from_cp - and otherwise formed from a speed of sound.  Forming it
+    # as U_e/a_inf, which is what the fallback does, uses the FREE-STREAM speed
+    # of sound for gas that is at T_e; it is retained only for callers that
+    # have no pressure field, and is exact at M_inf = 0, which is every
+    # flat-plate case here.
+    if Me is None:
+        Me = (Ue/a_sound if a_sound > 1e-6 else np.zeros(n))
+    else:
+        Me = np.asarray(Me, float)
+        if Me.shape != (n,):
+            raise ValueError("Me must be one value per station")
     nu_l = nu*_ref_temp_nu(Me, laminar=True)      # laminar recovery factor
     nu_t = nu*_ref_temp_nu(Me, laminar=False)     # turbulent recovery factor
 
@@ -1039,10 +1094,21 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
         # without adding a fitted constant to either branch: at the lower edge
         # it is exactly the amplification integral, at the upper edge exactly
         # the correlation, and the crossing of unity moves monotonically
-        # between the two onsets in between.  It is the same weighting the
-        # bypass branch already uses for the flow history of Tu.  The window is
-        # set wider than any case in this study, so no result here is blended
-        # - it is there so that the model is a function rather than a switch.
+        # between the two onsets in between.  The window is set wider than any
+        # case in this study, so no result here is blended - it is there so
+        # that the model is a function rather than a switch.
+        #
+        # The blend is arithmetic in the progress, not geometric.  A geometric
+        # weighting was tried first, to match the one the bypass branch uses
+        # for the flow history of Tu, and it is the wrong tool here: upstream
+        # of the neutral point the amplification integral is legitimately zero,
+        # and a geometric mean with a zero factor is zero at ANY weight, so a
+        # stream at Tu = 0.22 % - almost entirely bypass - was held laminar by
+        # a three per cent share of a branch that had not started amplifying.
+        # It reintroduced a 0.075c step at the upper edge of the window.  With
+        # the arithmetic form each closure contributes in proportion to its
+        # weight, and the onset moves monotonically from the bypass station to
+        # the amplification station as the weight falls.
         if in_bubble:
             p_nat = 0.0
         elif w_bp <= 0.0:
@@ -1050,7 +1116,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
         elif w_bp >= 1.0:
             p_nat = p_bp
         else:
-            p_nat = (max(p_ts, 1e-12)**(1.0 - w_bp))*(max(p_bp, 1e-12)**w_bp)
+            p_nat = (1.0 - w_bp)*p_ts + w_bp*p_bp
 
         # The onset Reynolds number is reported only where a branch that
         # actually produces one is the governing branch; 1e9 was the internal
@@ -1241,16 +1307,18 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     and lower surfaces.  Returns inviscid + viscous results.
     """
     xc, yc, Cp, V, th, S = panel_solve(xb, yb, alpha_deg, mach=mach)
-    # speed of sound implied by the free-stream Mach number; passing it to the
-    # march turns on the compressible (reference-temperature) closures
-    a_snd = (U/mach if (compressible and mach > 1e-6) else 0.0)
+    # Edge velocity and edge Mach number from the CORRECTED pressure, so the
+    # boundary layer runs on the same flow the loads are computed from; see
+    # _edge_from_cp for what taking the uncorrected panel velocity cost.
+    m_eff = (mach if compressible else 0.0)
+    Ue_ratio, Me_all = _edge_from_cp(Cp, m_eff)
     # arc length along surface (control points), find stagnation (Cp max)
     # NB: panel coords are unit-chord -> scale arc length to physical chord
     ds = S
     s_arc = np.concatenate([[0.5*ds[0]], 0.5*ds[0] +
                             np.cumsum(0.5*(ds[:-1]+ds[1:]))]) * chord
     i_stag = int(np.argmax(Cp))
-    Ue_mag = np.abs(V)*U
+    Ue_mag = Ue_ratio*U
 
     # Lower surface : from stagnation backward to start (index 0=TE lower)
     low_idx = np.arange(i_stag, -1, -1)
@@ -1269,7 +1337,7 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     for name, ss, idx in [("upper", s_up, idx_up), ("lower", s_low, idx_low)]:
         Ue_s = np.maximum(Ue_mag[idx], 1e-4)
         r = march_bl(ss, Ue_s, nu, Tu_pct=Tu_pct, sweep_deg=sweep_deg,
-                     cal=cal, a_sound=a_snd)
+                     cal=cal, Me=Me_all[idx])
         r["x"]  = xc[idx]; r["y"] = yc[idx]; r["Cp"] = Cp[idx]
         r["Re_x"] = U*ss/nu
         r["x_tr_chord"] = (float(xc[idx][r["i_tr"]])
