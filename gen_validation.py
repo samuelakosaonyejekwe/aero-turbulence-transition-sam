@@ -553,6 +553,88 @@ def crossflow_criticals(write=True, quiet=False):
     return df, st_df
 
 
+def crossflow_receptivity(write=True, quiet=False):
+    """Why the cross-flow gap cannot be quantified, and what it would take.
+
+    The two swept-wing facilities require critical values of 153 and 234, and
+    the report attributes the difference to receptivity by elimination -
+    stationary cross-flow vortices are seeded by leading-edge roughness, and
+    neither report documents the surface finish.  The natural way to make that
+    quantitative is to express the gap in amplification units, because for a
+    roughness-seeded vortex Delta N = ln(A_0,1/A_0,2) is the ratio of initial
+    amplitudes and so of effective roughness heights.
+
+    That cannot be done with the present branch, and this function is the
+    demonstration.  The rate it integrates is read off a separated STREAMWISE
+    profile at H_REVERSE, and it is nearly Reynolds-independent - 0.0417 at
+    Re_theta = 200 against 0.0461 at 8000 - so
+
+        N_cf  ~  sigma * (run length) / theta  ~  sqrt(Re_c),
+
+    which is a property of the chord Reynolds number and not of the cross-flow
+    instability.  The two facilities differ by a factor of seven in Re_c, so the
+    N they require is not comparable: measured at the transition station each
+    reports, it is 1.6 to 4.8 for Dagenhart & Saric and 3.1 to 121 for Boltz et
+    al., with scatter larger than the difference.
+
+    So the honest statement is narrower than the report's, and firmer.  The gap
+    is a difference in the critical cross-flow REYNOLDS NUMBER, which is
+    internally consistent within each facility - 17.9 and 4.0 per cent - and
+    differs between them by 53 per cent.  It is consistent with a receptivity
+    difference, and it cannot be converted into a roughness ratio by this
+    method, because this method carries no cross-flow instability rate.  Doing
+    that needs the Orr-Sommerfeld problem solved on the Falkner-Skan-Cooke
+    CROSS-FLOW profile rather than on a separated streamwise one - the profile
+    stability.fsc_profile already returns - tabulated the way the streamwise
+    rates in amplification_db.npz are.  That is a well-defined piece of work
+    and it is what would close this, not more data on these two wings.
+    """
+    from utss_solver import _re_theta2
+    rows = []
+    for name, v, geom in (
+            ("Dagenhart & Saric (calibration)", C.SWEPT, NLF415),
+            ("Boltz et al. (independent)", C.SWEPT2, C.SWEPT2["section"])):
+        X, Y = _section_points(geom)
+        swl = (v["sweep_deg"] if isinstance(v["sweep_deg"], list)
+               else [v["sweep_deg"]]*len(v["Re_c"]))
+        all_ = (v["alpha_deg"] if isinstance(v["alpha_deg"], list)
+                else [v["alpha_deg"]]*len(v["Re_c"]))
+        for sw, al, Rec, xm in zip(swl, all_, v["Re_c"], v["x_tr_c"]):
+            U = Rec*v["nu"]/v["chord_m"]
+            cal = dict(CF_N=1e9, A_TS=1e-9, Tu_BP_lo=1e9, Tu_BP_hi=2e9,
+                       bubble=False)
+            r = solve_airfoil(X, Y, al, U, v["nu"], v["chord_m"], v["Tu_pct"],
+                              sweep_deg=sw, cal=cal)
+            u = r["surfaces"]["upper"]
+            x = np.asarray(u["x"], float); k = np.argsort(x)
+            ncf = float(np.interp(xm, x[k], np.asarray(u["n_cf"], float)[k]))
+            nf = bool(r.get("sweep_transform", False))
+            rth = float(np.interp(xm, x[k], np.asarray(u["Re_theta"], float)[k]))
+            rows.append(dict(dataset=name, sweep_deg=sw, Re_c=f"{Rec:.3e}",
+                             x_tr_c_measured=xm,
+                             Re_theta2_required=round(
+                                 float(_re_theta2(rth, sw, CAL["CF_ratio"], nf)), 1),
+                             N_cf_at_measured_station=round(ncf, 2)))
+    df = pd.DataFrame(rows)
+    st = []
+    for nm, d in df.groupby("dataset", sort=False):
+        st.append(dict(dataset=nm,
+                       Re_theta2_mean=round(float(d.Re_theta2_required.mean()), 1),
+                       Re_theta2_cov_pct=round(
+                           100*float(d.Re_theta2_required.std(ddof=1)
+                                     / d.Re_theta2_required.mean()), 1),
+                       N_cf_min=round(float(d.N_cf_at_measured_station.min()), 2),
+                       N_cf_max=round(float(d.N_cf_at_measured_station.max()), 2),
+                       n_points=len(d)))
+    sm = pd.DataFrame(st)
+    if write:
+        df.to_csv(f"{VAL}/crossflow_receptivity.csv", index=False)
+        sm.to_csv(f"{VAL}/crossflow_receptivity_summary.csv", index=False)
+    if not quiet:
+        print(sm.to_string(index=False))
+    return df, sm
+
+
 def residual_diagnostics(write=True, quiet=False):
     """Where the flat-plate residuals come from, measured rather than asserted.
 
@@ -1090,6 +1172,7 @@ if __name__=="__main__":
     df_sw2=run_swept2()
     print(df_sw2.to_string(index=False))
     crossflow_criticals()
+    crossflow_receptivity()
     residual_diagnostics()
     bubble_diagnostics()
     df_nlf=run_nlf0416()
