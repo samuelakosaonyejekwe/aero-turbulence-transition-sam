@@ -23,9 +23,17 @@ Vortex-panel inviscid solution with a Karman–Tsien compressibility correction 
 the Falkner–Skan family, so the shape factor carries its own history) →
 **unified four-mechanism transition kernel**
 (natural/TS · bypass · separation bubble · cross-flow) → Narasimha
-intermittency → Head + Ludwieg–Tillmann turbulent BL evaluated at Eckert's
-reference temperature → Squire–Young drag, swept across the span
+intermittency, with the transitional extent from Dhawan & Narasimha's
+Re_λ = 9 Re_x,t^0.75 → Head + Ludwieg–Tillmann turbulent BL evaluated at
+Eckert's reference temperature → Squire–Young drag, swept across the span
 (strip + cross-flow) for the full 3-D wing.
+
+The transition-length correlation is validated on the flat plates below, which
+span Re_x,t = 6×10⁴ to 1.4×10⁶, and extrapolated on the wing, which transitions
+at 3.7×10⁶.  The extrapolation is not damped — that would add an undeclared
+constant — but what it costs is measured: sweeping the constant over a factor
+of four moves the section drag by a tenth of a count
+(`04_solution/transition_length_sensitivity.csv`).
 
 Two elements are not correlations:
 
@@ -170,16 +178,16 @@ is evaluated there.
 
 | set | critical Re_θ2 | coeff. of variation | points |
 |---|---|---|---|
-| Dagenhart & Saric | 169 | 21.7 % | 6 |
+| Dagenhart & Saric | 165 | 17.2 % | 6 |
 | Boltz et al. | 234 | 4.0 % | 4 |
-| pooled | 195 | 22.1 % | 10 |
+| pooled | 192 | 21.2 % | 10 |
 
 Each facility is internally consistent — Boltz to 4 % across four sweep angles
-and a factor of three in chord Reynolds number — and the two differ by 38 %.
+and a factor of three in chord Reynolds number — and the two differ by 42 %.
 That is the shape of a receptivity difference, not of a criterion with the
 wrong form.  Two attempts to close the gap fail and are recorded rather than
 dropped: the exact Falkner–Skan–Cooke factor K(λ) in place of the constant
-surrogate makes it worse (pooled variation 86 % against 22 %, and the ratio
+surrogate makes it worse (pooled variation 82 % against 21 %, and the ratio
 between the two sets inverts), and giving the cross-flow branch its own
 amplification threshold,
 separate from Mack's, moves the independent set only from 55 % to 51 % as that

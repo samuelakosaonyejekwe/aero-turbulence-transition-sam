@@ -6,7 +6,7 @@ A_CF,1.0,crossflow weight,unity; Arnal C1 criterion
 N_crit,from Tu,e^N amplification factor,"Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored -0.50 (FITTED jointly on S&S and 86 aerofoil pts); 8.18 for Tu<0.08%"
 N_floor,0.5,lower clamp on N_crit at high Tu,clamp; bypass governs there
 Tu_TS_max,0.1,upper Tu for the attached-flow TS branch,complement of the bypass gate
-C_len,6.5,Narasimha transition-length scale,Dhawan-Narasimha (1958)
+C_len,9.0,"transition-length scale, Re_lambda = C_len Re_x_t^0.75",Dhawan & Narasimha (1958) published value; not fitted here
 CF_C1,150.0,crossflow critical Re_theta2,"Arnal et al.; facility-dependent: 150 fits Dagenhart (14.7%), 200 fits Boltz (18.4%)"
 cf_amp,True,"crossflow closed by an amplification integral, not a local threshold",rate computed (0.0435); threshold is the same N_crit; adds no constant
 CF_ratio,0.47,theta2/theta surrogate for crossflow,FITTED on Dagenhart & Saric; independent check in Sec. IV.C

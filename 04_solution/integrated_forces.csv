@@ -1,8 +1,8 @@
 quantity,value,unit
 Section lift coefficient Cl,0.5171,-
-Section profile drag Cd,0.00438,-
-Section Cd (counts),43.8,counts
-Section L/D,118.0,-
+Section profile drag Cd,0.00437,-
+Section Cd (counts),43.7,counts
+Section L/D,118.2,-
 Section lift-curve slope a0 (panel),8.111,1/rad
 Zero-lift incidence a_L0 (panel),-2.185,deg
 Quarter-chord sweep,9.89,deg

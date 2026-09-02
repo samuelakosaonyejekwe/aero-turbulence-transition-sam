@@ -74,7 +74,22 @@ CAL = dict(
                         # overlap makes the e^N branch fire spuriously,
                         # because Mack's relation returns N_crit ~ 3 there
                         # and the envelope method is not calibrated that low.
-    C_len     = 6.5,    # transition-length scaling (Narasimha)
+    C_len     = 9.0,    # Dhawan & Narasimha's transition-length correlation,
+                        # Re_lambda = C_len * Re_x_t^0.75, with Re_x_t formed on
+                        # the streamwise distance from the leading edge (or the
+                        # stagnation point) and the local edge velocity, and
+                        # lambda the distance over which the intermittency goes
+                        # from 0.25 to 0.75.  9.0 is their published value and
+                        # is not fitted here.  An earlier version wrote the
+                        # correlation as 6.5*Re_theta_t^0.8, which returns
+                        # Re_lambda ~ 600 where the ERCOFTAC plates need ~4e4:
+                        # the layer went from fully laminar to fully turbulent
+                        # inside one marching station, and the predicted C_f
+                        # jumped vertically where the measurements climb over
+                        # half a decade of Re_x.  The transition LOCATION was
+                        # unaffected - onset is where the kernel fires, not
+                        # where the blend ends - but everything downstream of
+                        # onset was.
     CF_C1     = 150.0,  # cross-flow C1 critical Re_theta2 (Arnal)
     CF_ratio  = 0.47,   # theta2/theta surrogate; see _re_theta2().
                         # Calibrated on the 45 deg swept NLF(2)-0415
@@ -963,9 +978,13 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0):
 
     s_tr = s[i_tr]; onset_mech = mechanism[i_tr]
     Re_tr = Reth[i_tr]
-    # Narasimha transition length:  Re_lambda = C_len * Re_theta_t^0.8
-    Re_lam_len = cal["C_len"] * max(Re_tr, 1.0)**0.8
+    # Dhawan & Narasimha transition length:  Re_lambda = C_len * Re_x_t^0.75.
+    # Re_x_t is formed on the distance the layer has run - arc length from the
+    # stagnation point, which on a flat plate is x - and on the local edge
+    # velocity, the same convention Re_x carries everywhere else in this work.
     nu_local = nu_t[i_tr]
+    Re_x_tr = max(Ue[i_tr]*s_tr/nu_local, 1.0)
+    Re_lam_len = cal["C_len"] * Re_x_tr**0.75
     # convert Re-length to physical length using local Ue
     lam_len = Re_lam_len*nu_local/max(Ue[i_tr], 1e-6)
 

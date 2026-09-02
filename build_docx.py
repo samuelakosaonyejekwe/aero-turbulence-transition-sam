@@ -489,6 +489,30 @@ table_from_csv("04_solution/integrated_forces.csv", cap="Table 13. Integrated fo
 table_from_csv("04_solution/nlf_vs_turbulent.csv", cap="Table 14. NLF vs fully-turbulent drag.")
 image("05_postprocessing/csv_plots/nlf_vs_turbulent.png", width=5.4,
       cap="Fig. 12. Drag benefit of predicted laminar flow vs fully-turbulent.")
+h2("9.2a  The transition-length closure and what the result owes to it")
+para("The extent of the transitional region is Dhawan and Narasimha's published correlation, "
+ "Re_λ = 9 Re_x,t^0.75, with λ the distance over which the intermittency rises from 0.25 to "
+ "0.75. It is validated here on the flat plates of Section 11.1, which span Re_x,t = 6×10⁴ to "
+ "1.4×10⁶ and on which it reproduces the measured extent of the skin-friction rise to within "
+ "a factor of two — exactly on T3B. An earlier version of this work wrote the correlation as "
+ "6.5 Re_θt^0.8, which returns Re_λ ≈ 600 where those plates require ≈ 4×10⁴: the layer went "
+ "from fully laminar to fully turbulent inside a single marching station, and the predicted "
+ "C_f jumped vertically where the measurements climb over half a decade of Re_x. The "
+ "transition LOCATION was never affected — onset is where the kernel fires, not where the "
+ "blend ends — but everything downstream of onset was.")
+para("The cruise wing transitions at Re_x,t = 3.7×10⁶, a factor of three beyond the range the "
+ "correlation is validated over here, and it then returns a transitional zone of about a "
+ "third of the chord, which is longer than a real natural-laminar-flow section shows at this "
+ "Reynolds number. That extrapolation is not damped: doing so would add an undeclared "
+ "constant to a method whose claim is that it has none. What it costs is measured instead. "
+ "Sweeping the constant over a factor of four moves the section drag by a tenth of a count, "
+ "so no reported drag in this study depends on the extrapolated part of the closure; beyond "
+ "twice the published value the layer no longer completes transition before the trailing "
+ "edge, and there it would.")
+table_from_csv("04_solution/transition_length_sensitivity.csv",
+               cap="Table 14a. Sensitivity of the case-study result to the transition-length "
+                   "constant (transition_length_sensitivity.csv).")
+
 h2("9.3  Surface distributions — cruise")
 for f,c in [("cruise_Cp","Fig. 13. Pressure coefficient C_p — cruise."),
             ("cruise_Cf","Fig. 14. Skin-friction C_f and laminar run — cruise."),
@@ -613,15 +637,15 @@ para("The cross-flow coefficient is set on the first of these two experiments an
 para("What each experiment requires of the criterion is measured rather than asserted "
  "(Table 25). The march is run with every branch disabled so that it reaches the measured "
  "transition station, and the criterion is evaluated there. Dagenhart & Saric require a "
- "critical Re_θ2 of 169 with a 21.7 % coefficient of variation over six chord Reynolds "
+ "critical Re_θ2 of 165 with a 17.2 % coefficient of variation over six chord Reynolds "
  "numbers; Boltz et al. require 234 with 4.0 % over four sweep angles and a factor of three in chord "
  "Reynolds number. Each facility is therefore internally consistent — the second markedly so — "
- "and the two differ by 38 %. That is the shape of a receptivity difference rather than of a "
+ "and the two differ by 42 %. That is the shape of a receptivity difference rather than of a "
  "criterion with the wrong form: stationary cross-flow vortices are seeded by leading-edge "
  "roughness, and neither report documents the surface finish. Two attempts to close the gap "
  "fail and are recorded rather than dropped. Replacing the constant surrogate by the exact "
  "Falkner-Skan-Cooke factor K(λ) makes matters worse, taking the pooled coefficient of "
- "variation from 22 to 86 % and inverting the ratio between the two sets. Giving the "
+ "variation from 21 to 82 % and inverting the ratio between the two sets. Giving the "
  "cross-flow branch its own "
  "amplification threshold, separate from the one Mack's relation supplies for "
  "Tollmien-Schlichting waves — which is defensible, since a stationary cross-flow vortex is "

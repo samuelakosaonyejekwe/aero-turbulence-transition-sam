@@ -330,6 +330,44 @@ def _lifting_line_check():
     return True
 
 
+def transition_length_sensitivity():
+    """What the case-study drag owes to the transition-length closure.
+
+    The length is Dhawan & Narasimha's published correlation,
+    Re_lambda = 9 Re_x_t^0.75, and it is validated here on flat plates spanning
+    Re_x_t = 6e4 to 1.4e6, where it reproduces the measured extent of the
+    skin-friction rise to within a factor of two.  The cruise wing transitions
+    at Re_x_t = 3.7e6, a factor of three beyond that range, and the correlation
+    then returns a transitional zone of a third of the chord - longer than a
+    real natural-laminar-flow section shows at this Reynolds number.
+
+    Rather than damp the correlation, which would add an undeclared constant to
+    a method whose claim is that it has none, the consequence is measured: the
+    constant is swept over a factor of four and the section drag recorded.  It
+    moves by a tenth of a count, so the reported drag does not depend on the
+    part of the closure that is extrapolated.  Beyond twice the published value
+    the layer no longer completes transition before the trailing edge, and
+    there the closure does matter; that bound is reported too.
+    """
+    X,Y=C.nlf16_panel_points(130); rows=[]
+    for c in (2.25, 4.5, 9.0, 18.0, 36.0):
+        r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
+                        cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
+                        mach=cr["mach"],cal=dict(C_len=c))
+        u=r["surfaces"]["upper"]; g=u["gamma"]; x=u["x"]
+        i0=int(np.argmax(g>1e-6))
+        done=bool((g>=0.99).any())
+        i1=int(np.argmax(g>=0.99)) if done else None
+        rows.append(dict(C_len=c,
+            multiple_of_published=round(c/CAL["C_len"],2),
+            Cd_counts=round(r["Cd"]*1e4,2),
+            x_tr_c_upper=round(float(u["x_tr_chord"]),3),
+            transitional_extent_pct_chord=(round(100*(x[i1]-x[i0]),1) if done else None),
+            completes_before_TE=done))
+    df=pd.DataFrame(rows); df.to_csv(f"{SOL}/transition_length_sensitivity.csv",index=False)
+    return df
+
+
 def integrated_forces(rc):
     q=cr["q_inf"]; S=W["area_S"]
     ll=lifting_line()
@@ -376,8 +414,10 @@ if __name__=="__main__":
     bl_profiles(rc)
     nvt,cdn,cdt=nlf_vs_turbulent(rc)
     integrated_forces(rc)
+    tls=transition_length_sensitivity()
     print("=== TRANSITION SUMMARY ==="); print(ts.to_string(index=False))
     print("\n=== NLF vs TURBULENT ==="); print(nvt.to_string(index=False))
+    print("\n=== TRANSITION-LENGTH SENSITIVITY ==="); print(tls.to_string(index=False))
     print(f"\nCruise: Cl={rc['Cl']:.3f} Cd={rc['Cd']*1e4:.1f}cts  "
           f"Drag saving={ (cdt-cdn)/cdt*100:.1f}%")
     print("solution files:", sorted([f for f in os.listdir(SOL) if f.endswith('.csv')]))

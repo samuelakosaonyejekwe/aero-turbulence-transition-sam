@@ -76,7 +76,7 @@ EQS = [
  ("E15","4.4  Transitional & turbulent boundary layer","Narasimha universal intermittency",
    r"\gamma(x) = 1 - \exp\left[-0.412\,\xi^{2}\right], \quad \xi = \frac{x-x_t}{\lambda_{tr}}"),
  ("E16","4.4  Transitional & turbulent boundary layer","Transition-length scale",
-   r"\lambda_{tr} \sim \frac{\nu}{U_e} C_{len}\, Re_{\theta t}^{0.8}"),
+   r"\lambda_{tr} = \frac{\nu}{U_e} C_{len}\, Re_{x,t}^{0.75}, \quad C_{len} = 9"),
  ("E17","4.4  Transitional & turbulent boundary layer","Intermittency-weighted property blend",
    r"\phi = (1-\gamma)\phi_{lam} + \gamma\,\phi_{turb}"),
  ("E18","4.4  Transitional & turbulent boundary layer","Head entrainment (turbulent)",

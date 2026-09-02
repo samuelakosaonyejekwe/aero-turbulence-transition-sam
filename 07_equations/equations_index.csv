@@ -20,7 +20,7 @@ E12b,4.3  Unified transition kernel (novel),Separation bubble: reattachment cond
 E13,4.3  Unified transition kernel (novel),Unified minimum-onset transition kernel,"Re_{\theta t}^{*} = \min\left(a_{TS}Re_{\theta t}^{TS},\, a_{BP}Re_{\theta t}^{BP},\, a_{SEP}Re_{\theta t}^{SEP},\, a_{CF}Re_{\theta t}^{CF}\right)"
 E14,4.3  Unified transition kernel (novel),Transition trigger,Re_\theta(x_t) \ge Re_{\theta t}^{*}
 E15,4.4  Transitional & turbulent boundary layer,Narasimha universal intermittency,"\gamma(x) = 1 - \exp\left[-0.412\,\xi^{2}\right], \quad \xi = \frac{x-x_t}{\lambda_{tr}}"
-E16,4.4  Transitional & turbulent boundary layer,Transition-length scale,"\lambda_{tr} \sim \frac{\nu}{U_e} C_{len}\, Re_{\theta t}^{0.8}"
+E16,4.4  Transitional & turbulent boundary layer,Transition-length scale,"\lambda_{tr} = \frac{\nu}{U_e} C_{len}\, Re_{x,t}^{0.75}, \quad C_{len} = 9"
 E17,4.4  Transitional & turbulent boundary layer,Intermittency-weighted property blend,"\phi = (1-\gamma)\phi_{lam} + \gamma\,\phi_{turb}"
 E18,4.4  Transitional & turbulent boundary layer,Head entrainment (turbulent),"\frac{d(\theta H_1)}{dx} = C_E - \frac{\theta H_1}{U_e}\frac{dU_e}{dx}, \quad C_E = 0.0306(H_1-3)^{-0.6169}"
 E19,4.4  Transitional & turbulent boundary layer,Ludwieg-Tillmann skin-friction law,"C_f = 0.246 \times 10^{-0.678 H}\, Re_\theta^{-0.268}"
