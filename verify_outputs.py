@@ -19,6 +19,7 @@ only one of the two that sees what a reader sees.  Exits non-zero on any
 failure so it can be wired into a build.
 """
 import os
+import re
 import sys
 import pandas as pd
 
@@ -100,6 +101,20 @@ def main():
 
     want, present, absent = checks()
     bad = 0
+
+    # Captions must be numbered in the order they appear.  Hand numbering had
+    # drifted to presenting Fig. 8a and 8b before Fig. 1, and Table 20a after
+    # Table 24; build_docx now allocates in document order, and this keeps it
+    # that way.
+    for kind, pat in (("Figure", r"Fig\.\s*(\d+)\."),
+                      ("Table", r"Table\s*(\d+)\.")):
+        seq = [int(m.group(1)) for m in re.finditer(r"(?m)^\s*" + pat, txt)]
+        ok = bool(seq) and seq == list(range(1, len(seq)+1))
+        bad += not ok
+        print("  %-8s %s numbering: %d captions, %s"
+              % ("OK" if ok else "FAIL", kind, len(seq),
+                 "1..%d in order" % len(seq) if ok else "out of order: %s" % seq[:20]))
+
     for label, value in want:
         ok = value in txt
         bad += not ok
