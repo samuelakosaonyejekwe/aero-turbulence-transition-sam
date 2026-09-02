@@ -52,10 +52,10 @@ Two elements are not correlations:
 * **Separation-bubble closure.** The shear layer is carried across the dead-air
   region by the same two integral equations as the attached layer with the wall
   shear set to zero, so the shape factor keeps growing through the plateau
-  (3.34 → 3.44 on T3C4, Re_θ 255 → 274); reattachment is placed where the
+  (3.34 → 3.44 on T3C4, Re_θ 255 → 271); reattachment is placed where the
   disturbance has amplified by the same N_crit used elsewhere, so the bubble
-  length scales with the disturbance environment (≈40 θ_s at Tu = 2.1 %,
-  ≈180 θ_s at Tu = 0.03 %). The amplification rate is **not fitted**: it is read
+  length scales with the disturbance environment (≈42 θ_s at Tu = 2.1 %,
+  ≈226 θ_s at Tu = 0.03 %). The amplification rate is **not fitted**: it is read
   from the reverse-flow branch of the tabulated family, which returns 0.0435 at
   Re_θ = 400 (0.042–0.045 over the range these bubbles span). The shape factor
   itself is marched on the *attached* branch and bounded by its separation value

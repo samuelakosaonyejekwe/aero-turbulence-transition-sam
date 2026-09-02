@@ -385,8 +385,9 @@ para("Two elements of the formulation are not correlations. The amplification ra
  "2.59129 and a wall shear parameter f''(0) = 0.46960. At run time the cost is a table lookup, "
  "so the sub-second solution is preserved. The second is the separation-bubble closure "
  "described above, whose length scales with the disturbance environment and therefore spans "
- "measured bubbles from about 40 momentum thicknesses at 2.1 % free-stream turbulence to about "
- "180 at 0.03 %.")
+ "measured bubbles from about 42 momentum thicknesses at 2.1 % free-stream turbulence to a "
+ "median of 226 at 0.03 %, a spread of five and a half that no fixed multiple of θ_s "
+ "reproduces.")
 
 # ======================================================================
 h1("4.  The UTSS Universal Solver — Governing Equations")
