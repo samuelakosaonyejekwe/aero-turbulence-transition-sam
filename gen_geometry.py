@@ -11,7 +11,8 @@ Outputs (01_geometry/):
 import os, sys
 import numpy as np
 import pandas as pd
-sys.path.insert(0, "solver")
+import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
+                   # sys.path, so this script works from any directory
 import case_config as C
 from utss_solver import panel_solve
 from uplot import apply_style, INK, INK_SOFT, PALETTE, finish
@@ -148,10 +149,17 @@ def finish_dwg(fig, path):
 # ======================================================================
 def build_geometry():
     co = C.nlf16_coords(n=160)
+    # Rounded to the precision these quantities are meaningful to, the same
+    # convention run_solution.py states and every table in the report relies
+    # on.  Written raw, this file put seventeen-significant-figure numbers
+    # straight into the document - the report carried 202 of them - and its
+    # last bits moved with the BLAS thread count, so a regeneration that
+    # changed nothing physical still produced a different file.
     df_af = pd.DataFrame({
-        "x_c": co["x"], "y_camber": co["yc"], "half_thickness": co["yt"],
-        "x_upper": co["xu"], "y_upper": co["yu"],
-        "x_lower": co["xl"], "y_lower": co["yl"]})
+        "x_c": co["x"].round(6), "y_camber": co["yc"].round(6),
+        "half_thickness": co["yt"].round(6),
+        "x_upper": co["xu"].round(6), "y_upper": co["yu"].round(6),
+        "x_lower": co["xl"].round(6), "y_lower": co["yl"].round(6)})
     df_af.to_csv(f"{GEO}/airfoil_UTSS-NLF16.csv", index=False)
 
     W = C.WING
@@ -162,10 +170,13 @@ def build_geometry():
     x_te = x_le + chord
     twist = eta*W["twist_tip_deg"]
     z_dih = y*np.tan(np.radians(W["dihedral_deg"]))
-    df_pl = pd.DataFrame({"eta": eta, "y_m": y, "chord_m": chord,
-                          "x_le_m": x_le, "x_te_m": x_te,
-                          "twist_deg": twist, "z_dihedral_m": z_dih,
-                          "Re_local": C.CRUISE["U_inf"]*chord/C.CRUISE["nu_inf"]})
+    df_pl = pd.DataFrame({"eta": eta.round(4), "y_m": y.round(4),
+                          "chord_m": chord.round(4),
+                          "x_le_m": x_le.round(4), "x_te_m": x_te.round(4),
+                          "twist_deg": twist.round(3),
+                          "z_dihedral_m": z_dih.round(4),
+                          "Re_local": (C.CRUISE["U_inf"]*chord
+                                       / C.CRUISE["nu_inf"]).round(-2)})
     df_pl.to_csv(f"{GEO}/wing_planform.csv", index=False)
 
     # 3D lofted surface (sampled)

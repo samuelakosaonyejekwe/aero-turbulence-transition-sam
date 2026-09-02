@@ -25,7 +25,8 @@ sources.
 """
 import os, sys
 import numpy as np, pandas as pd
-sys.path.insert(0,"solver")
+import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
+                   # sys.path, so this script works from any directory
 import case_config as C
 from utss_solver import solve_flat_plate, solve_airfoil, panel_solve, CAL
 from uplot import apply_style, INK, INK_SOFT, PALETTE, new_fig, finish
@@ -132,11 +133,16 @@ def run_validation():
         # the ERCOFTAC tables define Re_x on the LOCAL free-stream velocity,
         # so form it the same way; identical to U*x/nu on the ZPG plates
         rex=float(r["Ue"][it])*r["x_tr"]/v["nu"]
-        dfs=pd.DataFrame({"Re_x":r["Re_x"],"Cf_solver":r["Cf"],
-                          "Cf_laminar_blasius":r["Cf_lam_ref"],
-                          "Cf_turbulent_ref":r["Cf_turb_ref"],
-                          "intermittency_gamma":r["gamma"],
-                          "Re_theta":r["Re_theta"]})
+        # Rounded to the precision these quantities are meaningful to, the
+        # same convention run_solution.py states.  Written raw these five files
+        # carried some 23,000 seventeen-figure numbers, and the report samples
+        # rows out of them.
+        dfs=pd.DataFrame({"Re_x":np.round(r["Re_x"],0),
+                          "Cf_solver":np.round(r["Cf"],7),
+                          "Cf_laminar_blasius":np.round(r["Cf_lam_ref"],7),
+                          "Cf_turbulent_ref":np.round(r["Cf_turb_ref"],7),
+                          "intermittency_gamma":np.round(r["gamma"],5),
+                          "Re_theta":np.round(r["Re_theta"],2)})
         dfs.to_csv(f"{VAL}/solver_{key}.csv",index=False)
         err=None
         if ex["Cf"] is not None:

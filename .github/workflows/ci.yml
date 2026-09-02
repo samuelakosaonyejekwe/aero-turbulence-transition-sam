@@ -1,0 +1,81 @@
+name: checks
+
+# The self-checks in this project were three __main__ blocks run by hand.  They
+# are worth running, and nothing made anyone run them: a commit that broke the
+# march's output contract, or a rename that left a generator reading a column
+# that no longer exists, would be found by whoever next spent four minutes on a
+# full regeneration.  tools/smoke.py finds both in seven seconds, so it runs on
+# every push.
+#
+# The full regeneration is NOT run here.  It needs the Falkner-Skan families and
+# the amplification database, which take about seven minutes to build on two
+# cores, and it writes 40-odd figures; that belongs on the machine the results
+# are published from, not in CI.  What CI guards is that the code still holds
+# together and that the committed CSVs still say what the committed document
+# says.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the pinned environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Cache the Falkner-Skan families
+        # Deterministic functions of the source, so they are keyed on it.  The
+        # amplification database is committed; these two are not, because they
+        # rebuild in fourteen seconds - but not on every job if we can help it.
+        uses: actions/cache@v4
+        with:
+          path: |
+            solver/falkner_skan_family.npz
+            solver/falkner_skan_reverse.npz
+          key: fs-family-${{ hashFiles('solver/stability.py') }}
+
+      - name: Solver and stability self-tests
+        run: |
+          python solver/stability.py
+          python solver/utss_solver.py
+
+      - name: Smoke checks
+        run: python tools/smoke.py
+
+      - name: Report agrees with the CSVs
+        # The committed PDF against the committed CSVs.  This is what catches a
+        # number edited in one place and not the other.
+        run: python verify_outputs.py
+
+      - name: Generators still run
+        # Cheap stages only - geometry, equations and the model setup - which
+        # between them import every module and exercise the writers without
+        # spending the four minutes the validation sweep costs.
+        run: |
+          python tools/pipeline.py --no-smoke --jobs 2 \
+            --stages geometry,equations,mesh
+
+      - name: Nothing regenerated differently
+        # The cheap stages are deterministic, so a clean tree here is a real
+        # signal.  It is also the check that would have caught the CSVs being
+        # written at full float64, whose last bits moved with the BLAS thread
+        # count and made every regeneration a new blob.
+        run: |
+          git diff --stat
+          git diff --quiet || {
+            echo "::error::a generator did not reproduce its committed output"
+            exit 1
+          }
