@@ -159,7 +159,7 @@ def pressure_field(cond,name):
     np.savez(f"{SOL}/field_pressure_{name}.npz",Xg=Xg,Yg=Yg,Cp=Cp,Vx=Vx,Vy=Vy,spd=spd)
     return df
 
-def bl_profiles(rc):
+def bl_profiles(rc, write=True):
     """Wall-normal velocity and temperature profiles at four chordwise stations.
 
     The march carries theta and the shape factor at every station, so the
@@ -238,7 +238,14 @@ def bl_profiles(rc):
                 recovery_r=round(float(r_rec),4),
                 delta_mm=round(delta*1e3,4),
                 intermittency_gamma=round(gam,3),state=s["state"][i]))
-    df=pd.DataFrame(rows); df.to_csv(f"{SOL}/bl_profiles_cruise.csv",index=False)
+    df=pd.DataFrame(rows)
+    # Only a run at the shipped settings may overwrite the committed result.
+    # tools/smoke.py exercises this routine on a reduced panel count, and a
+    # check that mutates the repository is not a check - the first full gate
+    # after it was added showed this file dirty for no reason anyone had asked
+    # for.  The same guard run_nlf0416 already carries.
+    if write:
+        df.to_csv(f"{SOL}/bl_profiles_cruise.csv",index=False)
     return df
 
 def nlf_vs_turbulent(rc):
