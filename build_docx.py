@@ -590,6 +590,15 @@ for f,c in [("climb_Cp","Pressure coefficient C_p — climb."),
             ("compare_cruise_climb_Cf","C_f cruise vs climb — regime-dependent transition.")]:
     image(f"05_postprocessing/csv_plots/{f}.png", width=5.8, cap=c)
 h2("9.5  Aerodynamic polars")
+para("The polar carries θ_TE/c, the trailing-edge momentum thickness as a fraction of chord, "
+ "because that is the assumption Squire-Young rests on and it is the quantity that bounds "
+ "where the drag can be believed. Over the sweep it stays below 0.009, so the thin-layer "
+ "assumption holds throughout. Outside the incidence envelope it does not merely degrade: "
+ "at 16° and a chord Reynolds number of 2×10⁵ the march returns a momentum thickness of 1.34 "
+ "chords and the formula duly returns C_d = 1.22, which is bluff-body drag from an aerofoil "
+ "method. A layer thicker than the body is long is arithmetic that has stopped meaning "
+ "anything rather than a marginal case, so the solver now returns no drag there instead of a "
+ "number. Within the envelope and Reynolds range of this study the test never fires.")
 table_from_csv("04_solution/aero_polar.csv", cap="Aerodynamic polar (aero_polar.csv).")
 image("05_postprocessing/csv_plots/aero_polar.png", width=6.3,
       cap="Lift curve, drag polar, L/D and transition vs angle of attack.")

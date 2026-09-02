@@ -69,6 +69,8 @@ def aero_polar():
         u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
         rows.append(dict(alpha_deg=a, Cl=round(r["Cl"],4), Cd=round(r["Cd"],5),
             L_over_D=round(r["Cl"]/max(r["Cd"],1e-9),1),
+            # the thin-layer assumption Squire-Young rests on, made visible
+            theta_te_c=round(r["theta_te_c"],5),
             xtr_upper_c=round(u["x_tr_chord"],3) if u["x_tr_chord"]==u["x_tr_chord"] else 1.0,
             xtr_lower_c=round(l["x_tr_chord"],3) if l["x_tr_chord"]==l["x_tr_chord"] else 1.0))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/aero_polar.csv",index=False)
