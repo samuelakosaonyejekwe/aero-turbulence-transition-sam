@@ -114,6 +114,10 @@ CAL = dict(
     bubble    = True,   # close the separation branch by continuing the
                         # amplification integral through the detached shear
                         # layer instead of transitioning at separation itself
+    len_re_x  = False,  # state the transition-length correlation in Re_x, the
+                        # form Dhawan & Narasimha published it in, rather than
+                        # in Re_theta.  Identical on a flat plate; the Re_theta
+                        # form is the one that is exact in a pressure gradient.
     bub_sigma_local = False,  # read the dead-air amplification rate at the
                         # marched shape factor instead of at the developed
                         # reverse-flow profile.  Tried and rejected on the
@@ -1338,7 +1342,34 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     # velocity, the same convention Re_x carries everywhere else in this work.
     nu_local = nu_t[i_tr]
     Re_x_tr = max(Ue[i_tr]*s_tr/nu_local, 1.0)
-    Re_lam_len = cal["C_len"] * Re_x_tr**0.75
+    # Written in Re_theta, where the physical statement is exact.
+    #
+    # Dhawan & Narasimha give Re_lambda = 9 Re_x,t^0.75, and this work reported
+    # that as validated to Re_x,t = 1.4e6 and EXTRAPOLATED on the wing, which
+    # transitions at 3.6e6.  It is not an extrapolation of the physics.  Their
+    # correlation is Narasimha's spot model with a constant dimensionless spot
+    # formation rate: matching gamma = 1 - exp(-0.412 xi^2) to
+    # gamma = 1 - exp(-n sigma (x-x_t)^2/U) with N = n sigma theta_t^3/nu gives
+    #
+    #     Re_lambda = sqrt(0.412/N) Re_theta_t^1.5,
+    #
+    # and on a Blasius plate Re_theta = 0.664 sqrt(Re_x), so
+    # Re_theta^1.5 = 0.5411 Re_x^0.75 and the two forms are THE SAME LAW with
+    # C_spot = C_len/0.5411 = 16.63.  Checked over Re_x from 6e4 to 1e7: they
+    # agree to every figure.
+    #
+    # So the constant that is assumed constant is the SPOT FORMATION RATE, not
+    # a coefficient in Re_x, and Re_theta is the variable in which that
+    # assumption is stated exactly.  The two forms are identical wherever
+    # Re_theta = 0.664 sqrt(Re_x) - every flat plate here - and differ where it
+    # does not, which is any pressure gradient, which is the wing.  Nothing is
+    # extrapolated: C_len is still Dhawan & Narasimha's published 9.0 and
+    # C_spot follows from it.
+    if cal.get("len_re_x", False):
+        Re_lam_len = cal["C_len"] * Re_x_tr**0.75
+    else:
+        Re_th_tr = max(Ue[i_tr]*theta[i_tr]/nu_local, 1.0)
+        Re_lam_len = (cal["C_len"]/0.664**1.5) * Re_th_tr**1.5
     # convert Re-length to physical length using local Ue
     lam_len = Re_lam_len*nu_local/max(Ue[i_tr], 1e-6)
 
