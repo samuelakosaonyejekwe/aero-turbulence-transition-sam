@@ -731,10 +731,19 @@ table_from_csv("06_validation/aerofoil_nlf0416.csv", max_rows=30, sample=True,
                    "(aerofoil_nlf0416.csv, sampled).")
 
 h2("11.3  Swept wings — the cross-flow branch")
+# read out of the CSVs rather than typed: these three numbers were left at
+# 14.7 / 51.7 / 18.4 after the swept sections began being solved in the plane
+# normal to the leading edge, and nothing checked them
+_sw1 = pd.read_csv("06_validation/swept_wing_crossflow.csv")
+_sw2 = pd.read_csv("06_validation/swept_wing_independent.csv")
+_e_cal  = float(_sw1.err_pct.abs().mean())
+_e_ind  = float(_sw2.err_pct_C1_150.abs().mean())
+_e_ind2 = float(_sw2.err_pct_C1_200.abs().mean())
 para("The cross-flow coefficient is set on the first of these two experiments and nothing is "
  "calibrated on the second, which is a different facility, section and era. The branch "
- "reproduces the calibration set to 14.7 % at the frozen constant C1 = 150. On the "
- "independent set that same constant gives 51.7 %, and C1 = 200 gives 18.4 % — so the "
+ "reproduces the calibration set to " + ("%.1f" % _e_cal) + " % at the frozen constant "
+ "C1 = 150. On the independent set that same constant gives " + ("%.1f" % _e_ind) +
+ " %, and C1 = 200 gives " + ("%.1f" % _e_ind2) + " % — so the "
  "criterion has the right functional form on both wings but not one critical value that "
  "serves both. The independent set is therefore tabulated at BOTH ends of that band: "
  "reporting only C1 = 150 understates what the criterion does here, and reporting only "
@@ -883,7 +892,7 @@ para("One explanation can be ruled out rather than merely doubted. If the differ
  "facility as it does between them. It does not. Within Dagenhart & Saric the required "
  "critical value FALLS steeply with chord Reynolds number, by 251 per decade with a "
  "correlation of −0.88 over a factor of two in Re_c; Boltz et al. sit at six times that "
- "Reynolds number and require 42 % MORE, not less, and are themselves flat across a factor "
+ "Reynolds number and require 53 % MORE, not less, and are themselves flat across a factor "
  "of three. The between-facility offset therefore has the opposite sign to the "
  "within-facility trend, and no monotone function of Re_c can carry one set into the other. "
  "That is what leaves receptivity — the leading-edge surface finish neither report "
@@ -896,8 +905,9 @@ para("Two numbers in this section have to be reconciled or they look inconsisten
  "EFFECTIVE critical value at the predicted station is higher than C1. Measured at the four "
  "Boltz conditions it is 157 for C1 = 150 and 209 for C1 = 200 — the integral adds about "
  "5 %, not the 17 % that would be needed to reach 234. That residual 12 % is precisely why "
- "the upper end of the band still leaves an 18.4 % error in location on the independent set, "
- "and it is the honest reason the band is offered as a bound rather than as a value.")
+ "the upper end of the band still leaves a " + ("%.1f" % _e_ind2) + " % error in location "
+ "on the independent set, and it is the honest reason the band is offered as a bound rather "
+ "than as a value.")
 table_from_csv("06_validation/crossflow_reynolds_trend.csv",
                cap="The required critical value against chord Reynolds number "
                    "within each facility (crossflow_reynolds_trend.csv). The trends have "

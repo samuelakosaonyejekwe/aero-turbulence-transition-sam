@@ -222,8 +222,8 @@ Boltz et al. digitised from NACA TN D-338:
 
 | set | C1 = 150 (frozen constant) | C1 = 200 |
 |---|---|---|
-| Dagenhart & Saric — calibration | **21.8 %** | — |
-| Boltz et al. — independent | 51.1 % | **16.9 %** |
+| Dagenhart & Saric — calibration | **22.0 %** | — |
+| Boltz et al. — independent | 51.1 % | **17.6 %** |
 
 Both columns of the independent set are computed and tabulated by
 `gen_validation.py` into `06_validation/swept_wing_independent.csv`; the spread
