@@ -840,13 +840,17 @@ def plot_nlf0416(df=None):
                         color=col, mec=INK_SOFT, lw=0, elinewidth=1.1,
                         capsize=2.5, ecolor=col, alpha=0.95,
                         label=f"measured, {surf}")
-            # The line is broken at conditions outside the incidence envelope of
-            # an attached-flow formulation: beyond about 8.5 deg the laminar
-            # layer separates within a few per cent of chord on this section.
-            # Those points remain in every error statistic reported; they are
-            # only excluded from the polyline, which would otherwise sweep
+            # The line is broken where the METHOD declares the condition - a
+            # burst bubble or a leading-edge bubble - rather than at a typed
+            # incidence.  An earlier version also broke it beyond 8.5 deg and
+            # the report then narrated that number as the formulation's
+            # incidence envelope, which the data do not support: the envelope
+            # is not symmetric, the method handles this section down to
+            # -12.04 deg without complaint, and it declares its first condition
+            # at -9.54 deg.  Those points remain in every error statistic; they
+            # are only excluded from the polyline, which would otherwise sweep
             # across the panel and misrepresent the trend.
-            out = d.degenerate | (d.alpha_deg.abs() > 8.5)
+            out = d.degenerate
             good = d[~out]
             ax.plot(good.x_tr_c_pred, good.c_l_exp, "-", lw=2.0, color=col,
                     alpha=0.85, label=f"UTSS, {surf}")
@@ -867,7 +871,7 @@ def plot_nlf0416(df=None):
     handles, labels = axes[0, 0].get_legend_handles_labels()
     handles.append(Line2D([], [], color=PALETTE[2], marker="x", ms=7, mew=1.6,
                           lw=0))
-    labels.append("declared: burst or leading-edge bubble,\nor outside ±8.5°")
+    labels.append("declared: burst or leading-edge bubble")
     axes[0, 0].legend(handles, labels, loc="upper left", fontsize=8,
                       framealpha=0.9)
     fig.suptitle("NLF(1)-0416 transition location, M = 0.10  —  "
