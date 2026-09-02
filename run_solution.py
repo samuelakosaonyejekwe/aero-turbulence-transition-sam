@@ -19,12 +19,20 @@ def run_case(cond, name):
                     mach=cond["mach"])
     for surf in ["upper","lower"]:
         s=r["surfaces"][surf]
+        # Rounded to the precision these quantities are meaningful to, as
+        # every other CSV in this project is.  Unrounded, a Reynolds number
+        # went into the report's sampled state tables as 1891858.3232883876.
         df=pd.DataFrame({
-            "x_c":s["x"], "arc_s_m":s["s"], "Re_x":s["Re_x"],
-            "Cp":s["Cp"], "Ue_ms":s["Ue"], "Ue_Uinf":s["Ue"]/cond["U_inf"],
-            "theta_mm":s["theta"]*1e3, "H_shape":s["H"],
-            "Cf":s["Cf"], "Re_theta":s["Re_theta"],
-            "Re_theta_trans":s["Re_theta_t"], "intermittency_gamma":s["gamma"],
+            "x_c":s["x"].round(6), "arc_s_m":s["s"].round(6),
+            "Re_x":s["Re_x"].round(0),
+            "Cp":s["Cp"].round(5), "Ue_ms":s["Ue"].round(4),
+            "Ue_Uinf":(s["Ue"]/cond["U_inf"]).round(5),
+            "theta_mm":(s["theta"]*1e3).round(5), "H_shape":s["H"].round(4),
+            "Cf":s["Cf"].round(7), "Re_theta":s["Re_theta"].round(2),
+            "Re_theta_trans":np.round(s["Re_theta_t"],1),
+            "n_factor":np.round(s["n_factor"],4),
+            "n_crit":np.round(s["n_crit"],3),
+            "intermittency_gamma":s["gamma"].round(5),
             "state":s["state"]})
         df.to_csv(f"{SOL}/surface_{name}_{surf}.csv",index=False)
     return r
