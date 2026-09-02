@@ -429,9 +429,16 @@ def crossflow_criticals(write=True, quiet=False):
         x = np.asarray(u["x"], float); k = np.argsort(x)
         Rt = float(np.interp(x_meas, x[k], np.asarray(u["Re_theta"], float)[k]))
         lm = float(np.interp(x_meas, x[k], np.asarray(u["lam"], float)[k]))
+        # The march runs in the plane normal to the leading edge, so Re_theta
+        # comes back as Re_theta,n and the sweep factor is sin(L), not
+        # sin(L)cos(L).  Evaluating the criterion here in a different frame
+        # from the one the march used is a factor of cos(L) - 0.64 at 50 deg -
+        # between the diagnostic and the model it is meant to diagnose.
+        nf = bool(r.get("sweep_transform", False))
         L = np.radians(sw)
-        return (Rt, _re_theta2(Rt, sw, CAL["CF_ratio"]),
-                Rt*np.sin(L)*np.cos(L)*_st.crossflow_factor(lm))
+        sf = np.sin(L) if nf else np.sin(L)*np.cos(L)
+        return (Rt, _re_theta2(Rt, sw, CAL["CF_ratio"], nf),
+                Rt*sf*_st.crossflow_factor(lm))
 
     rows = []
     v1 = C.SWEPT; X1, Y1 = _section_points(NLF415)

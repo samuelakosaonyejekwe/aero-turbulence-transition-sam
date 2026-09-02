@@ -313,17 +313,35 @@ def _dn_dReth(H):
     return 0.01*np.sqrt(a*a + 0.25)
 
 
-def _re_theta2(Re_theta, sweep_deg, ratio):
+def _re_theta2(Re_theta, sweep_deg, ratio, normal_frame=False):
     """Cross-flow momentum-thickness Reynolds number, algebraic surrogate.
 
     A three-dimensional boundary-layer solution is not carried, so the
-    cross-flow momentum thickness is estimated from the streamwise one by
-    theta2/theta ~ ratio * sin(L) cos(L).  `ratio` is set so that the C1
-    criterion becomes governing beyond roughly 25 deg of sweep.  It is
-    calibrated against the swept-wing transition measurements of Dagenhart
-    & Saric rather than against design experience alone."""
+    cross-flow momentum thickness is estimated from the chordwise one.  The
+    Falkner-Skan-Cooke solution gives
+
+        Re_cf = Re_theta,n sin(L) K(lambda),
+
+    with Re_theta,n formed on the CHORDWISE edge velocity U_e,n = Q_e cos(L).
+    The surrogate replaces K by a constant `ratio`, set on the swept-wing
+    transition measurements of Dagenhart & Saric.
+
+    Which sweep factor is right depends on which frame Re_theta arrives in, and
+    getting that wrong is a factor of cos(L) - 0.64 at 50 degrees:
+
+      * normal_frame=False: Re_theta is formed on the TOTAL edge velocity, so
+        Re_theta,n = Re_theta cos(L) and the factor is sin(L) cos(L).
+      * normal_frame=True: the march is already running in the plane normal to
+        the leading edge, Re_theta IS Re_theta,n, and the factor is sin(L).
+
+    Applying the normal-plane transformation while keeping the sin(L)cos(L) of
+    the first case counts cos(L) twice.  Measured, that mistake alone moved the
+    critical value required by the independent 20-50 degree set from a spread
+    of 4.6 per cent to 19.4 per cent - which is what a spurious cos(L) does to a
+    quantity swept across 30 degrees of sweep."""
     L = np.radians(sweep_deg)
-    return ratio*Re_theta*np.sin(L)*np.cos(L)
+    f = np.sin(L) if normal_frame else np.sin(L)*np.cos(L)
+    return ratio*Re_theta*f
 
 # ======================================================================
 #  1.  VORTEX-PANEL INVISCID SOLVER  (Kuethe & Chow)
@@ -594,7 +612,7 @@ def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True):
 
 
 def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
-             Me=None):
+             Me=None, normal_frame=False):
     """
     March the boundary layer along one surface.
       s    : arc length from stagnation/leading edge [m]  (increasing)
@@ -1126,22 +1144,27 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         if sweep_deg > 1.0 and cal.get("cf_amp", True):
             L_r = np.radians(sweep_deg)
             if cal.get("cf_exact", False):
-                fac = np.sin(L_r)*np.cos(L_r)*_stab.crossflow_factor(lam[i])
+                _sf = (np.sin(L_r) if normal_frame
+                       else np.sin(L_r)*np.cos(L_r))
+                fac = _sf*_stab.crossflow_factor(lam[i])
                 Re_th2 = Reth[i]*fac
             else:
-                Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"])
+                Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"],
+                                    normal_frame)
             if Re_th2 >= cal["CF_C1"]*cal["A_CF"] and i > 0:
                 n_cf += (sig_cf/max(theta[i], 1e-12))*(s[i] - s[i-1])
             Rcf = 1e9
         elif sweep_deg > 1.0:
             if cal.get("cf_exact", False):
                 L_r = np.radians(sweep_deg)
-                fac = (np.sin(L_r)*np.cos(L_r)
-                       * _stab.crossflow_factor(lam[i]))
+                _sf = (np.sin(L_r) if normal_frame
+                       else np.sin(L_r)*np.cos(L_r))
+                fac = _sf*_stab.crossflow_factor(lam[i])
                 Rcf = (cal["CF_C1"]/max(fac, 1e-12)/cal["A_CF"]
                        if fac > 1e-12 else 1e9)
             else:
-                Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"])
+                Re_th2 = _re_theta2(Reth[i], sweep_deg, cal["CF_ratio"],
+                                    normal_frame)
                 Rcf = (Reth[i]*cal["CF_C1"]/max(Re_th2, 1e-9)/cal["A_CF"]
                        if Re_th2 > 0 else 1e9)
         else:
@@ -1413,11 +1436,51 @@ def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
 
 
 def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
-                  sweep_deg=0.0, cal=None, mach=0.0, compressible=True):
+                  sweep_deg=0.0, cal=None, mach=0.0, compressible=True,
+                  sweep_transform=True):
     """
     Full aerofoil: panel method -> split at stagnation -> march upper
     and lower surfaces.  Returns inviscid + viscous results.
+
+    SWEEP.  On a swept surface the boundary layer is driven by the component of
+    the flow NORMAL to the leading edge, not by the streamwise flow, and simple
+    sweep theory says so exactly for an infinite swept wing: the chordwise
+    problem is the two-dimensional one at
+
+        U_n = Q cos(L),   c_n = c cos(L),   alpha_n = atan(tan(alpha)/cos(L)),
+
+    with the span-wise component Q sin(L) riding on top of it and entering only
+    through the cross-flow.  The section lift in the streamwise frame is then
+    c_l = c_l,n cos^2(L).
+
+    This was not done.  The panel solve and the march were run on the
+    STREAMWISE flow and the streamwise chord, and sweep_deg reached only the
+    cross-flow branch.  At the 12 deg of the case-study wing that is a 2 per
+    cent error in the edge velocity, but the cross-flow constant CF_ratio was
+    set on a 45 deg experiment, where cos(L) = 0.707: the chordwise edge
+    velocity, the momentum thickness and the pressure gradient driving them
+    were all wrong by tens of per cent, and the constant absorbed it.  Worse,
+    the independent check spans 20 to 50 deg of sweep, over which cos(L) runs
+    from 0.94 to 0.64, so the error is not even constant across the set the
+    criterion is asked to transfer to.
+
+    Set sweep_transform=False to recover the untransformed behaviour, so that
+    what the transformation is worth can be measured rather than asserted.
     """
+    L_rad = np.radians(sweep_deg)
+    cosL = float(np.cos(L_rad))
+    swept = bool(sweep_transform and sweep_deg > 1.0 and cosL > 1e-6)
+    if swept:
+        # into the plane normal to the leading edge
+        alpha_solve = float(np.degrees(np.arctan(
+            np.tan(np.radians(alpha_deg))/cosL)))
+        U_solve = U*cosL
+        chord_solve = chord*cosL
+        mach_solve = mach*cosL
+    else:
+        alpha_solve, U_solve, chord_solve, mach_solve = (
+            alpha_deg, U, chord, mach)
+    alpha_deg, U, chord, mach = alpha_solve, U_solve, chord_solve, mach_solve
     xc, yc, Cp, V, th, S = panel_solve(xb, yb, alpha_deg, mach=mach)
     # Edge velocity and edge Mach number from the CORRECTED pressure, so the
     # boundary layer runs on the same flow the loads are computed from; see
@@ -1449,7 +1512,7 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     for name, ss, idx in [("upper", s_up, idx_up), ("lower", s_low, idx_low)]:
         Ue_s = np.maximum(Ue_mag[idx], 1e-4)
         r = march_bl(ss, Ue_s, nu, Tu_pct=Tu_pct, sweep_deg=sweep_deg,
-                     cal=cal, Me=Me_all[idx])
+                     cal=cal, Me=Me_all[idx], normal_frame=swept)
         r["x"]  = xc[idx]; r["y"] = yc[idx]; r["Cp"] = Cp[idx]
         r["Re_x"] = U*ss/nu
         r["x_tr_chord"] = (float(xc[idx][r["i_tr"]])
@@ -1474,7 +1537,14 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         r["bubble_burst"] = bool(r.get("bubble_burst", False))
         res[name] = r
 
-    # forces (ordering is counter-clockwise -> outward normal = (-sin,cos))
+    # Forces.  The boundary points run CLOCKWISE (TE -> lower -> LE -> upper ->
+    # TE), which the signed area confirms: -0.110 for the case-study section.
+    # This comment used to say counter-clockwise.  The normal below is outward
+    # either way - on the upper surface, traversed towards +x, theta ~ 0 gives
+    # (-sin, cos) = (0, 1) - so nothing was wrong with the arithmetic, but
+    # run_solution's body mask says clockwise five lines from where it uses the
+    # winding to decide a sign, and the two files contradicting each other is
+    # how the next sign error gets made.
     # panel coords are unit-chord, so reference chord for Cp integration = 1
     nx = -np.sin(th); ny = np.cos(th)
     Cn = -np.sum(Cp*ny*S)
@@ -1514,9 +1584,21 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     if max(res["upper"]["theta_te_c"], res["lower"]["theta_te_c"]) > 1.0:
         Cd = float("nan")
 
+    # Back to the streamwise frame.  In the normal plane the section carries
+    # c_l,n on a dynamic pressure formed with U_n = Q cos(L) and a chord
+    # c cos(L); referred to the streamwise dynamic pressure and the streamwise
+    # chord that is c_l = c_l,n cos^2(L).  The profile drag scales the same
+    # way, being 2 theta/c times a velocity ratio that is frame-independent.
+    # Transition LOCATIONS need no conversion: x/c is the same fraction of the
+    # same chord line in either frame.
+    if swept:
+        Cl = Cl*cosL*cosL
+        Cd = Cd*cosL*cosL
     return dict(panel=dict(xc=xc, yc=yc, Cp=Cp, V=V, th=th, S=S,
                            i_stag=i_stag),
                 surfaces=res, Cl=Cl, Cd=Cd, alpha=alpha_deg,
+                sweep_deg=sweep_deg, sweep_transform=swept,
+                alpha_normal_deg=alpha_deg, cos_sweep=cosL,
                 theta_te_c=max(res["upper"]["theta_te_c"],
                                res["lower"]["theta_te_c"]))
 
