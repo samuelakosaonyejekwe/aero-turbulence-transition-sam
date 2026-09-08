@@ -720,10 +720,31 @@ def swept_drag_is_near_unswept_at_small_sweep():
     d = abs(cd[W["le_sweep_deg"]] - cd[0.0])/cd[0.0]
     # A mild sweep leaves the wetted area and the streamwise run length very
     # nearly alone, so the streamwise profile drag has to be very nearly the
-    # unswept one.  The cos^2(L) conversion this replaced put it 4.4 % below.
+    # unswept one.
     assert d < 0.02, ("12 deg of sweep moved the section drag by %.1f %%: "
                       "%.2f counts unswept, %.2f swept"
                       % (100*d, cd[0.0]*1e4, cd[W["le_sweep_deg"]]*1e4))
+    # And the conversion this replaced has to fail that, or the correction was
+    # not worth making.  cos^2(L) applied to the unswept Squire-Young is
+    # rebuilt from the same march rather than described: the comment here said
+    # it put the drag "4.4 % below" and it is 5.1, a figure nothing generated.
+    from utss_solver import _swept_drag_factor as _sdf
+    r_sw = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                         W["MAC"], cr["Tu_pct"],
+                         sweep_deg=W["le_sweep_deg"], mach=cr["mach"])
+    cosL = np.cos(np.radians(W["le_sweep_deg"]))
+    old = cosL*cosL*sum(
+        2.0*r_sw["surfaces"][k]["theta_te_c"]
+        * _sdf(r_sw["surfaces"][k]["Ue_te_ratio"],
+               r_sw["surfaces"][k]["H_te_squire_young"],
+               W["le_sweep_deg"], swept=False)
+        for k in ("upper", "lower"))
+    d_old = abs(old - cd[0.0])/cd[0.0]
+    assert d_old > 3.0*d, (
+        "the cos^2(L) conversion is no longer distinguishable from the "
+        "corrected one: %.2f counts against %.2f, %.1f %% from unswept "
+        "against %.1f %%" % (old*1e4, cd[W["le_sweep_deg"]]*1e4,
+                             100*d_old, 100*d))
 
 
 @check

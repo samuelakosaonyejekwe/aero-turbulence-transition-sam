@@ -297,9 +297,13 @@ def nlf_vs_turbulent(rc):
     # Laminar extent is a CHORDWISE fraction, the same quantity the transition
     # summary, the polar and the span-wise sweep report.  An earlier version
     # formed it from x_tr, which is the arc length from the stagnation point,
-    # and divided that by the chord: on the cruise section that reads 58.3 %
-    # against the 56.6 % the chordwise stations give, and Table 1 of the report
-    # then quoted the two next to each other.  A surface that stays laminar to
+    # and divided that by the chord.  On the cruise section the arc-length form
+    # read 58.3 per cent against the chordwise one, and Table 1 of the report
+    # then quoted the two next to each other.  The chordwise figure is NOT
+    # restated here: this comment gave it as 56.6, which was the mean of the
+    # two transition stations at the time and is 55.4 now, so the sentence
+    # explaining a stale-number bug had itself gone stale.  It is the
+    # mean_laminar_pct column of 04_solution/nlf_vs_turbulent.csv.  A surface that stays laminar to
     # the trailing edge counts as 1.0, as it does everywhere else.
     def _xtr(sf):
         x=sf["x_tr_chord"]

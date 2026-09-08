@@ -96,17 +96,31 @@ def _tabnum(key=None):
     if key: _REF["TAB:"+key] = "Table %d" % _TAB[0]
     return _TAB[0]
 
+_UNRESOLVED = set()
+
+
 def resolve_refs(document):
-    """Substitute @@KIND:key@@ tokens once all numbers are allocated."""
+    """Substitute @@KIND:key@@ tokens once all numbers are allocated.
+
+    An unknown key used to be substituted by ITSELF, so a mistyped reference
+    left a bare "TAB:cf_forms" in the rendered report rather than a number, and
+    nothing anywhere failed: the token had gone, so a search for "@@" found
+    nothing and the sentence read as though a table had been named.  Unknown
+    keys are collected and the build refuses to save.
+    """
+    def _sub(m):
+        k = m.group(1)
+        if k not in _REF:
+            _UNRESOLVED.add(k)
+        return _REF.get(k, k)
+
     def fix(par):
         if "@@" not in par.text: return
         for r in par.runs:
             if "@@" in r.text:
-                r.text = re.sub(r"@@([A-Z]+:[a-z0-9_]+)@@",
-                                lambda m: _REF.get(m.group(1), m.group(1)), r.text)
+                r.text = re.sub(r"@@([A-Z]+:[a-z0-9_]+)@@", _sub, r.text)
         if "@@" in par.text:            # split across runs: rebuild in run 0
-            t = re.sub(r"@@([A-Z]+:[a-z0-9_]+)@@",
-                       lambda m: _REF.get(m.group(1), m.group(1)), par.text)
+            t = re.sub(r"@@([A-Z]+:[a-z0-9_]+)@@", _sub, par.text)
             par.runs[0].text = t
             for e in par.runs[1:]: e.text = ""
     for par in document.paragraphs: fix(par)
@@ -158,6 +172,7 @@ def table_from_csv(path, max_rows=40, ncols=None, cap=None, sample=False, key=No
     # 1.785e+05, values already rounded to the precision they are claimed to),
     # and re-parsing them as floats renders 1.785e+05 as 178500.0
     df=pd.read_csv(path, dtype=str)
+    n_full=len(df)
     if ncols: df=df.iloc[:,:ncols]
     if len(df)>max_rows:
         if sample:
@@ -169,8 +184,14 @@ def table_from_csv(path, max_rows=40, ncols=None, cap=None, sample=False, key=No
     else: truncated=False
     add_table(df, cap, key=key)
     if truncated:
-        para(f"(table sampled to {len(df)} rows; full data in {path})",
-             italic=True, size=8.5)
+        # "sampled" and "truncated" are not the same thing and the note used to
+        # call both of them sampled: sample=True takes an even spread across
+        # the whole file, sample=False keeps the FIRST max_rows and drops the
+        # tail, which a reader needs to know before concluding anything from
+        # the last row shown.
+        how = ("sampled evenly to %d of %d rows" % (len(df), n_full) if sample
+               else "truncated to the first %d of %d rows" % (len(df), n_full))
+        para(f"(table {how}; full data in {path})", italic=True, size=8.5)
 
 MAX_TABLE_COLS = 7      # what stays legible across a portrait text column
 
@@ -1491,6 +1512,9 @@ if _eq_unplaced:
                      "placed in the report: %s" % (EQD, ", ".join(_eq_unplaced)))
 
 resolve_refs(doc)
+if _UNRESOLVED:
+    raise SystemExit("cross-references in the report name keys that were never "
+                     "allocated: %s" % ", ".join(sorted(_UNRESOLVED)))
 doc.save("case.docx")
 print("case.docx written:", os.path.getsize("case.docx")//1024, "KB")
 print("figures embedded across", len(inv), "generated files")

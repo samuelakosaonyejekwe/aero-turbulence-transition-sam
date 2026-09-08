@@ -492,10 +492,11 @@ Sources recorded in `06_validation/sources_and_references.csv`.
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
 solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld +
                   amplification database), case_config.py, uplot.py (style)
-tools/            smoke.py (25 checks over the whole solver, well under a
-                  minute), pipeline.py (staged regeneration, timings written to
+tools/            smoke.py (the whole solver checked in well under a minute),
+                  pipeline.py (staged regeneration, timings written to
                   .pipeline/timings.json), baseline.py (numeric diff of every
-                  generated CSV against a snapshot)
+                  generated CSV against a snapshot), docx2pdf.py (renders
+                  case.docx and copies it onto the tracked report; needs Word)
 utss_paths.py     anchors every entry point to the repository root, so a
                   generator run from another directory still reads and writes
                   here

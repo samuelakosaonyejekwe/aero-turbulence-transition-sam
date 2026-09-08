@@ -1532,7 +1532,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # answer DISCONTINUOUS in the free-stream turbulence: on the cruise
         # section, 0.1000 % gave x_tr/c = 0.542 and 0.1001 % gave 0.373, a
         # step of 0.17c and 33 % in profile drag across a change of one part in
-        # a thousand in an input the study quotes to two figures.  A geometric
+        # a thousand in an input the study quotes to two figures.  A weighted
         # blend of the two progresses over the declared window removes the step
         # without adding a fitted constant to either branch: at the lower edge
         # it is exactly the amplification integral, at the upper edge exactly
