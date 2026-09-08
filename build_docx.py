@@ -773,7 +773,9 @@ para("The polar carries θ_TE/c, the trailing-edge momentum thickness as a fract
  % (float(_pol.theta_te_c.max()), _OFF["te260"], _OFF["te160"], _OFF["te360"],
     _OFF["cd"]))
 _sys = pd.read_csv("04_solution/squire_young_station_sensitivity.csv")
-_sy_ship = _sys[_sys.x_ref == 0.98].iloc[0]
+# The shipped station is the row the sweep marks as its own reference, not a
+# literal 0.98: that equality tied the report to a constant it does not read.
+_sy_ship = _sys[_sys.delta_from_shipped_counts == 0.0].iloc[0]
 _sy_lo = _sys.iloc[0]
 _pol_clip = int(pd.read_csv("04_solution/aero_polar.csv").H_sy_at_clip.sum())
 _ts_clip = pd.read_csv("04_solution/transition_summary.csv")
@@ -784,11 +786,12 @@ _geo = pd.read_csv("01_geometry/geometry_definition.csv").set_index("parameter")
 para("Where Squire-Young is evaluated matters, and this report first said why in the wrong "
  "terms. The formula wants the trailing edge and this section has a %.1f° wedge one, so the "
  "trailing edge is a stagnation point of the inviscid flow, U_e goes to zero there physically "
- "and (U_e/U_∞)^((H+5)/2) degenerates — at the last control point it returns 18 counts against "
+ "and (U_e/U_∞)^((H+5)/2) degenerates — at the last control point it returns %.0f counts against "
  "%.1f. The evaluation is therefore pulled forward to %.2f c, and the drag over the range "
  "either side runs from %.1f counts to %.1f. That spread was reported here as a five-count "
  "uncertainty band on the headline number. It is not a band."
  % (float(_geo.loc["Trailing-edge included angle", "value"]),
+    _sys.iloc[-1].Cd_counts,
     _sy_ship.Cd_counts, _sy_ship.x_ref, _sy_lo.Cd_counts, _sy_ship.Cd_counts),
  italic=True, size=10)
 # Every figure in this paragraph is read from the summary the sweep writes.
@@ -1154,22 +1157,39 @@ para("Second, and this is the substantive point: THE MOMENTUM INTEGRAL CANNOT BE
  "factor of 2.93. No integral method closed on any physical profile family reproduces this "
  "bubble, so the shape-factor cap was never the leading term, and the earlier attribution of "
  "a factor 1.32 of the shortfall to that cap was accounting for the wrong thing.")
+# Both figures were typed here as -14.2 and -30.4 against the -13.9 and -30.2
+# the summary generates.  verify_outputs checks the bracket value unanchored,
+# so it was satisfied by the copy in the table beside this paragraph while the
+# prose said something else.
+_t3c4 = pd.read_csv("06_validation/validation_summary.csv")
+_t3c4 = _t3c4[_t3c4.case.str.contains("T3C4")].iloc[0]
 para("Third, onset is not resolved to a station here. It is taken as the station of minimum "
  "measured C_f, as on the other plates. On this plate C_f is 1.87×10⁻⁴ at x = 1.295 m and "
  "1.83×10⁻⁴ at x = 1.395 m — two per cent apart, in a hot-film measurement of a quantity at "
  "its floor. They are not distinguishable, so onset is bracketed by them, Re_θ from 309.3 to "
  "381.3, and quoting the second alone reports the end of the plateau as though it were the "
- "beginning. Against that bracket the error is −14.2 %, not −30.4 %. The point value is "
+ "beginning. Against that bracket the error is %.1f %%, not %.1f %%. The point value is "
  "retained in the tables for continuity with the literature; the bracket is what the residual "
- "should be read against.")
+ "should be read against."
+ % (_t3c4.Re_theta_t_err_bracket_pct, _t3c4.Re_theta_t_err_pct))
+# The shipped bubble length was typed as 0.052 m and is 0.055; the other three
+# figures in this sentence were typed too and are read now.
+_bub = pd.read_csv("06_validation/bubble_diagnostics.csv").set_index("quantity")
+_nsum0 = pd.read_csv("06_validation/aerofoil_nlf0416_summary.csv").set_index("set")
 para("Reading the amplification rate at the marched shape factor instead of at the developed "
  "reverse-flow profile became possible once the march crossed the fold, and looks more "
  "principled because it removes a constant. It is rejected on measurement: the T3C4 bubble "
- "lengthens from 0.052 to 0.087 m, towards the measured 0.10, but the 86 NLF(1)-0416 "
- "conditions collapse from 50 to 21 inside the bracket. The reason is physical — the marched "
- "H is the integral shape factor of the whole dead-air region, still near 3.4, while the "
+ "lengthens from the %.3f m the shipped closure returns to 0.087, towards the measured %.2f, "
+ "but the 86 NLF(1)-0416 conditions collapse from %d to 21 inside the bracket. The reason is "
+ "physical — the marched H is the integral shape factor of the whole dead-air region, still "
+ "near %.1f, while the "
  "detached shear layer riding on it is inflectional from the moment the flow leaves the wall. "
- "It is exposed as cal[\"bub_sigma_local\"] so the test is reproducible.", italic=True, size=10)
+ "It is exposed as cal[\"bub_sigma_local\"] so the test is reproducible."
+ % (_bub.loc["bubble length [m]", "model"],
+    _bub.loc["bubble length [m]", "measured"],
+    int(_nsum0.loc["All", "within_bracket"]),
+    _bub.loc["shape factor at reattachment", "model"]),
+ italic=True, size=10)
 _rd = pd.read_csv("06_validation/residual_diagnostics.csv").set_index("branch",
                                                                      drop=False)
 _gain = {r.case.split(" flat plate")[0].replace("ERCOFTAC ", ""):

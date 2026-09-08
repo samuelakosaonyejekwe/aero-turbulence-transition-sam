@@ -477,7 +477,10 @@ def growth_curve(H_target, Re_theta, alphas, N=110, y_max=60.0, y_half=6.0,
 # The table is indexed by shape factor, momentum-thickness Reynolds number and
 # dimensionless frequency, and holds the spatial amplification rate
 # sigma = -alpha_i*theta.  The shape-factor range stops short of the
-# Falkner-Skan separation profile (H = 4.04): the eigenvalue problem is stiff
+# Falkner-Skan separation profile (H = 4.00, and fs_H_range returns 3.9974;
+# this said 4.04, which is neither that value nor the 4.00 the same file gives
+# for the same profile eighty lines further down): the eigenvalue problem is
+# stiff
 # there and the separation-induced branch of the transition kernel, not the
 # amplification integral, is what decides transition in a separating layer.
 # The shape-factor grid is dense below H = 3.0, where the neutral boundary of
@@ -682,10 +685,12 @@ def omega_grid_bounds():
 # departure is near separation: the fit returns H = 3.10 at its separation
 # value lambda = -0.090, whereas the exact family reaches H = 4.00 there, and
 # separation itself occurs at lambda = -0.0681.  That matters because the
-# amplification rate of Sec. sigma_lookup rises by a factor of seven between
-# the Blasius profile and H = 3.9, so a shape factor short by 0.9 near
-# separation starves the amplification integral in exactly the adverse
-# gradients where transition is decided.
+# amplification rate sigma_lookup returns rises by AT LEAST a factor of eight
+# between the Blasius profile and H = 3.9 - eighteen at Re_theta = 300, eight
+# to nine from 1000 up, and never the "factor of seven" this comment used to
+# give, which is below the ratio at every Reynolds number in the table - so a
+# shape factor short by 0.9 near separation starves the amplification integral
+# in exactly the adverse gradients where transition is decided.
 _CLOSURE = None
 
 

@@ -907,10 +907,6 @@ def verify_outputs_contract():
     bad = "Table 1. A.\nTable 3. C.\nTable 2. B."
     for lab, raw_, want in (("cross-reference", good, True),
                             ("genuinely out of order", bad, False)):
-        res = dict((n, o) for n, o, _ in
-                   V.structural_checks(V.flatten(raw_), raw_))
-        got = res["Table numbering (%d captions)"
-                  % (3 if want else 3)] if False else None
         got = [o for n, o, _ in V.structural_checks(V.flatten(raw_), raw_)
                if n.startswith("Table numbering")][0]
         assert got is want, "%s: numbering check returned %s" % (lab, got)

@@ -562,8 +562,18 @@ def squire_young_station_sensitivity():
             theta_te_c_upper=round(float(u["theta_te_c"]),6),
             H_on_Head_clamp=bool(u["H_sy_at_clip"] or l["H_sy_at_clip"])))
     df=pd.DataFrame(rows)
+    # Against the SHIPPED station, whatever CAL says it is.  Comparing x_ref to
+    # a hard-coded 0.98 ties this column to a constant it does not read: move
+    # sy_x_ref and the reference row is either the wrong one or absent, and the
+    # .iloc[0] then raises inside a generator rather than at the change.
+    _ship = float(CAL["sy_x_ref"])
+    _i = int(np.argmin(np.abs(df.x_ref.to_numpy(float) - _ship)))
+    if abs(float(df.x_ref.iloc[_i]) - _ship) > 1e-9:
+        raise ValueError("the shipped Squire-Young station, sy_x_ref = %g, is "
+                         "not one of the stations this sweep visits: %s"
+                         % (_ship, df.x_ref.tolist()))
     df["delta_from_shipped_counts"]=(df.Cd_counts
-                                     - float(df[df.x_ref==0.98].Cd_counts.iloc[0])).round(2)
+                                     - float(df.Cd_counts.iloc[_i])).round(2)
     # The column that settles it.  If the spread across stations were an
     # uncertainty, this would wander; if it is friction being included, the sum
     # of the drag counted so far and the friction still ahead is the same
@@ -579,8 +589,8 @@ def squire_young_station_sensitivity():
     # swept-drag formulation changed the drag they are differences of.  The
     # climb figure had no generating source at all - the sweep runs the cruise
     # condition - so it is computed here too.
-    x_lo = float(df.x_ref.min()); x_hi = float(CAL["sy_x_ref"])
-    lo = df[df.x_ref == x_lo].iloc[0]; hi = df[df.x_ref == x_hi].iloc[0]
+    x_lo = float(df.x_ref.min()); x_hi = _ship
+    lo = df.iloc[0]; hi = df.iloc[_i]
     inv = df[(df.x_ref >= 0.90) & (df.x_ref <= x_hi)].Cd_plus_omitted_counts
     r_cl = solve_airfoil(X, Y, cl["alpha_deg"], cl["U_inf"], cl["nu_inf"],
                          W["MAC"], cl["Tu_pct"], sweep_deg=W["le_sweep_deg"],

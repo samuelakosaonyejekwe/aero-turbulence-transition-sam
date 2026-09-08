@@ -216,8 +216,16 @@ def run_validation():
             # A station inside the predicted bubble is in neither state: the
             # closure sets C_f identically to zero there, so a relative error
             # against a measured 1.9e-4 is 100 per cent by construction and
-            # says nothing about the laminar branch.  Two such stations were
-            # what carried the T3C4 laminar figure from 18.6 to 29.7 per cent.
+            # says nothing about the laminar branch.  Two such stations once
+            # dominated the T3C4 laminar figure, and this comment quoted what
+            # they cost as "18.6 to 29.7 per cent"; neither number reproduces
+            # now, and the cut currently removes nothing at all, because the
+            # predicted separation and the earlier of the two onsets have moved
+            # to 1.609e5 and 1.665e5 in Re_x with no measurement station
+            # between them.  It is kept as the guard it is - the two cuts are
+            # a march apart and either can move - and the figure it protects is
+            # read from 06_validation/validation_summary.csv rather than
+            # restated here.
             rex_sep = (float(r["Re_x"][r["i_sep"]])
                        if r.get("i_sep") is not None else np.inf)
             m_lam=(rex_e < lo) & (cf_e <= 1.5*cf_lam_ref) & (rex_e < rex_sep)
