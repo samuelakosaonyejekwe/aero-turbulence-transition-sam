@@ -67,6 +67,19 @@ station — half the polar — and the drag there is formed from a bound rather 
 a solved shape factor. `H_sy_at_clip` says which it is, per surface and per
 point. Both of these were undeclared until the fifth audit pass.
 
+Neither can be removed inside this formulation, and the reason is one fact
+about the section: its trailing edge is a **26.8° wedge, not a cusp**. A
+finite-angle trailing edge is a stagnation point of the inviscid flow, so U_e
+goes to zero there *physically* — the panel method's collapse is the answer, not
+an artefact — and Squire-Young's (U_e/U_∞)^((H+5)/2) degenerates exactly where
+the formula wants to be evaluated. The station is an irreducible consequence,
+not a tuning constant; and the shape factor reaching Head's clamp is the same
+wedge, a layer decelerating into a stagnation point genuinely approaching
+separation. What would resolve both is a **wake march** — carrying the momentum
+integral past the trailing edge with no wall until the pressure has recovered,
+as a coupled panel code does. That is a formulation extension, and it is named
+here rather than done.
+
 The transition-length correlation is validated on the flat plates below, which
 span Re_x,t = 6×10⁴ to 1.4×10⁶, and extrapolated on the wing, which transitions
 at 3.7×10⁶.  The extrapolation is not damped — that would add an undeclared

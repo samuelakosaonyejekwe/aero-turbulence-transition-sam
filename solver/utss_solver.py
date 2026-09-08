@@ -1877,18 +1877,47 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
 
         WHAT THAT CHOICE COSTS.  The result is insensitive to the PANEL COUNT
         at this station, which is what this docstring used to say; it is NOT
-        insensitive to the station.  The drag runs from 42.5 counts at 0.88c to
-        47.3 at 0.98c, about half a count per per cent of chord, which is an
+        insensitive to the station.  The drag runs from about 42.5 counts at
+        0.88c to 47.3 at 0.98c, half a count per per cent of chord, which is an
         order more than the transition-length constant is worth over a factor
         of four.  That is measured into
         04_solution/squire_young_station_sensitivity.csv rather than left
         undeclared.
 
+        WHY THE STATION CANNOT SIMPLY BE MOVED TO THE TRAILING EDGE, which is
+        where Squire-Young wants it.  The UTSS-NLF16 has a FINITE-ANGLE
+        trailing edge - 26.8 degrees included, measured off the section, not a
+        cusp - so the trailing edge is a stagnation point of the inviscid flow
+        and U_e goes to zero there PHYSICALLY.  The panel method's collapse is
+        not a discretisation artefact to be extrapolated away; it is the
+        answer.  (U_e/U_inf measured on a 400-panel side: 1.03 at 0.90c, 0.86
+        at 0.98, 0.77 at 0.99, 0.66 at 0.999.)  Squire-Young's
+        (U_e/U_inf)^((H+5)/2) therefore DEGENERATES at the trailing edge of
+        this section, and every station short of it under-counts the friction
+        still to come by a different amount.  The evaluation station is an
+        irreducible part of applying this formula to a wedge trailing edge, not
+        a tuning constant, and the sensitivity table bounds what it is worth.
+
+        Taking "the last station at which the layer is still attached" instead
+        was tried and is worse: the drag peaks near 0.98c and falls beyond it,
+        so that rule lands on the far side of a maximum and makes the answer
+        depend on where Head's clamp happens to bite, which is a numerical
+        threshold rather than a physical station.
+
+        WHAT WOULD RESOLVE IT is a wake march - carrying the momentum integral
+        past the trailing edge with no wall until the pressure has recovered,
+        which is how a coupled panel code handles a blunt or wedge trailing
+        edge - and that is a formulation extension, not a fix to this routine.
+
         AND WHETHER THE SHAPE FACTOR THERE IS SOLVED.  Head's entrainment
         method has no validity past separation, so H_turb is clamped at 2.8.
         On the climb case and at every incidence above about 3 degrees the
         upper surface is ON that clamp at 0.98c, so the drag is being formed
-        from a bound rather than from a solved shape factor.  This project
+        from a bound rather than from a solved shape factor.  That is the same
+        wedge trailing edge again: the layer decelerating into a stagnation
+        point genuinely approaches separation, so the clamp is being reached
+        for a physical reason and not a numerical one, and it is Squire-Young's
+        thin-attached-layer premise that is failing rather than the march.  This project
         already flags exactly that hazard for the trailing-edge separation
         margin (H_te_at_clip) and did not for the drag, which is the headline
         number.  H_sy_at_clip says which it is, per surface.

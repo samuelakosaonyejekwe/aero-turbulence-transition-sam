@@ -250,6 +250,20 @@ def panel_method_invariants():
         al = np.radians(a)
         return Cn*np.cos(al) - Ca*np.sin(al), Cp, Vt, S
 
+    # The case-study section has a FINITE-ANGLE trailing edge, which is why
+    # Squire-Young cannot be evaluated there: the trailing edge is an inviscid
+    # stagnation point and the edge velocity goes to zero physically.  If the
+    # section is ever changed to a cusp, the reasoning in squire_young's
+    # docstring - and the evaluation station it forces - has to be revisited.
+    co = C.nlf16_coords(n=2000)
+    su = (co["yu"][-1]-co["yu"][-40])/(co["xu"][-1]-co["xu"][-40])
+    sl = (co["yl"][-1]-co["yl"][-40])/(co["xl"][-1]-co["xl"][-40])
+    te_angle = abs(np.degrees(np.arctan(su) - np.arctan(sl)))
+    assert te_angle > 5.0, (
+        "the trailing edge is now near-cusped (%.2f deg included); Squire-Young "
+        "may be evaluable at it, and squire_young's docstring argues from the "
+        "wedge" % te_angle)
+
     # A SYMMETRIC section at zero incidence must carry exactly no lift, and its
     # two surfaces must see the same pressure.  Nothing tested this, and it is
     # the one case where the answer is known to the last bit.
