@@ -53,6 +53,20 @@ from 45.0 to 47.3 counts and leaves it within half a count of the same section
 unswept, which is what 12° of sweep should do to a viscous drag; the drag
 *reduction* is unchanged, both configurations scaling together.
 
+**Where the drag is evaluated is worth more than most of what this study
+sweeps.** Squire-Young wants the trailing edge; a panel method drives the edge
+velocity to the stagnation value there, and the exponent (H+5)/2 turns that into
+18 counts against 47.3, so the evaluation is pulled forward to 0.98c. Over the
+range either side the section drag runs from 42.5 to 47.3 counts — about half a
+count per per cent of chord, an order more than the transition-length constant
+is worth over a factor of four
+(`04_solution/squire_young_station_sensitivity.csv`). And Head's method has no
+validity past separation, so H is clamped at 2.8: on the climb case and at every
+incidence above about 3° the upper surface is ON that clamp at the evaluation
+station — half the polar — and the drag there is formed from a bound rather than
+a solved shape factor. `H_sy_at_clip` says which it is, per surface and per
+point. Both of these were undeclared until the fifth audit pass.
+
 The transition-length correlation is validated on the flat plates below, which
 span Re_x,t = 6×10⁴ to 1.4×10⁶, and extrapolated on the wing, which transitions
 at 3.7×10⁶.  The extrapolation is not damped — that would add an undeclared
@@ -385,7 +399,7 @@ Sources recorded in `06_validation/sources_and_references.csv`.
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
 solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld +
                   amplification database), case_config.py, uplot.py (style)
-tools/            smoke.py (22 checks over the whole solver, well under a
+tools/            smoke.py (23 checks over the whole solver, well under a
                   minute), pipeline.py (staged regeneration, timings written to
                   .pipeline/timings.json), baseline.py (numeric diff of every
                   generated CSV against a snapshot)
@@ -399,7 +413,7 @@ case.docx         the same report as .docx - a build product, not tracked
 
 ## Reproduce
 ```bash
-python3 tools/smoke.py         # 22 checks over the whole solver, under a minute.
+python3 tools/smoke.py         # 23 checks over the whole solver, under a minute.
                                #   Run this FIRST and after every edit: a full
                                #   regeneration is minutes and the faults
                                #   that waste it are all visible here in the

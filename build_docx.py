@@ -654,7 +654,7 @@ para("This section presents every generated output: numerical tables (CSV) and t
  "curve for each. The boundary-layer state is reported on both surfaces at the cruise and "
  "climb conditions.")
 h2("9.1  Transition prediction summary")
-table_from_csv("04_solution/transition_summary.csv",
+table_from_csv("04_solution/transition_summary.csv", key="ts",
                cap="Transition prediction summary (transition_summary.csv).")
 image("05_postprocessing/csv_plots/transition_summary_bar.png", width=6.0,
       cap="Predicted laminar-flow extent by case and surface (transition_summary.csv).")
@@ -765,6 +765,34 @@ para("The polar carries θ_TE/c, the trailing-edge momentum thickness as a fract
  "rather than typed, and neither was what it returns.)"
  % (float(_pol.theta_te_c.max()), _OFF["te260"], _OFF["te160"], _OFF["te360"],
     _OFF["cd"]))
+_sys = pd.read_csv("04_solution/squire_young_station_sensitivity.csv")
+_sy_ship = _sys[_sys.x_ref == 0.98].iloc[0]
+_sy_lo = _sys.iloc[0]
+_pol_clip = int(pd.read_csv("04_solution/aero_polar.csv").H_sy_at_clip.sum())
+_ts_clip = pd.read_csv("04_solution/transition_summary.csv")
+para("Where Squire-Young is evaluated is a choice, and it is worth more than most of the "
+ "constants this study sweeps. The formula wants the trailing edge and a panel method cannot "
+ "supply one — it drives the edge velocity to the stagnation value there, and the exponent "
+ "(H+5)/2 turns that into 18 counts against %.1f — so the evaluation is pulled forward to "
+ "%.2f c. Over the range either side of that the section drag runs from %.1f counts to %.1f "
+ "(@@TAB:sy_station@@), about half a count per per cent of chord, which is an order more than "
+ "the transition-length constant is worth over a factor of four. Nothing measured it before; "
+ "the docstring said the result was insensitive to the DISCRETISATION, which is true and is a "
+ "different statement."
+ % (_sy_ship.Cd_counts, _sy_ship.x_ref, _sy_lo.Cd_counts, _sy_ship.Cd_counts),
+ italic=True, size=10)
+para("And whether the shape factor at that station is solved. Head's entrainment method has no "
+ "validity past separation, so H is clamped at 2.8, and on the climb case and at every "
+ "incidence above about 3° the upper surface is ON that clamp at the evaluation station — "
+ "%d of the %d polar points, and the climb condition in @@TAB:ts@@ above — the drag there is formed "
+ "from a bound rather than from a solved shape factor. This report already flagged exactly "
+ "that hazard for the trailing-edge separation margin and had not for the drag, which is the "
+ "headline number; H_sy_at_clip now says which it is, per surface and per point."
+ % (_pol_clip, len(pd.read_csv("04_solution/aero_polar.csv"))), italic=True, size=10)
+table_from_csv("04_solution/squire_young_station_sensitivity.csv", key="sy_station",
+               cap="Sensitivity of the section drag to the Squire-Young "
+                   "evaluation station (squire_young_station_sensitivity.csv). "
+                   "The last row is on Head's H = 2.8 clamp.")
 table_from_csv("04_solution/aero_polar.csv", cap="Aerodynamic polar (aero_polar.csv).")
 image("05_postprocessing/csv_plots/aero_polar.png", width=6.3,
       cap="Lift curve, drag polar, L/D and transition vs angle of attack.")

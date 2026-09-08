@@ -514,6 +514,46 @@ def swept_drag_is_near_unswept_at_small_sweep():
 
 
 @check
+def squire_young_station_is_declared():
+    """the drag says where it was evaluated, and whether H there is a clamp"""
+    import case_config as C
+    from utss_solver import solve_airfoil
+    cr, W = C.CRUISE, C.WING
+    X, Y = C.nlf16_panel_points(80)
+    kw = dict(sweep_deg=W["le_sweep_deg"], mach=cr["mach"],
+              T_inf_K=cr["T_inf_K"])
+
+    # the station is a declared constant, not a literal buried in a closure
+    from utss_solver import CAL
+    assert "sy_x_ref" in CAL and 0.5 < CAL["sy_x_ref"] < 1.0
+
+    # and it moves the drag, so it must be sweepable
+    cds = {}
+    for xr in (0.90, 0.98):
+        r = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                          W["MAC"], cr["Tu_pct"], cal=dict(sy_x_ref=xr), **kw)
+        cds[xr] = r["Cd"]*1e4
+        u = r["surfaces"]["upper"]
+        assert abs(u["x_squire_young"] - xr) < 0.03, \
+            "Squire-Young evaluated at %.4f, asked for %.2f" % (u["x_squire_young"], xr)
+    assert cds[0.98] > cds[0.90], "the drag no longer rises towards the trailing edge"
+    assert abs(cds[0.98] - cds[0.90]) > 1.0, (
+        "the evaluation station is worth less than a count now (%.2f vs %.2f); "
+        "the sensitivity table and the text that quotes it need re-checking"
+        % (cds[0.90], cds[0.98]))
+
+    # Head's clamp: the climb case sits on it at the evaluation station, and
+    # the flag has to say so - the drag there is formed from a bound
+    cl = C.CLIMB
+    r = solve_airfoil(X, Y, cl["alpha_deg"], cl["U_inf"], cl["nu_inf"], W["MAC"],
+                      cl["Tu_pct"], sweep_deg=W["le_sweep_deg"],
+                      mach=cl["mach"], T_inf_K=cl["T_inf_K"])
+    u = r["surfaces"]["upper"]
+    assert u["H_sy_at_clip"] == (u["H_te_squire_young"] >= 2.8 - 1e-6), \
+        "H_sy_at_clip disagrees with the shape factor it describes"
+
+
+@check
 def airfoil_output_contract():
     """solve_airfoil returns what run_solution and gen_validation read"""
     import case_config as C
@@ -535,7 +575,8 @@ def airfoil_output_contract():
         for k in ("x", "y", "Cp", "Re_x", "x_tr_chord", "x_sep_chord",
                   "bubble_burst", "theta_te_c", "H_te", "H_te_at_clip",
                   "sep_margin_H", "x_sep_turb_chord", "Me",
-                  "Ue_te_ratio", "H_te_squire_young"):
+                  "Ue_te_ratio", "H_te_squire_young", "x_squire_young",
+                  "H_sy_at_clip"):
             assert k in s, "surface dict lost %r" % k
         assert len(s["x"]) == len(s["s"]) == len(s["Cf"]) == len(s["Me"])
         # the edge Mach number must come off the corrected pressure, not off
@@ -619,6 +660,21 @@ def verify_outputs_contract():
         "document_text does not preserve .docx body order: %r" % txt
     assert V.find_value(txt, "42.0", "ANCHOR CAPTION HERE")[0], \
         "a table value is no longer anchorable to the caption above it"
+
+    # Caption numbering must count FIRST occurrences: a repeat is a
+    # cross-reference, and the renderer wraps lines wherever it likes, so
+    # "... in Table 12. The drag ..." can begin a line and look like a caption.
+    good = "Table 1. A.\nTable 2. B.\nsee\nTable 1. And so on.\nTable 3. C."
+    bad = "Table 1. A.\nTable 3. C.\nTable 2. B."
+    for lab, raw_, want in (("cross-reference", good, True),
+                            ("genuinely out of order", bad, False)):
+        res = dict((n, o) for n, o, _ in
+                   V.structural_checks(V.flatten(raw_), raw_))
+        got = res["Table numbering (%d captions)"
+                  % (3 if want else 3)] if False else None
+        got = [o for n, o, _ in V.structural_checks(V.flatten(raw_), raw_)
+               if n.startswith("Table numbering")][0]
+        assert got is want, "%s: numbering check returned %s" % (lab, got)
 
 
 def main():

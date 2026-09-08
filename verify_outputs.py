@@ -284,10 +284,24 @@ def structural_checks(txt, raw):
     for kind, pat in (("Figure", r"Fig\.\s*(\d+)\."),
                       ("Table", r"Table\s*(\d+)\.")):
         seq = [int(m.group(1)) for m in re.finditer(r"(?m)^\s*" + pat, raw)]
-        ok = bool(seq) and seq == list(range(1, len(seq)+1))
-        out.append(("%s numbering (%d captions)" % (kind, len(seq)), ok,
-                    "1..%d in order" % len(seq) if ok
-                    else "out of order: %s" % seq[:20]))
+        # FIRST OCCURRENCES must run 1..N in order.  A repeat of a number
+        # already issued is a CROSS-REFERENCE, not a caption: the renderer
+        # wraps lines wherever it likes, so "... the climb condition in
+        # Table 12. The drag ..." can begin a line and is then indistinguishable
+        # from a caption by position alone.  A caption emitted out of order
+        # still fails, because it introduces a NEW number in the wrong place -
+        # which is the fault this check exists for, and the one hand numbering
+        # used to produce.
+        seen, firsts, repeats = set(), [], []
+        for n in seq:
+            (repeats if n in seen else firsts).append(n)
+            seen.add(n)
+        ok = bool(firsts) and firsts == list(range(1, len(firsts)+1))
+        note = ("1..%d in order%s" % (len(firsts),
+                                      "" if not repeats
+                                      else ", %d cross-reference(s)" % len(repeats))
+                if ok else "out of order: %s" % firsts[:20])
+        out.append(("%s numbering (%d captions)" % (kind, len(firsts)), ok, note))
 
     # No raw float64 repr anywhere in the document.  run_solution.py rounds
     # every column it writes to the precision the quantity is meaningful to;

@@ -120,6 +120,18 @@ CAL = dict(
     bubble    = True,   # close the separation branch by continuing the
                         # amplification integral through the detached shear
                         # layer instead of transitioning at separation itself
+    sy_x_ref  = 0.98,   # chordwise station at which Squire-Young is evaluated.
+                        # NOT a discretisation parameter: the drag depends on it
+                        # strongly - 42.5 counts at 0.88 against 47.3 at 0.98 on
+                        # the cruise section - because theta grows and the panel
+                        # method collapses U_e towards the trailing edge, and
+                        # Squire-Young raises that ratio to (H+5)/2.  It is
+                        # exposed so that what the choice costs can be measured
+                        # (04_solution/squire_young_station_sensitivity.csv)
+                        # rather than left as an undeclared constant under the
+                        # headline drag.  0.98 is the last station at which the
+                        # cruise shape factor is still solved rather than
+                        # sitting on Head's H = 2.8 clamp; see H_sy_at_clip.
     len_re_x  = False,  # state the transition-length correlation in Re_x, the
                         # form Dhawan & Narasimha published it in, rather than
                         # in Re_theta.  Identical on a flat plate; the Re_theta
@@ -1845,16 +1857,34 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     al = np.radians(alpha_deg)
     Cl = Cn*np.cos(al) - Ca*np.sin(al)
     # profile drag via Squire-Young on each surface
-    def squire_young(r, x_ref=0.98):
+    def squire_young(r, x_ref=None):
         """Squire-Young profile drag, already referred to the streamwise frame.
 
-        The formula is evaluated at 98% chord rather than at the last panel
-        control point.  A panel method drives the edge velocity towards the
-        stagnation value at a sharp trailing edge, so the final control point
-        sits inside that collapse; since Squire-Young raises Ue/Uinf to the
-        power (H+5)/2, taking the last point makes the drag hypersensitive to
-        the panel distribution.  At 98% chord the boundary-layer solution is
-        still meaningful and the result is insensitive to the discretisation.
+        The formula is evaluated at cal["sy_x_ref"], 98% chord, rather than at
+        the last panel control point.  A panel method drives the edge velocity
+        towards the stagnation value at a sharp trailing edge, so the final
+        control point sits inside that collapse; since Squire-Young raises
+        Ue/Uinf to the power (H+5)/2, taking the last point makes the drag
+        hypersensitive to the panel distribution - at the last point itself the
+        cruise section returns 18 counts against 47.
+
+        WHAT THAT CHOICE COSTS.  The result is insensitive to the PANEL COUNT
+        at this station, which is what this docstring used to say; it is NOT
+        insensitive to the station.  The drag runs from 42.5 counts at 0.88c to
+        47.3 at 0.98c, about half a count per per cent of chord, which is an
+        order more than the transition-length constant is worth over a factor
+        of four.  That is measured into
+        04_solution/squire_young_station_sensitivity.csv rather than left
+        undeclared.
+
+        AND WHETHER THE SHAPE FACTOR THERE IS SOLVED.  Head's entrainment
+        method has no validity past separation, so H_turb is clamped at 2.8.
+        On the climb case and at every incidence above about 3 degrees the
+        upper surface is ON that clamp at 0.98c, so the drag is being formed
+        from a bound rather than from a solved shape factor.  This project
+        already flags exactly that hazard for the trailing-edge separation
+        margin (H_te_at_clip) and did not for the drag, which is the headline
+        number.  H_sy_at_clip says which it is, per surface.
 
         On a swept strip the conversion out of the normal plane is NOT the
         cos^2(L) the lift takes, and it is not a scaling of Squire-Young at all
@@ -1865,6 +1895,8 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         it depends on that surface's own trailing-edge shape factor and edge
         velocity ratio.
         """
+        if x_ref is None:
+            x_ref = float(cal.get("sy_x_ref", 0.98)) if cal else 0.98
         xs = np.asarray(r["x"], float)
         cand = np.where(xs > 0.5)[0]
         i = (cand[np.argmin(np.abs(xs[cand] - x_ref))] if len(cand)
@@ -1873,6 +1905,10 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         r["theta_te_c"] = float(th_te/chord)
         r["Ue_te_ratio"] = float(Ue_te/U)
         r["H_te_squire_young"] = float(H_te)
+        r["x_squire_young"] = float(xs[i])
+        # Head's clamp is 2.8; on it, H is a bound and not a solved quantity,
+        # and the drag formed from it is reporting the bound.
+        r["H_sy_at_clip"] = bool(H_te >= 2.8 - 1e-6)
         return 2.0*th_te/chord*_swept_drag_factor(Ue_te/U, H_te, sweep_deg,
                                                   swept=swept)
     Cd = squire_young(res["upper"]) + squire_young(res["lower"])

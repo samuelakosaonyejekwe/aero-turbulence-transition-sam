@@ -66,6 +66,13 @@ def transition_summary(rc, rl):
                 H_te=round(float(s["H_te"]),3),
                 H_te_at_clip=bool(s["H_te_at_clip"]),
                 sep_margin_H=round(float(s["sep_margin_H"]),3),
+                # Whether the SQUIRE-YOUNG station's shape factor is solved or
+                # is Head's H = 2.8 clamp.  H_te_at_clip above describes the
+                # last station; the drag is formed at 0.98c, and on the climb
+                # case that station is on the clamp too.
+                x_sy_c=round(float(s["x_squire_young"]),4),
+                H_sy=round(float(s["H_te_squire_young"]),3),
+                H_sy_at_clip=bool(s["H_sy_at_clip"]),
                 x_sep_turb_c=(round(float(s["x_sep_turb_chord"]),3)
                               if s["x_sep_turb_chord"]==s["x_sep_turb_chord"]
                               else None)))
@@ -83,6 +90,8 @@ def aero_polar():
             L_over_D=round(r["Cl"]/max(r["Cd"],1e-9),1),
             # the thin-layer assumption Squire-Young rests on, made visible
             theta_te_c=round(r["theta_te_c"],5),
+            # half this sweep evaluates Squire-Young on the H = 2.8 clamp
+            H_sy_at_clip=bool(u["H_sy_at_clip"] or l["H_sy_at_clip"]),
             xtr_upper_c=round(u["x_tr_chord"],3) if u["x_tr_chord"]==u["x_tr_chord"] else 1.0,
             xtr_lower_c=round(l["x_tr_chord"],3) if l["x_tr_chord"]==l["x_tr_chord"] else 1.0))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/aero_polar.csv",index=False)
@@ -482,6 +491,42 @@ def transition_length_sensitivity():
     return df
 
 
+def squire_young_station_sensitivity():
+    """What the case-study drag owes to WHERE Squire-Young is evaluated.
+
+    The formula wants the trailing edge, and a panel method cannot supply one:
+    it drives the edge velocity towards the stagnation value there, and
+    Squire-Young raises that ratio to (H+5)/2, so the last control point returns
+    18 counts against 47.  The evaluation is therefore pulled forward to 0.98c.
+
+    That is a choice, and unlike the transition-length constant - whose cost is
+    already measured next door, at a tenth of a count over a factor of four -
+    nothing measured this one.  It is worth about half a count per per cent of
+    chord.  The sweep also reports whether the shape factor at each station is
+    still solved or has reached Head's H = 2.8 clamp, because past the clamp the
+    drag is being formed from a bound.
+    """
+    X,Y=C.nlf16_panel_points(130); rows=[]
+    for xr in (0.88,0.90,0.92,0.94,0.96,0.98,0.99):
+        r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
+                        cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
+                        mach=cr["mach"],T_inf_K=cr["T_inf_K"],
+                        cal=dict(sy_x_ref=xr))
+        u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
+        rows.append(dict(x_ref=xr,
+            x_evaluated_upper=round(float(u["x_squire_young"]),4),
+            Cd_counts=round(r["Cd"]*1e4,2),
+            H_upper=round(float(u["H_te_squire_young"]),3),
+            H_lower=round(float(l["H_te_squire_young"]),3),
+            theta_te_c_upper=round(float(u["theta_te_c"]),6),
+            H_on_Head_clamp=bool(u["H_sy_at_clip"] or l["H_sy_at_clip"])))
+    df=pd.DataFrame(rows)
+    df["delta_from_shipped_counts"]=(df.Cd_counts
+                                     - float(df[df.x_ref==0.98].Cd_counts.iloc[0])).round(2)
+    df.to_csv(f"{SOL}/squire_young_station_sensitivity.csv",index=False)
+    return df
+
+
 def integrated_forces(rc):
     q=cr["q_inf"]; S=W["area_S"]
     ll=lifting_line()
@@ -529,9 +574,11 @@ if __name__=="__main__":
     nvt,cdn,cdt=nlf_vs_turbulent(rc)
     integrated_forces(rc)
     tls=transition_length_sensitivity()
+    sys_=squire_young_station_sensitivity()
     print("=== TRANSITION SUMMARY ==="); print(ts.to_string(index=False))
     print("\n=== NLF vs TURBULENT ==="); print(nvt.to_string(index=False))
     print("\n=== TRANSITION-LENGTH SENSITIVITY ==="); print(tls.to_string(index=False))
+    print("\n=== SQUIRE-YOUNG STATION SENSITIVITY ==="); print(sys_.to_string(index=False))
     print(f"\nCruise: Cl={rc['Cl']:.3f} Cd={rc['Cd']*1e4:.1f}cts  "
           f"Drag saving={ (cdt-cdn)/cdt*100:.1f}%")
     print("solution files:", sorted([f for f in os.listdir(SOL) if f.endswith('.csv')]))

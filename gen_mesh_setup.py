@@ -384,6 +384,16 @@ def setup_tables():
         ("tu_hist",CAL["tu_hist"],"weight on the flow-history average of Tu, Tu_eff = Tu_avg^w Tu_local^(1-w)",
          "FITTED on the three ERCOFTAC plates; no effect where Tu does not decay"),
         ("lam_sep",CAL["lam_sep"],"Thwaites parameter at laminar separation","Thwaites (1949) published value; not fitted"),
+        ("sy_x_ref",CAL["sy_x_ref"],
+         "chordwise station at which Squire-Young is evaluated",
+         "NOT a discretisation parameter and not fitted to anything: the "
+         "formula wants the trailing edge and a panel method cannot supply one, "
+         "so the evaluation is pulled forward to the last station at which the "
+         "cruise shape factor is still solved rather than sitting on Head's "
+         "H = 2.8 clamp.  The choice is worth about half a count of section "
+         "drag per per cent of chord - more than any constant swept in this "
+         "table - and what it costs is measured into "
+         "04_solution/squire_young_station_sensitivity.csv"),
         ("sep_floor",CAL["sep_floor"],"min separation-induced onset Re_theta (ablation path only)",
          "superseded by the bubble closure; reachable only with bubble=False"),
         ("d_omega",CAL["d_omega"],"max ratio between adjacent frequencies in the e^N integration",
