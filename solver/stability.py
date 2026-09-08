@@ -193,36 +193,122 @@ _COMB = None
 
 
 def fs_profile_for_H(H_target):
-    """Falkner-Skan profile at a prescribed shape factor.
+    """Falkner-Skan profile at a prescribed shape factor, SOLVED not blended.
 
     H rises monotonically along the combined family, from about 2.13 in a
-    strong favourable gradient, through 4.00 at separation, to about 4.99 on
-    the reverse-flow branch, so the profile at a given H is obtained by
-    interpolating between the two members that bracket it.  Continuing past
-    separation is what allows the amplification rate inside a separation
-    bubble to be read from the same table as everywhere else, rather than
-    supplied as a separate constant.
+    strong favourable gradient, through 4.00 at separation, to about 6.4 on the
+    reverse-flow branch.  Continuing past separation is what allows the
+    amplification rate inside a separation bubble to be read from the same
+    table as everywhere else rather than supplied as a separate constant.
+
+    WHY THIS SOLVES RATHER THAN INTERPOLATES.  This used to take the two family
+    members bracketing H_target and blend them linearly.  A linear combination
+    of two Falkner-Skan profiles is not a Falkner-Skan profile: it has the
+    requested H by construction, and it satisfies no similarity equation.  The
+    blend is close - its velocity is within 1.3e-4 of the true profile - but
+    the Orr-Sommerfeld operator is driven by U'', and U'' comes from f''',
+    which the blend gets wrong by 4e-4.
+
+    Measured against the standard Blasius benchmark (Jordinson 1970,
+    Re_delta* = 998, alpha delta* = 0.308, c = 0.36412 + 0.00796i), the blended
+    profile returns a growth rate 1.20 per cent LOW, and it stays 1.20 per cent
+    low however many collocation points are used, however far the outer
+    boundary is put, and whether the tabulation is interpolated linearly or by
+    cubic - because none of those is the cause.  Solved at the beta that gives
+    the requested H, the same code returns the benchmark to 0.02 per cent.
+
+    beta = 0 is not even a node of the family: the grid runs
+    ... 0.03394, 0.00596, -0.02202 ... so Blasius itself, the one profile whose
+    stability is most heavily published, was never actually in the table.
+
+    The family is still what brackets the root and seeds the solve, so this
+    costs one boundary-value solve per DISTINCT shape factor and is memoised.
+    Past the fold at H = 4.03 beta is no longer a usable parameter - the two
+    branches meet there - so the reverse branch is solved in the wall shear
+    f''(0) instead, which is the continuation parameter it was built with.
     """
-    global _COMB
     key = round(float(H_target), 5)
     if key in _H_CACHE:
         return _H_CACHE[key]
-    if _COMB is None:
-        _COMB = _combined_family()
-    eta, prof = _COMB
-    H = np.array([p[0] for p in prof])
-    t = float(np.clip(H_target, H[0], H[-1]))
-    j = int(np.clip(np.searchsorted(H, t) - 1, 0, H.size - 2))
-    w = (t - H[j])/(H[j+1] - H[j])
-    u = (1.0 - w)*prof[j][2] + w*prof[j+1][2]
-    up = (1.0 - w)*prof[j][3] + w*prof[j+1][3]
-    upp = (1.0 - w)*prof[j][4] + w*prof[j+1][4]
-    th = (1.0 - w)*prof[j][1] + w*prof[j+1][1]
-    # f''' rides along so that the Orr-Sommerfeld operator can form U'' by the
-    # chain rule instead of differentiating an interpolant; see _fs_third.
-    pr = (eta, u, up, t, th, upp)
+    eta, fam = _fs_family()
+    H_att = np.array([m[1] for m in fam])
+    b_att = np.array([m[0] for m in fam])
+    t = float(H_target)
+
+    def _seeded(guess_u, guess_up):
+        f0 = np.concatenate([[0.0],
+                             np.cumsum(0.5*(guess_u[1:] + guess_u[:-1])*np.diff(eta))])
+        return np.vstack([f0, guess_u, guess_up])
+
+    if t <= H_att[-1]:
+        t = float(np.clip(t, H_att[0], H_att[-1]))
+        j = int(np.clip(np.searchsorted(H_att, t) - 1, 0, H_att.size - 2))
+        lo, hi = float(b_att[j]), float(b_att[j+1])
+        guess = _seeded(fam[j][3], fam[j][4])
+
+        def resid(b):
+            sol = _fs_solve(b, eta, guess)
+            if not sol.success:
+                raise RuntimeError("Falkner-Skan failed at beta=%.6f" % b)
+            f, u, up = sol.sol(eta)
+            return _trapz(1.0 - u, eta)/_trapz(u*(1.0 - u), eta) - t
+
+        b = _bisect(resid, min(lo, hi), max(lo, hi))
+        sol = _fs_solve(b, eta, guess)
+        f, u, up = sol.sol(eta)
+        upp = _fs_third(b, f, u, up)
+    else:
+        rev = fs_reverse_family()
+        H_rev = np.array([m[2] for m in rev])
+        fw_rev = np.array([m[0] for m in rev])
+        t = float(np.clip(t, H_rev.min(), H_rev.max()))
+        k = int(np.argmin(np.abs(H_rev - t)))
+        k = int(np.clip(k, 1, len(rev) - 2))
+        guess = _seeded(rev[k][4], rev[k][5])
+        beta0 = rev[k][1]
+
+        def resid_fw(fw):
+            sol = _fs_solve_shear(fw, eta, guess, beta0)
+            if not sol.success:
+                raise RuntimeError("reverse-branch solve failed at f''(0)=%.6f" % fw)
+            f, u, up = sol.sol(eta)
+            return _trapz(1.0 - u, eta)/_trapz(u*(1.0 - u), eta) - t
+
+        j = int(np.clip(np.searchsorted(H_rev, t) - 1, 0, H_rev.size - 2))
+        fw = _bisect(resid_fw, min(fw_rev[j], fw_rev[j+1]),
+                     max(fw_rev[j], fw_rev[j+1]))
+        sol = _fs_solve_shear(fw, eta, guess, beta0)
+        f, u, up = sol.sol(eta)
+        upp = _fs_third(float(sol.p[0]), f, u, up)
+
+    th = _trapz(u*(1.0 - u), eta)
+    H_got = _trapz(1.0 - u, eta)/th
+    pr = (eta, u, up, float(H_got), float(th), upp)
     _H_CACHE[key] = pr
     return pr
+
+
+def _bisect(f, lo, hi, tol=1e-9, itmax=60):
+    """Bisection on a monotone residual, with the bracket widened if need be."""
+    flo, fhi = f(lo), f(hi)
+    grow = 0
+    while flo*fhi > 0.0 and grow < 6:
+        span = hi - lo
+        lo -= 0.25*span; hi += 0.25*span
+        flo, fhi = f(lo), f(hi)
+        grow += 1
+    if flo*fhi > 0.0:
+        return lo if abs(flo) < abs(fhi) else hi
+    for _ in range(itmax):
+        mid = 0.5*(lo + hi)
+        fm = f(mid)
+        if abs(fm) < tol or hi - lo < tol:
+            return mid
+        if flo*fm <= 0.0:
+            hi, fhi = mid, fm
+        else:
+            lo, flo = mid, fm
+    return 0.5*(lo + hi)
 
 
 def fs_H_range():
@@ -558,10 +644,11 @@ def tabulated_neutral_Re_theta(H=2.59129, hi=400.0, step=0.25):
     differ because the last node below the crossing holds an exact zero, so the
     interpolant cannot turn positive until it has climbed away from that node.
 
-    The value is 209, and it is NOT a node: RET_GRID has nodes at 204.21 and
-    233.92 and nothing between them.  Three places in this project described it
-    as "the nearest node of the Reynolds-number grid, Re_theta = 210", which is
-    wrong in both the number and the description; they now read this.
+    The value is NOT a node: RET_GRID has nodes at 204.21 and 233.92 and
+    nothing between them.  Three places in this project described it as "the
+    nearest node of the Reynolds-number grid, Re_theta = 210", which is wrong
+    in both the number and the description; they now read this instead, and it
+    is deliberately not restated in prose anywhere.
     """
     Rs = load_database()[1]
     for x in np.arange(float(Rs[0]), float(hi), float(step)):
@@ -859,14 +946,14 @@ def neutral_Re_theta(H=2.59129, lo=120.0, hi=400.0, tol=0.25, N=110,
 
     Bisected on max_omega sigma(Re_theta) from a direct temporal sweep, so it
     measures the eigenvalue solver rather than the resolution of the tabulated
-    Reynolds-number grid.  On the Blasius profile it returns 201 against the
-    accepted 200.5.  What the boundary-layer march sees is the interpolated
-    table, which first turns positive at Re_theta = 209 because the node below
-    the crossing holds an exact zero; that offset is the resolution of
-    RET_GRID, not an error in the eigenvalue solver.  See
-    tabulated_neutral_Re_theta, which computes it - 209 is where the
-    interpolant crosses, between nodes at 204 and 234, and is not itself a
-    node.
+    Reynolds-number grid.  On the Blasius profile it returns 200 against the
+    accepted 200.5 - 201 before fs_profile_for_H was made to solve the
+    similarity profile rather than blend two neighbours.  What the
+    boundary-layer march sees is the interpolated table, which first turns
+    positive a few units above that because the node below the crossing holds
+    an exact zero; that offset is the resolution of RET_GRID, not an error in
+    the eigenvalue solver.  tabulated_neutral_Re_theta computes it, and the
+    value is not restated here.
     """
     if alphas is None:
         alphas = np.geomspace(0.03, 0.35, 26)

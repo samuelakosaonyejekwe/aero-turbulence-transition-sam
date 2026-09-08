@@ -82,13 +82,15 @@ Two elements are not correlations:
   collocation, Gaster transformation), continued past separation onto the
   reverse-flow branch so that a separated profile has a computed rate too. The
   march carries one amplification factor per physical frequency. The stability
-  solver puts the Blasius neutral point at Re_θ = 201 against the accepted
-  200.5; what the march reads is the interpolated table, which first amplifies
-  at Re_θ = 209 — between Reynolds-number nodes at 204 and 234, so the offset is
-  the resolution of that grid rather than an error in the eigenvalue solver.
-  (`stability.tabulated_neutral_Re_theta()` computes it; this used to say
-  "the nearest node of its Reynolds-number grid, Re_θ = 210", which is neither
-  the value nor a node.)  Regenerate with
+  solver puts the Blasius neutral point at Re_θ = 200 against the accepted
+  200.5, and reproduces the standard Blasius Orr–Sommerfeld eigenvalue to
+  better than a tenth of a per cent; what the march reads is the interpolated
+  table, which first amplifies a few units above that — the node below the
+  crossing holds an exact zero, so the offset is the resolution of that grid
+  rather than an error in the eigenvalue solver.
+  (`stability.tabulated_neutral_Re_theta()` computes it, and it is not restated
+  here; this used to say "the nearest node of its Reynolds-number grid,
+  Re_θ = 210", which is neither the value nor a node.)  Regenerate with
   `python3 -c "import sys; sys.path.insert(0,'solver'); import stability;
   stability.build_database()"` (minutes, on several cores); the build is checkpointed
   per shape factor, so an interrupted run resumes rather than restarting.
@@ -98,9 +100,9 @@ Two elements are not correlations:
   (on T3C4 the shape factor rises through the plateau); reattachment is placed where the
   disturbance has amplified by the same N_crit used elsewhere, so the bubble
   length scales with the disturbance environment — measured, not asserted, into
-  `06_validation/bubble_length_scaling.csv`: 26 θ_s on the separating plate at
-  Tu = 2.11 % against a median of 206 over the 50 aerofoil bubbles at 0.03 %, a
-  spread of 7.8.  (This line said ≈42 and ≈226, the report said "a spread of
+  `06_validation/bubble_length_scaling.csv`: 28 θ_s on the separating plate at
+  Tu = 2.11 % against a median of 208 over the 50 aerofoil bubbles at 0.03 %, a
+  spread of 7.4.  (This line said ≈42 and ≈226, the report said "a spread of
   five and a half" and the solver's own comment said ≈40, ≈180 and "four and a
   half"; the claim is true and none of the three numbers was.)
   The amplification rate is **not fitted**: it is read
@@ -215,7 +217,7 @@ Flat plates — onset momentum-thickness Reynolds number:
 |------|------|-----------|------------|-----|-----------|
 | ERCOFTAC T3B  | 5.95 | 181.3 | 168.0 | −7.3 %  | bypass |
 | ERCOFTAC T3A  | 3.04 | 272.3 | 282.1 | +3.6 %  | bypass |
-| ERCOFTAC T3C4 | 2.11 | 309–381 † | 265.5 | −14.2 % † | separation |
+| ERCOFTAC T3C4 | 2.11 | 309–381 † | 266.2 | -13.9 % † | separation |
 | ERCOFTAC T3A⁻ | 0.87 | 818.8 | 683.6 | −16.5 % | bypass |
 | Schubauer & Skramstad | 0.03 | 1100 | 1100.7 | +0.1 % | natural |
 
@@ -224,7 +226,7 @@ minimum C_f, and on this plate C_f is 1.87×10⁻⁴ at x = 1.295 m against
 1.83×10⁻⁴ at 1.395 m — two per cent apart, at the hot-film floor. The two are
 indistinguishable, so onset is bracketed by them and quoting the second alone
 reports the *end* of the plateau as its beginning. Against the point value the
-error is −30.4 %; against the bracket, −14.2 %.
+error is -30.2 %; against the bracket, -13.9 %.
 
 Aerofoil — NLF(1)-0416, 86 transition locations digitised from NASA TP-1861
 Fig. 9, both surfaces, four chord Reynolds numbers, c_l from −1.03 to +1.62.
@@ -234,10 +236,10 @@ brackets transition within the 0.05c orifice pitch, so its own uncertainty is
 
 | Set | Points | mean abs. err | bias | within ±0.025c |
 |-----|--------|---------------|------|----------------|
-| Upper surface | 46 | 0.0385 c | −0.011 c | 24 (52 %) |
-| Lower surface | 40 | 0.0384 c | −0.032 c | 26 (65 %) |
-| All           | 86 | 0.0384 c | −0.021 c | 50 (58 %) |
-| **Conditions the method accepts** | **84** | **0.0313 c** | −0.016 c | **50 (60 %)** |
+| Upper surface | 46 | 0.0389 c | -0.010 c | 23 (50 %) |
+| Lower surface | 40 | 0.0382 c | -0.031 c | 27 (68 %) |
+| All           | 86 | 0.0386 c | -0.020 c | 50 (58 %) |
+| **Conditions the method accepts** | **84** | **0.0315 c** | -0.015 c | **50 (60 %)** |
 
 The "All" row includes two conditions the method explicitly declares it cannot
 handle — a burst bubble and a leading-edge bubble at x/c = 0.0016 — whose
@@ -257,10 +259,10 @@ Ablations, everything else held fixed (all 86 aerofoil points):
 
 | configuration | S&S | mean abs. err | within ±0.025c |
 |---|---|---|---|
-| no bubble closure | +0.1 % | 0.0629 c | 19/86 |
-| one-equation laminar march | −10.2 % | 0.0418 c | 42/86 |
-| Drela–Giles envelope | −11.7 % | 0.0431 c | 45/86 |
-| **full model** | **+0.1 %** | **0.0384 c** | **50/86** |
+| no bubble closure | +0.1 % | 0.0630 c | 18/86 |
+| one-equation laminar march | -10.0 % | 0.0415 c | 42/86 |
+| Drela–Giles envelope | -11.2 % | 0.0435 c | 46/86 |
+| **full model** | **+0.1 %** | **0.0386 c** | **50/86** |
 
 Reproduced by `python3 gen_validation.py`, which writes `06_validation/ablations.csv`;
 pass `--no-ablations` to skip the sweep.
@@ -271,7 +273,7 @@ Boltz et al. digitised from NACA TN D-338:
 
 | set | C1 = 150 (frozen constant) | C1 = 200 |
 |---|---|---|
-| Dagenhart & Saric — calibration | **22.0 %** | — |
+| Dagenhart & Saric — calibration | **21.8 %** | — |
 | Boltz et al. — independent | 51.1 % | **17.6 %** |
 
 Both columns of the independent set are computed and tabulated by
@@ -474,7 +476,7 @@ The smoke set also holds the solver to results published outside this work:
 the Falkner-Skan wall shear f''(0) at five values of beta (to 5e-5); the
 standard Blasius Orr-Sommerfeld benchmark, c = 0.36412 + 0.00796i at
 Re_delta* = 998 and alpha delta* = 0.308, which it reproduces to 1e-5 in phase
-speed and 1.2 % in growth rate; a symmetric section carrying exactly zero lift
+speed and better than 0.1 % in growth rate; a symmetric section carrying exactly zero lift
 at zero incidence and lift exactly odd in incidence; and Kutta-Joukowski, the
 lift from the pressure integral against the lift from the circulation.
 

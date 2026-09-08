@@ -159,7 +159,16 @@ def correlations_against_their_sources():
     assert abs(U._dn_dReth(h) - 0.01*np.sqrt(a*a + 0.25)) < 1e-12
 
     # -- Mack (1977) --------------------------------------------------------
-    assert abs(U._n_crit(1.0) - (-8.43 - 2.4*np.log(0.01) - 1.10)) < 1e-9
+    # The FORM is what is published; the anchor is this work's own units
+    # conversion and is read off the function rather than duplicated here.
+    # Duplicating it meant that re-setting the anchor for the corrected
+    # amplification rates failed this check on the constant, not on Mack.
+    import inspect
+    _anchor = inspect.signature(U._n_crit).parameters["anchor"].default
+    assert abs(U._n_crit(1.0) - (-8.43 - 2.4*np.log(0.01) - _anchor)) < 1e-9
+    # and Tu is clamped to the interval the correlation is quoted over
+    assert U._n_crit(0.02) == U._n_crit(0.08), "the low-Tu clamp is not at 0.08 %"
+    assert U._n_crit(5.0) == U._n_crit(3.0), "the high-Tu clamp is not at 2.98 %"
 
     # -- Karman-Tsien against the EXACT isentropic stagnation pressure ------
     M, g = 0.42, 1.4
@@ -290,11 +299,14 @@ def stability_against_published_eigenvalues():
     assert c is not None, "no unstable mode found at the Blasius benchmark point"
     assert abs(c.real - 0.36412) < 2e-4, \
         "phase speed %.5f against the published 0.36412" % c.real
-    # the growth rate carries a systematic deficit of 1.2 per cent, which
-    # is what "reproduces published amplification rates to within a few per
-    # cent" in _n_crit's docstring is claiming; hold it to that
-    assert abs(c.imag - 0.00796)/0.00796 < 0.03, \
-        "growth rate %.5f against the published 0.00796 - more than 3 %%" % c.imag
+    # The growth rate used to carry a systematic 1.2 per cent deficit, which
+    # was fs_profile_for_H blending two similarity profiles instead of solving
+    # one: a blend has the requested H and satisfies no similarity equation,
+    # and U'' - which drives the instability - was wrong by 4e-4.  Solved, the
+    # same code returns the benchmark to better than a tenth of a per cent, so
+    # this is held to 0.5 and not to the 3 that tolerated the defect.
+    assert abs(c.imag - 0.00796)/0.00796 < 0.005, \
+        "growth rate %.6f against the published 0.00796 - more than 0.5 %%" % c.imag
 
 
 @check

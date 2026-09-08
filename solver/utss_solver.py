@@ -268,7 +268,7 @@ def _tu_decay(Tu0_pct, x, L_turb, U=None, cal=None):
     return Tu0*100.0*(1.0 + a*xx)**(-p)
 
 
-def _n_crit(Tu_pct, floor=0.5, anchor=1.10):
+def _n_crit(Tu_pct, floor=0.5, anchor=1.04):
     """Critical amplification factor from the free-stream turbulence level.
 
     Mack's correlation, N_crit = -8.43 - 2.4 ln(Tu) with Tu as a fraction,
@@ -289,8 +289,13 @@ def _n_crit(Tu_pct, floor=0.5, anchor=1.10):
     the only quantity in the natural branch set by measurement.
 
     It is set on the Schubauer & Skramstad plate ALONE - the one measurement in
-    this work of natural transition on a flat plate - and 1.10 reproduces its
-    quoted onset, Re_theta_t = 1100, to 0.07 per cent.
+    this work of natural transition on a flat plate - and 1.04 reproduces its
+    quoted onset, Re_theta_t = 1100, to 0.07 per cent.  It was 1.10 against the
+    amplification rates as they stood before fs_profile_for_H was made to SOLVE
+    the similarity profile at the requested shape factor rather than blend two
+    neighbours; those rates were about a per cent low, the anchor absorbed it,
+    and when they were corrected the anchor had to move with them.  That is the
+    unit conversion doing exactly what it is for.
 
     It used to be chosen jointly over that plate AND all 86 NLF(1)-0416
     aerofoil conditions, at whatever value put the most predictions inside the
@@ -303,7 +308,9 @@ def _n_crit(Tu_pct, floor=0.5, anchor=1.10):
     The cost of that is real and is reported rather than buried: on the
     aerofoil set the count inside the +/-0.025c bracket went from 51 to 50 and
     the mean absolute error rose, which is what happens when a constant stops
-    being fitted to the set it is scored on.  The flat plate goes from +5.6 per
+    being fitted to the set it is scored on.  Re-setting the anchor for the
+    corrected rates cost that set nothing further - it stays at 50 of 86, with
+    the mean error moving by 0.0003 chord.  The flat plate goes from +5.6 per
     cent to +0.07 per cent.  The error figures are NOT quoted here: this said
     "0.0319c to 0.0334c", and the set's mean has since moved with corrections
     that have nothing to do with the anchor, so a before-and-after pair frozen
