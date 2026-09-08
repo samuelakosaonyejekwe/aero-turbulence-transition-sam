@@ -91,7 +91,11 @@ def finish(fig, path, caption=None):
         fig.subplots_adjust(bottom=0.16)
         fig.text(0.5, 0.015, caption, ha="center", va="bottom",
                  fontsize=8.5, color=INK_SOFT, style="italic")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # A path with no directory part - "figure.png" - gives dirname "", and
+    # os.makedirs("") raises FileNotFoundError rather than doing nothing.
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
     fig.savefig(path, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     return path

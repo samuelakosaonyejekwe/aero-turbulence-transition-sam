@@ -3,7 +3,7 @@ A_TS,1.0,TS/natural onset progress weight,"unity, not fitted; the natural branch
 A_BP,1.0,bypass onset weight,unity; validated on ERCOFTAC T3A/T3A-/T3B
 A_SEP,1.0,separation-induced weight,unity; validated on T3C4 and NLF(1)-0416 lower surface
 A_CF,1.0,crossflow weight,unity; Arnal C1 criterion
-N_crit,from Tu,e^N amplification factor,"Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored -1.10 (FITTED jointly on S&S and 86 aerofoil pts); 7.58 for Tu<0.08%"
+N_crit,from Tu,e^N amplification factor,"Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored -1.10 (set on the Schubauer-Skramstad plate ALONE; see N_anchor below); 7.58 for Tu<0.08%"
 N_floor,0.5,lower clamp on N_crit at high Tu,clamp; bypass governs there
 Tu_BP_lo,0.1,Tu [%] below which the bypass correlation carries no weight,lower edge of the natural/bypass blend; below it the e^N branch alone governs
 Tu_BP_hi,0.25,Tu [%] above which the bypass correlation carries all the weight,"upper edge of the same blend.  Replaces the single Tu_TS_max gate, which made the predicted transition location a step function of Tu; the window is wider than the spread of any case here, so no result in this study is blended"

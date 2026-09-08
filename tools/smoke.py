@@ -124,6 +124,83 @@ def amplification_database():
 # 3.  the inviscid solution
 # ----------------------------------------------------------------------
 @check
+def correlations_against_their_sources():
+    """every published correlation, against the form its source publishes"""
+    import case_config as C
+    import utss_solver as U
+
+    # -- Thwaites, as fitted in White, Viscous Fluid Flow -------------------
+    assert abs(U._thwaites_HL(0.0)[1] - 0.220) < 5e-4, "l(0) is not 0.220"
+    assert abs(U._thwaites_HL(0.0)[0] - 2.61) < 5e-3, "H(0) is not the fit's 2.61"
+    assert abs(U._thwaites_HL(-0.09)[0] - (2.088 + 0.0731/0.05)) < 1e-9
+    assert abs(U._thwaites_HL(-0.09)[1]) < 6e-3, "l does not vanish at lambda = -0.09"
+
+    # -- Head (1958) H1(H), and the inverse the march marches on ------------
+    assert abs(U._head_H1(1.6) - (3.3 + 0.8234*0.5**-1.287)) < 1e-9
+    assert abs(U._head_H1(1.6) - (3.3 + 1.5501*(1.6 - 0.6778)**-3.064)) < 0.03, \
+        "the two H1 branches do not meet at H = 1.6"
+    for H in (1.3, 1.45, 1.8, 2.4):
+        assert abs(U._head_H_from_H1(U._head_H1(H)) - H) < 3e-3, \
+            "H1 inversion off at H = %.2f" % H
+
+    # -- Ludwieg & Tillmann (1950) -----------------------------------------
+    assert abs(U._ludwieg_tillmann(1.4, 1000.0)
+               - 0.246*10**(-0.678*1.4)*1000.0**-0.268) < 1e-12
+
+    # -- Abu-Ghannam & Shaw (1980) -----------------------------------------
+    assert abs(U._ags_re_theta_t(3.0, 0.0)
+               - (163.0 + np.exp(6.91*(1.0 - 3.0/6.91)))) < 1e-9
+
+    # -- Drela & Giles (1987), the envelope behind the use_os_db ablation ---
+    h = 2.59129; hm = 1.0/(h - 1.0)
+    assert abs(np.log10(U._re_theta_crit(h))
+               - ((1.415*hm - 0.489)*np.tanh(20*hm - 12.9) + 3.295*hm + 0.44)) < 1e-12
+    a = 2.4*h - 3.7 + 2.5*np.tanh(1.5*h - 4.65)
+    assert abs(U._dn_dReth(h) - 0.01*np.sqrt(a*a + 0.25)) < 1e-12
+
+    # -- Mack (1977) --------------------------------------------------------
+    assert abs(U._n_crit(1.0) - (-8.43 - 2.4*np.log(0.01) - 1.10)) < 1e-9
+
+    # -- Karman-Tsien against the EXACT isentropic stagnation pressure ------
+    M, g = 0.42, 1.4
+    b = np.sqrt(1 - M*M)
+    kt = 1.0/(b + (M*M/(1 + b))*0.5)
+    exact = 2/(g*M*M)*((1 + (g - 1)/2*M*M)**(g/(g - 1)) - 1)
+    assert abs(kt - exact) < 0.006, "Karman-Tsien stagnation Cp %.4f vs exact %.4f" % (kt, exact)
+    assert kt < 1.0/b, "Karman-Tsien should stay below Prandtl-Glauert"
+
+    # -- Dhawan & Narasimha, the two forms of one law ----------------------
+    assert abs(9.0/0.664**1.5 - 16.63) < 5e-3
+
+    # -- the flight conditions against Sutherland and the ISA --------------
+    # These are typed into case_config, and nothing checked that they are the
+    # gas they claim to be.
+    for nm, d, T in (("cruise", C.CRUISE, 216.65), ("climb", C.CLIMB, 268.66)):
+        mu = U._sutherland_mu(T)
+        assert abs(d["mu_inf"] - mu) < 1e-8, \
+            "%s mu_inf %.4e is not Sutherland at %.2f K (%.4e)" % (nm, d["mu_inf"], T, mu)
+        assert abs(d["a_sound"] - np.sqrt(1.4*287.05*T)) < 0.02, \
+            "%s speed of sound is not sqrt(gamma R T)" % nm
+        assert abs(d["T_inf_K"] - T) < 1e-9
+    assert abs(C.CRUISE["rho_inf"] - 22632.0/(287.05*216.65)) < 5e-5, \
+        "cruise density is not p/(R T) at the quoted FL360 pressure"
+
+    # -- the reference-temperature closure ---------------------------------
+    # exactly 1 at M_e = 0 either way, so no incompressible case can move
+    for Te in (None, np.array([216.65])):
+        for lam in (True, False):
+            assert abs(float(U._ref_temp_nu(np.array([0.0]), laminar=lam,
+                                            Te_K=Te)[0]) - 1.0) < 1e-15
+    # and Sutherland must exceed the room-temperature power law at 216 K,
+    # because omega there is 0.838 and not 0.76
+    pw = float(U._ref_temp_nu(np.array([0.42]), laminar=False)[0])
+    su = float(U._ref_temp_nu(np.array([0.42]), laminar=False,
+                              Te_K=np.array([216.65]))[0])
+    assert su > pw, "Sutherland factor %.5f below the power law %.5f" % (su, pw)
+    assert abs(su - pw)/pw < 0.01, "the two viscosity laws differ by more than 1 %"
+
+
+@check
 def panel_solution():
     """panel method: closed loop, stagnation pressure, compressibility"""
     import case_config as C
@@ -311,6 +388,79 @@ def compressible_closures():
 
 
 @check
+def swept_drag_factor():
+    """the swept drag conversion, against the yawed flat plate it must reproduce"""
+    from utss_solver import _swept_drag_factor as F
+    # 1. zero sweep is Squire-Young untouched
+    for r_ in (0.7, 0.84, 1.0):
+        for H in (1.4, 2.15, 2.8):
+            assert abs(F(r_, H, 0.0) - r_**((H + 5.0)/2.0)) < 1e-12
+            # and sweep_transform=False must recover it at any sweep
+            assert abs(F(r_, H, 45.0, swept=False) - r_**((H + 5.0)/2.0)) < 1e-12
+
+    # 2. THE CHECK THAT SETS THE FORM.  A flat plate at yaw is a flat plate in
+    #    the free stream, so its drag is the unyawed value at the streamwise run
+    #    length: with U_e,n = U_n the factor must be exactly cos(L), for every
+    #    sweep and every shape factor.  2 theta_n/c_n * cos(L) = 2 theta_n/c,
+    #    and the independence principle gives theta_n = theta_streamwise.
+    #    The cos^2(L) this replaced fails here by a whole cos(L) - 29 % at 45
+    #    degrees - and so would cos^3(L) on Squire-Young alone, by cos^2(L).
+    for L in (0.0, 5.0, 12.0, 30.0, 45.0, 60.0):
+        for H in (1.4, 2.15, 2.8, 4.0):
+            got = F(1.0, H, L)
+            assert abs(got - np.cos(np.radians(L))) < 1e-12, \
+                "yawed flat plate at L=%g, H=%g: factor %.6f, cos(L) %.6f" \
+                % (L, H, got, np.cos(np.radians(L)))
+
+    # 3. continuous at zero sweep, bounded, and falling once the geometry
+    #    dominates.  It is NOT monotone from zero: the factor is cos(L) times a
+    #    cos^2/sin^2-weighted mean of r^p and r, and with r < 1 < p the
+    #    span-wise term r is the LARGER of the two, so a little sweep raises the
+    #    drag by a quarter of a per cent before cos(L) takes over near 20 deg.
+    r_, H = 0.84, 2.2
+    p_ = (H + 5.0)/2.0
+    vals = [F(r_, H, L) for L in (0.0, 1.0, 12.0, 30.0, 45.0)]
+    assert abs(vals[0] - r_**p_) < 1e-12, "zero sweep is not Squire-Young"
+    assert abs(vals[0] - vals[1]) < 2e-3, "discontinuous at zero sweep"
+    for L in (0.0, 5.0, 12.0, 30.0, 45.0, 60.0):
+        c = np.cos(np.radians(L))
+        lo, hi = c*min(r_**p_, r_), c*max(r_**p_, r_)
+        assert lo - 1e-12 <= F(r_, H, L) <= hi + 1e-12, \
+            "factor at L=%g is not cos(L) times a mean of r^p and r" % L
+    tail = [F(r_, H, L) for L in (20.0, 30.0, 45.0, 60.0)]
+    assert all(a > b for a, b in zip(tail, tail[1:])), \
+        "drag factor does not fall with sweep beyond 20 deg: %s" % tail
+
+    # 4. the span-wise term is additive, so the factor must exceed the
+    #    chordwise-only cos^3(L) Squire-Young term at any real sweep
+    for L in (12.0, 45.0):
+        r_, H = 0.84, 2.2
+        chord_only = np.cos(np.radians(L))**3 * r_**((H + 5.0)/2.0)
+        assert F(r_, H, L) > chord_only, "span-wise friction term is missing"
+
+
+@check
+def swept_drag_is_near_unswept_at_small_sweep():
+    """12 deg of sweep must not move the viscous drag by five per cent"""
+    import case_config as C
+    from utss_solver import solve_airfoil
+    cr, W = C.CRUISE, C.WING
+    X, Y = C.nlf16_panel_points(80)
+    cd = {}
+    for sw in (0.0, W["le_sweep_deg"]):
+        r = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                          W["MAC"], cr["Tu_pct"], sweep_deg=sw, mach=cr["mach"])
+        cd[sw] = r["Cd"]
+    d = abs(cd[W["le_sweep_deg"]] - cd[0.0])/cd[0.0]
+    # A mild sweep leaves the wetted area and the streamwise run length very
+    # nearly alone, so the streamwise profile drag has to be very nearly the
+    # unswept one.  The cos^2(L) conversion this replaced put it 4.4 % below.
+    assert d < 0.02, ("12 deg of sweep moved the section drag by %.1f %%: "
+                      "%.2f counts unswept, %.2f swept"
+                      % (100*d, cd[0.0]*1e4, cd[W["le_sweep_deg"]]*1e4))
+
+
+@check
 def airfoil_output_contract():
     """solve_airfoil returns what run_solution and gen_validation read"""
     import case_config as C
@@ -318,15 +468,28 @@ def airfoil_output_contract():
     X, Y = C.nlf16_panel_points(80)
     r = solve_airfoil(X, Y, 1.5, 120.0, 4.0e-5, 1.9, 0.07,
                       sweep_deg=12.0, mach=0.42)
-    for k in ("panel", "surfaces", "Cl", "Cd", "alpha", "theta_te_c"):
+    for k in ("panel", "surfaces", "Cl", "Cd", "alpha", "theta_te_c",
+              "alpha_normal_deg", "cos_sweep", "mach_solve", "sweep_transform"):
         assert k in r
+    # "alpha" is the incidence the caller asked for and "alpha_normal_deg" the
+    # one the panel method was run at; on a swept section they must differ, or
+    # the normal-plane transformation has overwritten the streamwise value again
+    assert abs(r["alpha"] - 1.5) < 1e-12, "alpha is not the requested incidence"
+    assert r["alpha_normal_deg"] > r["alpha"], "normal-plane incidence not raised"
+    assert abs(r["mach_solve"] - 0.42*r["cos_sweep"]) < 1e-12
     for surf in ("upper", "lower"):
         s = r["surfaces"][surf]
         for k in ("x", "y", "Cp", "Re_x", "x_tr_chord", "x_sep_chord",
                   "bubble_burst", "theta_te_c", "H_te", "H_te_at_clip",
-                  "sep_margin_H", "x_sep_turb_chord"):
+                  "sep_margin_H", "x_sep_turb_chord", "Me",
+                  "Ue_te_ratio", "H_te_squire_young"):
             assert k in s, "surface dict lost %r" % k
-        assert len(s["x"]) == len(s["s"]) == len(s["Cf"])
+        assert len(s["x"]) == len(s["s"]) == len(s["Cf"]) == len(s["Me"])
+        # the edge Mach number must come off the corrected pressure, not off
+        # U_e/a_inf; the two differ by over a per cent at cruise
+        me = np.asarray(s["Me"], float)
+        _finite("Me", me)
+        assert me.min() >= 0.0 and me.max() < 1.0, "edge Mach outside [0,1)"
 
 
 # ----------------------------------------------------------------------
@@ -384,6 +547,25 @@ def verify_outputs_contract():
     assert V.find_value(V.flatten("NLF vs fully-turbulent drag. 168.0"),
                         "168", "NLF vs fully-turbulent drag")[0], \
         "168 did not match 168.0"
+    # A .docx must be flattened IN DOCUMENT ORDER.  Reading every paragraph and
+    # then every table puts each caption tens of thousands of characters from
+    # the table it labels, and every anchored check then fails with "present,
+    # but not within 2500 chars" on a document whose numbers are all correct.
+    import tempfile
+    from docx import Document as _D
+    d = _D()
+    d.add_paragraph("ANCHOR CAPTION HERE")
+    t = d.add_table(rows=1, cols=2)
+    t.rows[0].cells[0].text = "value"; t.rows[0].cells[1].text = "42.0"
+    d.add_paragraph("TRAILING PARAGRAPH")
+    with tempfile.TemporaryDirectory() as td:
+        f = os.path.join(td, "order.docx")
+        d.save(f)
+        txt = V.flatten(V.document_text(f)[0])
+    assert txt.index("ANCHOR CAPTION") < txt.index("42.0") < txt.index("TRAILING"), \
+        "document_text does not preserve .docx body order: %r" % txt
+    assert V.find_value(txt, "42.0", "ANCHOR CAPTION HERE")[0], \
+        "a table value is no longer anchorable to the caption above it"
 
 
 def main():

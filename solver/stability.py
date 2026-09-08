@@ -528,8 +528,11 @@ def sigma_lookup(H, Re_theta, omega):
 
     H and Re_theta are clamped to the tabulated range, which runs from H = 2.15
     - strongly accelerated and effectively stable - past the separation profile
-    and onto the reverse-flow branch at H = 4.96, so that a detached shear layer
-    reads its rate from the same table as an attached one.  omega outside the
+    and onto the reverse-flow branch, whose last node is H_REVERSE = 4.90, so
+    that a detached shear layer reads its rate from the same table as an
+    attached one.  (H_GRID's adverse leg is arange(3.00, 4.96, 0.095), whose
+    last member is 4.90; this said 4.96, which is the open end of that range
+    and not a tabulated shape factor.)  omega outside the
     tabulated band returns zero, which is correct - those frequencies are not
     amplified.
 
@@ -543,6 +546,30 @@ def sigma_lookup(H, Re_theta, omega):
     if omega < Os[0] or omega > Os[-1]:
         return 0.0
     return float(np.interp(omega, Os, sigma_curve(H, Re_theta)))
+
+
+def tabulated_neutral_Re_theta(H=2.59129, hi=400.0, step=0.25):
+    """Where the INTERPOLATED table first amplifies, and the nodes bracketing it.
+
+    Returns (Re_theta, node_below, node_above).  neutral_Re_theta() measures the
+    eigenvalue solver by a direct sweep and puts the Blasius neutral point at
+    201 against the accepted 200.5; this measures what the boundary-layer march
+    actually reads, which is the bilinear interpolation of RET_GRID.  The two
+    differ because the last node below the crossing holds an exact zero, so the
+    interpolant cannot turn positive until it has climbed away from that node.
+
+    The value is 209, and it is NOT a node: RET_GRID has nodes at 204.21 and
+    233.92 and nothing between them.  Three places in this project described it
+    as "the nearest node of the Reynolds-number grid, Re_theta = 210", which is
+    wrong in both the number and the description; they now read this.
+    """
+    Rs = load_database()[1]
+    for x in np.arange(float(Rs[0]), float(hi), float(step)):
+        if sigma_curve(H, float(x)).max() > 0.0:
+            j = int(np.searchsorted(Rs, x))
+            return (float(x), float(Rs[max(j - 1, 0)]),
+                    float(Rs[min(j, Rs.size - 1)]))
+    return (float("nan"), float("nan"), float("nan"))
 
 
 def omega_grid_bounds():
@@ -834,9 +861,12 @@ def neutral_Re_theta(H=2.59129, lo=120.0, hi=400.0, tol=0.25, N=110,
     measures the eigenvalue solver rather than the resolution of the tabulated
     Reynolds-number grid.  On the Blasius profile it returns 201 against the
     accepted 200.5.  What the boundary-layer march sees is the interpolated
-    table, which first turns positive at Re_theta = 210 because the node below
+    table, which first turns positive at Re_theta = 209 because the node below
     the crossing holds an exact zero; that offset is the resolution of
-    RET_GRID, not an error in the eigenvalue solver.
+    RET_GRID, not an error in the eigenvalue solver.  See
+    tabulated_neutral_Re_theta, which computes it - 209 is where the
+    interpolant crosses, between nodes at 204 and 234, and is not itself a
+    node.
     """
     if alphas is None:
         alphas = np.geomspace(0.03, 0.35, 26)
@@ -1141,11 +1171,12 @@ if __name__ == "__main__":
     # 3. the Blasius neutral point, from the solver and from the table
     _n = neutral_Re_theta()
     # what the march actually sees: the bilinearly interpolated table
-    _tab = next((float(R) for R in np.arange(RET_GRID[0], 400.0, 1.0)
-                 if sigma_curve(2.59129, float(R)).max() > 0.0), float("nan"))
+    _tab, _lo_node, _hi_node = tabulated_neutral_Re_theta()
     print("Blasius neutral point: solver Re_theta = %.0f (accepted 200.5), "
-          "tabulated grid Re_theta = %.0f  %s"
-          % (_n, _tab, "OK" if abs(_n - 200.5) < 5.0 else "FAIL"))
+          "interpolated table Re_theta = %.0f (between grid nodes %.0f and "
+          "%.0f; not itself a node)  %s"
+          % (_n, _tab, _lo_node, _hi_node,
+             "OK" if abs(_n - 200.5) < 5.0 else "FAIL"))
 
     # 3b. the single-frequency lookup must agree with the curve the march reads
     _c = sigma_curve(3.0, 500.0)

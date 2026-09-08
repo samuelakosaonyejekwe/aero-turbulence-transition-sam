@@ -54,13 +54,55 @@ def document_text(path):
         import fitz
         with fitz.open(path) as d:
             return "\n".join(p.get_text() for p in d), d.page_count
+    return _docx_text(path), None
+
+
+def _docx_text(path):
+    """A .docx flattened IN DOCUMENT ORDER.
+
+    Every check here anchors a value to a caption and requires the two within
+    WINDOW characters of each other, and a caption is a paragraph while the
+    value it labels is in a table.  Reading `doc.paragraphs` and then
+    `doc.tables`, as this did, emits every paragraph in the document followed
+    by every table in the document: the narrative and the data end up tens of
+    thousands of characters apart, and 20 of the 26 anchored checks failed on a
+    .docx with the message "present, but not within 2500 chars" - the value was
+    right, the layout the checker saw was not the document's.
+
+    It never showed, because the default target is the rendered PDF, whose text
+    extractor emits the body in order.  It shows the moment anyone points this
+    script at the .docx the build actually produces, which is what
+    tools/pipeline.py now does.
+
+    The body's XML children carry the real order, so they are walked directly
+    and each w:p / w:tbl mapped back to its python-docx object.  Tables nest,
+    so a cell's own paragraphs and tables are walked the same way.
+    """
     from docx import Document
-    d = Document(path)
-    parts = [p.text for p in d.paragraphs]
-    for t in d.tables:
-        for r in t.rows:
-            parts.append(" | ".join(c.text for c in r.cells))
-    return "\n".join(parts), None
+    from docx.document import Document as _Doc
+    from docx.table import Table, _Cell
+    from docx.text.paragraph import Paragraph
+
+    def walk(parent):
+        if isinstance(parent, _Doc):
+            elm = parent.element.body
+        elif isinstance(parent, _Cell):
+            elm = parent._tc
+        else:                                    # pragma: no cover - guard
+            raise TypeError("cannot walk %r" % type(parent))
+        for child in elm.iterchildren():
+            tag = child.tag.split("}")[-1]
+            if tag == "p":
+                yield Paragraph(child, parent).text
+            elif tag == "tbl":
+                t = Table(child, parent)
+                for row in t.rows:
+                    cells = []
+                    for c in row.cells:
+                        cells.append(" ".join(x for x in walk(c) if x))
+                    yield " | ".join(cells)
+
+    return "\n".join(walk(Document(path)))
 
 
 def flatten(txt):
@@ -257,11 +299,14 @@ def structural_checks(txt, raw):
                 else "%d value(s), e.g. %s" % (len(longs), ", ".join(longs[:4]))))
 
     # A number rendered as a bare sentinel or a failed format.
-    for needle, lab in (("1e+09", "no 1e9 branch-inactive sentinel"),
-                        ("nan", "no bare NaN in the text"),
-                        ("None", "no bare None in the text")):
+    # "nan" is matched case-insensitively: str(float('nan')) is 'nan' but numpy
+    # and pandas both print 'NaN' in places, and a check that only looked for
+    # the lower-case spelling would pass on the upper-case one.
+    for needle, lab, flags in (("1e+09", "no 1e9 branch-inactive sentinel", 0),
+                               ("nan", "no bare NaN in the text", re.I),
+                               ("None", "no bare None in the text", 0)):
         hits = len(re.findall(r"(?<![A-Za-z])" + re.escape(needle) + r"(?![A-Za-z])",
-                              txt))
+                              txt, flags))
         out.append((lab, hits == 0, "clean" if not hits else "%d occurrence(s)" % hits))
     return out
 
