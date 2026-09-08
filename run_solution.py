@@ -162,10 +162,14 @@ def pressure_field(cond,name):
     # with the BLAS thread count, so a regeneration that changed nothing
     # physical still rewrote both field files and both .npz - which is a large
     # part of why the history is four times the size of the working tree.
-    df=pd.DataFrame({"x_c":Xg.ravel().round(6),"y_c":Yg.ravel().round(6),
-                     "Cp":Cp.ravel().round(5),
-                     "Vx_ms":Vx.ravel().round(4),"Vy_ms":Vy.ravel().round(4),
-                     "speed_ms":spd.ravel().round(4)})
+    # `+ 0.0` collapses NEGATIVE zero, which rounding a small negative produces
+    # and which these two files carried 249 times between them.  It is a
+    # published data file; "-0.0" in it is a sign that is not there.
+    df=pd.DataFrame({"x_c":Xg.ravel().round(6)+0.0,"y_c":Yg.ravel().round(6)+0.0,
+                     "Cp":Cp.ravel().round(5)+0.0,
+                     "Vx_ms":Vx.ravel().round(4)+0.0,
+                     "Vy_ms":Vy.ravel().round(4)+0.0,
+                     "speed_ms":spd.ravel().round(4)+0.0})
     df.to_csv(f"{SOL}/field_pressure_{name}.csv",index=False)
     # No .npz beside it.  One was written here for years, 1.8 MB per case, and
     # NOTHING read it: gen_postprocessing._solution_field reads the CSV, which
@@ -406,10 +410,16 @@ def induced_angle_deg(eta, alpha_deg=None):
     each station.  Doing that at the geometric incidence - root incidence plus
     washout, which is what alpha_eff_deg used to report - leaves out the
     downwash of the wing the stations belong to, and the report computes that
-    downwash two sections earlier: an AR = 8.7 wing at the cruise C_L carries
-    0.61 deg of it, against a root incidence of 1.5 deg.  Left out, the root
-    strip runs at c_l = 0.517 instead of 0.432 and the tip strip at 0.107
-    instead of 0.022, a factor of five.
+    downwash two sections earlier: a strip run at the geometric incidence is a
+    two-dimensional aerofoil, not a station on a finite wing.
+
+    No figures for it here.  This docstring gave the downwash as 0.61 deg and
+    the section lift it costs as 0.517 against 0.432 at the root and 0.107
+    against 0.022 at the tip, "a factor of five"; none of the five reproduces.
+    04_solution/spanwise_distribution.csv carries alpha_induced_deg,
+    alpha_eff_deg and c_l_section at every station, which is where the effect
+    should be read: it is a large correction across the whole span, not a tip
+    effect, and it is not a factor of five anywhere.
 
     Cached per incidence: the monoplane solve is one linear system but the
     section lift-curve slope it needs costs three panel solves.

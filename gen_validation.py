@@ -302,6 +302,20 @@ def run_validation():
      ("Calibration","Linear stability / amplification database",
       "Orr (1907); Sommerfeld (1908); Gaster M. (1962), JFM 14, 222; Mack L.M. (1977), "
       "AGARD CP-224; Drela M. & Giles M.B. (1987), AIAA J. 25(10), 1347."),
+     # The stationary cross-flow eigenvalue problem.  The report and
+     # stability.py both rest on these four and this table listed none of
+     # them: the Falkner-Skan-Cooke mean flow, the three-dimensional stability
+     # formulation, the N-factors the solve is CHECKED against, and the
+     # receptivity finding that is the report's explanation for why a single
+     # critical value does not transfer between the two facilities.
+     ("Calibration","Stationary cross-flow stability",
+      "Cooke J.C. (1950), 'The boundary layer of a class of infinite yawed "
+      "cylinders', Proc. Camb. Phil. Soc. 46, 645; Mack L.M. (1984), "
+      "'Boundary-layer linear stability theory', AGARD R-709; Dagenhart & "
+      "Saric, NASA/TP-1999-209344, Tables 3-5 (SALLY N-factors at f = 0, the "
+      "independent check on stability.stationary_crossflow) and Sec. 2 "
+      "(Radeztsky et al. on micron-scale leading-edge roughness, the "
+      "receptivity the amplification factor cannot carry)."),
      ("Case study","NLF aerofoil design reference",
       "Somers D.M. (1981), 'Design and Experimental Results for a Natural-Laminar-Flow "
       "Airfoil for General Aviation Applications', NASA TP-1861 (NLF(1)-0416)."),

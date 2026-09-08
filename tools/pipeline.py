@@ -51,12 +51,20 @@ STAGES = {
                                              "validation", "equations", "post"],
                    "case.docx"),
     "verify":     ("verify_outputs.py",     ["docx"], "(checks only)"),
+    # The README banner and the Pages social card.  They were hand-made, were
+    # the only artefacts with no generating source, and both had drifted to
+    # claiming "~37 % drag reduction" against 50.4 and "<= 4 % validation
+    # error" against a five-plate mean of 8.3.  They read the same CSVs the
+    # report is checked against, and the wing on them is the 3-D render `post`
+    # writes, so this stage waits on both.
+    "assets":     ("gen_assets.py",          ["solution", "validation", "post"],
+                   "assets/"),
 }
 
 # Heaviest first, so a two-worker pool is never left holding one long stage at
 # the end while the other sits idle.  Measured on the reference machine.
 _WEIGHT = {"validation": 100, "solution": 40, "post": 25, "mesh": 12,
-           "geometry": 8, "docx": 8, "equations": 3, "verify": 3}
+           "geometry": 8, "docx": 8, "equations": 3, "verify": 3, "assets": 2}
 
 
 def _physical_cores():

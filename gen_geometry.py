@@ -184,13 +184,20 @@ def build_geometry():
     x_te = x_le + chord
     twist = eta*W["twist_tip_deg"]
     z_dih = y*np.tan(np.radians(W["dihedral_deg"]))
-    df_pl = pd.DataFrame({"eta": eta.round(4), "y_m": y.round(4),
-                          "chord_m": chord.round(4),
-                          "x_le_m": x_le.round(4), "x_te_m": x_te.round(4),
-                          "twist_deg": twist.round(3),
-                          "z_dihedral_m": z_dih.round(4),
+    # `+ 0.0` after every round is not decoration: IEEE rounding of a small
+    # negative gives NEGATIVE zero, and the root station's twist is exactly
+    # -(0 * twist_tip), so wing_planform.csv published "-0.0" for it and the
+    # report's planform table printed a negative twist at the root.  Adding
+    # positive zero is the defined way to collapse the sign (-0.0 + 0.0 = +0.0)
+    # and leaves every other value untouched.
+    df_pl = pd.DataFrame({"eta": eta.round(4) + 0.0, "y_m": y.round(4) + 0.0,
+                          "chord_m": chord.round(4) + 0.0,
+                          "x_le_m": x_le.round(4) + 0.0,
+                          "x_te_m": x_te.round(4) + 0.0,
+                          "twist_deg": twist.round(3) + 0.0,
+                          "z_dihedral_m": z_dih.round(4) + 0.0,
                           "Re_local": (C.CRUISE["U_inf"]*chord
-                                       / C.CRUISE["nu_inf"]).round(-2)})
+                                       / C.CRUISE["nu_inf"]).round(-2) + 0.0})
     df_pl.to_csv(f"{GEO}/wing_planform.csv", index=False)
 
     # 3D lofted surface (sampled)

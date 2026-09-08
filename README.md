@@ -501,8 +501,12 @@ Sources recorded in `06_validation/sources_and_references.csv`.
                   error summary (aerofoil_nlf0416_summary.csv) and the
                   ablation sweep (ablations.csv)
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
-solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld +
-                  amplification database), case_config.py, uplot.py (style)
+solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld,
+                  Falkner-Skan and Falkner-Skan-Cooke), case_config.py,
+                  uplot.py (style), and the two tabulated databases that are
+                  committed because they cost minutes and hours to build:
+                  amplification_db.npz (streamwise e^N rates) and
+                  crossflow_db.npz (stationary cross-flow rates)
 tools/            smoke.py (the whole solver checked in well under a minute),
                   pipeline.py (staged regeneration, timings written to
                   .pipeline/timings.json), baseline.py (numeric diff of every
@@ -514,6 +518,22 @@ utss_paths.py     anchors every entry point to the repository root, so a
 verify_outputs.py checks the compiled report against the generated CSVs
 aero_turbulence_transition_report.pdf   FULL compiled report (tracked)
 case.docx         the same report as .docx - a build product, not tracked
+gen_*.py          the five generators: geometry, mesh/model setup, validation,
+                  post-processing and the equation document
+run_solution.py   the case-study solve, and every 04_solution/ output
+build_docx.py     assembles case.docx from the generated CSVs and figures
+_config.yml       GitHub Pages configuration for the published site
+gen_assets.py     rebuilds assets/ from the CSVs.  Those two images were the
+                  only artefacts with no generating source, and both had
+                  drifted: "~37 % drag reduction" against the 50.4 % the
+                  solution returns, and "<= 4 % validation error" against a
+                  five-plate mean of 8.3 %
+assets/           banner and social-preview images for the README and the site
+.github/          the CI workflow: smoke, the two module self-tests,
+                  verify_outputs, and a check that the CSVs regenerate
+                  identically
+LICENSE, LICENSE-CODE   CC BY-NC 4.0 for data and the report, PolyForm
+                  Noncommercial 1.0.0 for the source
 ```
 
 ## Reproduce
@@ -543,6 +563,9 @@ python3 gen_postprocessing.py  # all plots, contours, profiles, 3D
                               #   (reads 04_solution/, so run it after
                               #    run_solution.py)
 python3 gen_equations.py       # build model.equations.docx (native equations)
+python3 gen_assets.py          # rebuild the README banner and the social card
+                              #   from the CSVs (reads 05_postprocessing, so
+                              #   run it after gen_postprocessing.py)
 python3 build_docx.py          # assemble case.docx
 python3 verify_outputs.py      # check the compiled report against the CSVs
 python3 tools/docx2pdf.py case.docx   # render, and copy onto the tracked

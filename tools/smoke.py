@@ -1112,6 +1112,28 @@ def thin_layer_guard_never_fires_inside_the_envelope():
         "means the guard is no longer merely a sanity check" % worst
 
 
+@check
+def generated_csvs_carry_no_signed_zero():
+    """no published data file prints a minus sign in front of zero"""
+    import re
+    import subprocess
+    out = subprocess.run(["git", "ls-files", "*.csv"], capture_output=True,
+                         text=True).stdout.split()
+    bad = []
+    for f in out:
+        if not os.path.exists(f):
+            continue
+        n = len(re.findall(r'(?<![\d.])-0\.0+\b', open(f).read()))
+        if n:
+            bad.append((f, n))
+    # Rounding a small negative gives IEEE negative zero, and these files are
+    # read by people and rendered into the report: the planform table printed
+    # the root station's twist as "-0.0", which reads as a negative twist.
+    # `round(...) + 0.0` collapses the sign wherever a CSV is written.
+    assert not bad, "signed zeros in generated CSVs: %s" % \
+        ", ".join("%s (%d)" % b for b in bad)
+
+
 def main():
     only = None
     if "-k" in sys.argv:

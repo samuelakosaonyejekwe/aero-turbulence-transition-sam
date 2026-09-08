@@ -143,6 +143,26 @@ def image(path, width=6.3, cap=None, key=None):
     if cap: caption("Fig. %d. %s" % (_fignum(key), cap))
 
 _EQ_PLACED = set()
+_EQ_HEAD_USED = set()
+
+
+def _eq_section(prefix):
+    """The chapter-4 heading, taken from the equations index that names it.
+
+    build_docx and gen_equations each carried their own wording for these five
+    sections - "4.1 Inviscid panel flow" here against "4.1 Inviscid edge
+    solution" there - so model.equations.docx and this report gave the same
+    five sections different names, and 4.2 was called "(Thwaites)" while the
+    shipped closure is the two-equation march that solver_settings.csv
+    describes.  One source now, and a missing one stops the build.
+    """
+    hits = sorted({str(x) for x in eq_index["section"]
+                   if str(x).startswith(prefix)})
+    if len(hits) != 1:
+        raise SystemExit("equations_index.csv has %d sections beginning %r: %s"
+                         % (len(hits), prefix, hits))
+    _EQ_HEAD_USED.add(hits[0])
+    return hits[0]
 
 
 def equation(key, show_title=True):
@@ -450,11 +470,11 @@ h1("4.  The UTSS Universal Solver — Governing Equations")
 para("All equations implemented in the solver are listed below as native, editable Word "
  "equations at standard size. They constitute the complete mathematical definition of the "
  "method, and are also collected in the companion file model.equations.docx.")
-h2("4.1  Inviscid edge solution")
+h2(_eq_section("4.1"))
 for k in ["E02","E03","E01","E04"]: equation(k)
-h2("4.2  Laminar boundary layer (Thwaites)")
+h2(_eq_section("4.2"))
 for k in ["E05","E06","E06b","E06c","E07"]: equation(k)
-h2("4.3  Unified four-mechanism transition kernel (novel contribution)")
+h2(_eq_section("4.3"))
 para("Bypass onset uses the Abu-Ghannam & Shaw correlation evaluated at the flow-history-averaged "
  "Tu; natural/TS onset integrates one amplification factor per physical frequency using the "
  "tabulated Orr-Sommerfeld growth rates and triggers on their envelope at N_crit; "
@@ -480,7 +500,7 @@ para("The natural and bypass routes are the same transition seen through two clo
  "noisiest natural case is 0.07 %, the quietest bypass case 0.87 %), so no result in this "
  "work is blended; it is there so that the model is a function of Tu rather than a switch.",
  italic=True, size=10)
-h2("4.4  Transitional region and turbulent closure")
+h2(_eq_section("4.4"))
 for k in ["E15","E16","E17","E18","E19"]: equation(k)
 _pol = pd.read_csv("04_solution/aero_polar.csv")
 
@@ -540,7 +560,7 @@ def _narrative_probes():
 
 _OFF = _narrative_probes()
 
-h2("4.5  Drag, temperature and reference quantities")
+h2(_eq_section("4.5"))
 for k in ["E20","E20b","E20c","E21","E22","E22b","E25","E26","E23","E24"]: equation(k)
 para("Eq. E20c is the conversion of the profile drag out of the plane normal to the leading "
  "edge, and it is not the cos²Λ the section lift takes. Two forces act on a swept strip and "
@@ -1514,12 +1534,28 @@ para("Two limitations bound that claim and are stated here rather than left to b
 h1("Appendix A.  Complete Generated-Output Inventory")
 para("Every file generated for this case study, by folder:")
 def inventory():
+    """Every generated data or figure file the repository tracks.
+
+    solver/ is walked too.  The appendix is titled COMPLETE, and the two
+    tabulated databases are generated outputs like any other - they are
+    committed precisely because regenerating them costs minutes and hours -
+    so leaving them out made the title false and, since 04_solution's field
+    .npz was removed, left the NPZ count reading zero on a project that ships
+    two of them.
+    """
     rows=[]
     for root in ["01_geometry","02_mesh","03_model_setup","04_solution",
-                 "05_postprocessing","06_validation","07_equations"]:
+                 "05_postprocessing","06_validation","07_equations","solver"]:
         for dp,_,fs in os.walk(root):
+            if "__pycache__" in dp or "_slabs" in dp:
+                continue
             for f in sorted(fs):
                 ext=f.split(".")[-1].lower()
+                # the Falkner-Skan families are build caches, rebuilt in well
+                # under a minute and deliberately not tracked; the two
+                # databases beside them are the generated artefacts
+                if f.startswith("falkner_skan"):
+                    continue
                 if ext in ("csv","png","npz"):
                     rows.append([os.path.join(dp,f), ext.upper()])
     return rows
@@ -1551,6 +1587,10 @@ for f,c in [("table_geometry_definition","geometry_definition.csv, rendered as a
 # noticed: the report is assembled from explicit key lists, so an equation can
 # be defined, written to the CSV, rendered into model.equations.docx and still
 # be absent from the document that claims to contain all of them.
+_eq_missing_head = sorted({str(x) for x in eq_index["section"]} - _EQ_HEAD_USED)
+if _eq_missing_head:
+    raise SystemExit("equations_index.csv declares sections the report never "
+                     "heads: %s" % ", ".join(_eq_missing_head))
 _eq_unplaced = sorted(set(eq_index.index) - _EQ_PLACED)
 if _eq_unplaced:
     raise SystemExit("equations defined in %s/equations_index.csv but never "

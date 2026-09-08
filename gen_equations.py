@@ -27,119 +27,128 @@ EQD   = "07_equations"; os.makedirs(EQD, exist_ok=True)
 MATHNS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 # (key, section, descriptive title, LaTeX)
+#
+# The section strings are the REPORT's headings, verbatim.  They were shorter
+# and differently worded here - "4.1 Inviscid panel flow" against the report's
+# "4.1 Inviscid edge solution", and so on for all five - so model.equations.docx
+# and case.docx gave the same five sections ten different names.  build_docx
+# now takes its chapter-4 headings from this file and fails if one is missing,
+# so the two cannot drift apart again.  4.2 also said "(Thwaites)", which is the
+# SEED and the two_eq=False ablation, not the shipped closure: the march is the
+# two-equation one, as 03_model_setup/solver_settings.csv states.
 EQS = [
  # ---- 4.1  Inviscid panel flow ---------------------------------------
- ("E01","4.1  Inviscid panel flow","Pressure coefficient (inviscid)",
+ ("E01","4.1  Inviscid edge solution","Pressure coefficient (inviscid)",
    r"C_p = 1 - \left(\frac{V}{U_\infty}\right)^{2}"),
- ("E04","4.1  Inviscid panel flow","Karman-Tsien compressibility correction",
+ ("E04","4.1  Inviscid edge solution","Karman-Tsien compressibility correction",
    r"C_p = \frac{C_{p,0}}{\beta + \left(\frac{M_\infty^{2}}{1+\beta}\right)\frac{C_{p,0}}{2}}, \quad \beta = \sqrt{1-M_\infty^{2}}"),
- ("E02","4.1  Inviscid panel flow","Vortex-panel surface velocity (Kuethe & Chow)",
+ ("E02","4.1  Inviscid edge solution","Vortex-panel surface velocity (Kuethe & Chow)",
    r"\frac{V_{t_i}}{U_\infty} = \cos(\theta_i-\alpha) + \sum_{j=1}^{N} C_{t,ij}\,\gamma_j"),
- ("E03","4.1  Inviscid panel flow","Kutta condition (sharp trailing edge)",
+ ("E03","4.1  Inviscid edge solution","Kutta condition (sharp trailing edge)",
    r"\gamma_{1} + \gamma_{N+1} = 0"),
- ("E05","4.2  Laminar boundary layer","Thwaites momentum thickness (laminar)",
+ ("E05","4.2  Laminar boundary layer (two-equation integral march)","Thwaites momentum thickness (laminar)",
    r"\theta^{2} = \frac{0.45\,\nu}{U_e^{6}} \int_{0}^{x} U_e^{5}\, dx'"),
- ("E06","4.2  Laminar boundary layer","Thwaites pressure-gradient and momentum-thickness Reynolds number",
+ ("E06","4.2  Laminar boundary layer (two-equation integral march)","Thwaites pressure-gradient and momentum-thickness Reynolds number",
    r"\lambda = \frac{\theta^{2}}{\nu}\frac{dU_e}{dx}, \quad Re_\theta = \frac{U_e\,\theta}{\nu}"),
- ("E06b","4.2  Laminar boundary layer","Kinetic-energy integral (two-equation laminar march)",
+ ("E06b","4.2  Laminar boundary layer (two-equation integral march)","Kinetic-energy integral (two-equation laminar march)",
    r"\theta\frac{dH^{*}}{dx} = 2C_D - H^{*}\frac{C_f}{2} - H^{*}(1-H)\frac{\theta}{U_e}\frac{dU_e}{dx}"),
- ("E06c","4.2  Laminar boundary layer","Laminar closure functions (from the Falkner-Skan family)",
+ ("E06c","4.2  Laminar boundary layer (two-equation integral march)","Laminar closure functions (from the Falkner-Skan family)",
    r"H^{*}(H) = \frac{\theta^{*}}{\theta}, \quad l(H) = Re_\theta\frac{C_f}{2} = \theta_\eta f''(0), "
    r"\quad d(H) = Re_\theta C_D = \theta_\eta \int \left(f''\right)^{2} d\eta"),
- ("E07","4.2  Laminar boundary layer","Von Karman momentum-integral equation",
+ ("E07","4.2  Laminar boundary layer (two-equation integral march)","Von Karman momentum-integral equation",
    r"\frac{d\theta}{dx} + (2+H)\frac{\theta}{U_e}\frac{dU_e}{dx} = \frac{C_f}{2}"),
  # ---- 4.3  Unified transition kernel (novel) -------------------------
- ("E08","4.3  Unified transition kernel (novel)","Abu-Ghannam & Shaw bypass onset",
+ ("E08","4.3  Unified four-mechanism transition kernel (novel contribution)","Abu-Ghannam & Shaw bypass onset",
    r"Re_{\theta t} = 163 + \exp\left[F(\lambda_\theta) - \frac{F(\lambda_\theta)\,Tu}{6.91}\right]"),
- ("E09","4.3  Unified transition kernel (novel)","AGS pressure-gradient function",
+ ("E09","4.3  Unified four-mechanism transition kernel (novel contribution)","AGS pressure-gradient function",
    r"F(\lambda_\theta) = \begin{cases} 6.91+12.75\lambda_\theta+63.64\lambda_\theta^{2}, & \lambda_\theta \le 0 \\ "
    r"6.91+2.48\lambda_\theta-12.27\lambda_\theta^{2}, & \lambda_\theta > 0 \end{cases}"),
- ("E10","4.3  Unified transition kernel (novel)","Natural / Tollmien-Schlichting onset (e^N, envelope over frequency)",
+ ("E10","4.3  Unified four-mechanism transition kernel (novel contribution)","Natural / Tollmien-Schlichting onset (e^N, envelope over frequency)",
    r"N(x) = \max_{\omega} \int_{x_0(\omega)}^{x} \frac{\sigma(H, Re_\theta, \omega\theta/U_e)}{\theta}\,dx' \ge N_{crit}"),
- ("E10b","4.3  Unified transition kernel (novel)","Orr-Sommerfeld operator (tabulated amplification rates)",
+ ("E10b","4.3  Unified four-mechanism transition kernel (novel contribution)","Orr-Sommerfeld operator (tabulated amplification rates)",
    r"\left[(U-c)(D^2-\alpha^2) - U''\right]\hat{v} = \frac{1}{i\alpha Re_\theta}(D^2-\alpha^2)^2\hat{v}"),
- ("E10c","4.3  Unified transition kernel (novel)","Gaster transformation (temporal to spatial growth rate)",
+ ("E10c","4.3  Unified four-mechanism transition kernel (novel contribution)","Gaster transformation (temporal to spatial growth rate)",
    r"\sigma = -\alpha_i\theta = \frac{\omega_i}{c_g}, \quad c_g = \frac{\partial\omega_r}{\partial\alpha_r}"),
- ("E11","4.3  Unified transition kernel (novel)","Cross-flow criterion (swept wing, C1 on Re_theta2)",
+ ("E11","4.3  Unified four-mechanism transition kernel (novel contribution)","Cross-flow criterion (swept wing, C1 on Re_theta2)",
    r"Re_{\theta 2} = k_{cf}\,Re_\theta\,\sin\Lambda\,\cos\Lambda \ \ge\ C_1"),
- ("E11b","4.3  Unified transition kernel (novel)","Cross-flow amplification integral (the closure actually used)",
+ ("E11b","4.3  Unified four-mechanism transition kernel (novel contribution)","Cross-flow amplification integral (the closure actually used)",
    r"N_{cf} = \int_{x_{c1}}^{x} \frac{\sigma(H_{rev})}{\theta}\,dx' \ \ge\ N_{crit}"),
  # The stationary cross-flow eigenvalue problem.  It is not the shipped
  # closure - E11b is - but it is solved by this solver (stability.py), is
  # validated against Dagenhart & Saric's SALLY N-factors, and is scored in
  # 06_validation/crossflow_formulations.csv, so a document that claims to hold
  # every governing equation has to carry it.
- ("E11c","4.3  Unified transition kernel (novel)",
+ ("E11c","4.3  Unified four-mechanism transition kernel (novel contribution)",
    "Cross-flow: velocity resolved along the wave-vector direction (Falkner-Skan-Cooke)",
    r"\frac{U_\psi(\eta)}{Q_e} = \cos\Lambda\, f'(\eta)\cos\psi "
    r"+ \sin\Lambda\, g(\eta)\sin\psi, \quad "
    r"U_\psi(\infty)/Q_e = \cos(\psi-\Lambda)"),
- ("E11d","4.3  Unified transition kernel (novel)",
+ ("E11d","4.3  Unified four-mechanism transition kernel (novel contribution)",
    "Stationary cross-flow wave and the amplification it accumulates",
    r"\omega_r(k,\psi^{*}) = 0, \quad "
    r"\frac{dN_{cf}}{dx} = \frac{\omega_i}{c_{g,x}}\frac{1}{\theta}, \quad "
    r"c_{g,x} = \cos\psi\,\frac{\partial\omega}{\partial k} "
    r"- \frac{\sin\psi}{k}\frac{\partial\omega}{\partial\psi}"),
- ("E12","4.3  Unified transition kernel (novel)","Separation bubble: dead-air march (momentum and kinetic energy, no wall shear)",
+ ("E12","4.3  Unified four-mechanism transition kernel (novel contribution)","Separation bubble: dead-air march (momentum and kinetic energy, no wall shear)",
    r"\frac{d\theta}{dx} = -(2+H)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad "
    r"\theta\frac{dH^{*}}{dx} = 2C_D - H^{*}(1-H)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad C_f = 0"),
- ("E12b","4.3  Unified transition kernel (novel)","Separation bubble: reattachment condition",
+ ("E12b","4.3  Unified four-mechanism transition kernel (novel contribution)","Separation bubble: reattachment condition",
    r"N_{bub} = \int_{x_s}^{x_r} \frac{\sigma(H_{rev}, Re_\theta)}{\theta}\,dx' = N_{crit}, \quad "
    r"\sigma(H_{rev}) \approx 0.0435"),
- ("E13","4.3  Unified transition kernel (novel)","Unified transition kernel: onset where the first mechanism completes",
+ ("E13","4.3  Unified four-mechanism transition kernel (novel contribution)","Unified transition kernel: onset where the first mechanism completes",
    r"x_t = \min\left\{\, x \;:\; \max_{m}\; a_m\, p_m(x) \ge 1 \,\right\}, "
    r"\quad m \in \{TS,\; BP,\; SEP,\; CF\}"),
- ("E13b","4.3  Unified transition kernel (novel)","The four onset progresses, each reaching unity at its own onset",
+ ("E13b","4.3  Unified four-mechanism transition kernel (novel contribution)","The four onset progresses, each reaching unity at its own onset",
    r"p_{TS} = \frac{N}{N_{crit}}, \quad p_{BP} = \frac{Re_\theta}{Re_{\theta t}^{AGS}}, "
    r"\quad p_{SEP} = \frac{N_{bub}}{N_{crit}}, \quad p_{CF} = \frac{N_{cf}}{N_{crit}}"),
- ("E14","4.3  Unified transition kernel (novel)","Natural / bypass blend across the validity window",
+ ("E14","4.3  Unified four-mechanism transition kernel (novel contribution)","Natural / bypass blend across the validity window",
    r"p_{nat} = (1-w)\,p_{TS} + w\,p_{BP}, \quad "
    r"w = 3t^{2}-2t^{3}, \quad t = \mathrm{clip}\!\left(\frac{Tu - Tu_{lo}}{Tu_{hi}-Tu_{lo}},0,1\right)"),
  # ---- 4.4  Transitional & turbulent boundary layer -------------------
- ("E15","4.4  Transitional & turbulent boundary layer","Narasimha universal intermittency",
+ ("E15","4.4  Transitional region and turbulent closure","Narasimha universal intermittency",
    r"\gamma(x) = 1 - \exp\left[-0.412\,\xi^{2}\right], \quad \xi = \frac{x-x_t}{\lambda_{tr}}"),
- ("E16","4.4  Transitional & turbulent boundary layer",
+ ("E16","4.4  Transitional region and turbulent closure",
    "Transition-length scale (Dhawan & Narasimha, in the two equivalent variables)",
    r"\lambda_{tr} = \frac{\nu}{U_e}\,\frac{C_{len}}{0.664^{3/2}}\,"
    r"Re_{\theta,t}^{3/2} \;=\; \frac{\nu}{U_e} C_{len}\, Re_{x,t}^{0.75}"
    r"\Big|_{Re_\theta = 0.664\sqrt{Re_x}}, \quad C_{len} = %g"
    % CAL["C_len"]),
- ("E17","4.4  Transitional & turbulent boundary layer","Intermittency-weighted property blend",
+ ("E17","4.4  Transitional region and turbulent closure","Intermittency-weighted property blend",
    r"\phi = (1-\gamma)\phi_{lam} + \gamma\,\phi_{turb}"),
- ("E18","4.4  Transitional & turbulent boundary layer","Head entrainment (turbulent)",
+ ("E18","4.4  Transitional region and turbulent closure","Head entrainment (turbulent)",
    r"\frac{d(\theta H_1)}{dx} = C_E - \frac{\theta H_1}{U_e}\frac{dU_e}{dx}, \quad C_E = 0.0306(H_1-3)^{-0.6169}"),
- ("E19","4.4  Transitional & turbulent boundary layer","Ludwieg-Tillmann skin-friction law",
+ ("E19","4.4  Transitional region and turbulent closure","Ludwieg-Tillmann skin-friction law",
    r"C_f = 0.246 \times 10^{-0.678 H}\, Re_\theta^{-0.268}"),
  # ---- 4.5  Drag, compressible temperature & reference ----------------
- ("E20","4.5  Drag, temperature & reference scales","Squire-Young profile drag",
+ ("E20","4.5  Drag, temperature and reference quantities","Squire-Young profile drag",
    r"C_d = 2\frac{\theta_{TE}}{c}\left(\frac{U_{e,TE}}{U_\infty}\right)^{(H_{TE}+5)/2}"),
- ("E20b","4.5  Drag, temperature & reference scales",
+ ("E20b","4.5  Drag, temperature and reference quantities",
    "Span-wise momentum integral on an infinite swept wing (no span-wise pressure gradient)",
    r"\frac{d}{dx_n}\left[\rho\,U_{e,n} W\,\theta_{12}\right] = \tau_{w,z}, \quad "
    r"\theta_{12} = \int_{0}^{\delta}\frac{u}{U_{e,n}}\left(1-\frac{w}{W}\right)dy "
    r"\;\Rightarrow\; F_z = \rho W\left(U_{e,n}\theta_{12}\right)_{TE}"),
- ("E20c","4.5  Drag, temperature & reference scales",
+ ("E20c","4.5  Drag, temperature and reference quantities",
    "Swept-strip profile drag in the streamwise frame (chordwise wake + span-wise friction)",
    r"C_d = 2\frac{\theta_{TE,n}}{c_n}\cos\Lambda\left[\cos^{2}\Lambda"
    r"\left(\frac{U_{e,TE,n}}{U_n}\right)^{(H_{TE}+5)/2} "
    r"+ \sin^{2}\Lambda\,\frac{U_{e,TE,n}}{U_n}\right], \quad "
    r"c_l = c_{l,n}\cos^{2}\Lambda"),
- ("E21","4.5  Drag, temperature & reference scales","Crocco-Busemann temperature profile",
+ ("E21","4.5  Drag, temperature and reference quantities","Crocco-Busemann temperature profile",
    r"\frac{T}{T_e} = 1 + r\frac{\gamma-1}{2}M_e^{2}\left[1-\left(\frac{u}{U_e}\right)^{2}\right]"),
- ("E22","4.5  Drag, temperature & reference scales","Recovery (adiabatic-wall) temperature",
+ ("E22","4.5  Drag, temperature and reference quantities","Recovery (adiabatic-wall) temperature",
    r"T_r = T_e\left(1 + r\frac{\gamma-1}{2}M_e^{2}\right), \quad r \approx Pr^{1/3}"),
- ("E22b","4.5  Drag, temperature & reference scales","Eckert reference temperature (compressible closures)",
+ ("E22b","4.5  Drag, temperature and reference quantities","Eckert reference temperature (compressible closures)",
    r"\frac{T_{ref}}{T_e} = 1 + 0.032 M_e^{2} + 0.58\left(\frac{T_w}{T_e}-1\right), \quad "
    r"\frac{\nu_{ref}}{\nu_e} = \left(\frac{T_{ref}}{T_e}\right)^{1+\omega}"),
- ("E23","4.5  Drag, temperature & reference scales","Reynolds number (mean aerodynamic chord)",
+ ("E23","4.5  Drag, temperature and reference quantities","Reynolds number (mean aerodynamic chord)",
    r"Re_{MAC} = \frac{\rho_\infty U_\infty \overline{c}}{\mu_\infty} = \frac{U_\infty \overline{c}}{\nu_\infty}"),
- ("E25","4.5  Drag, temperature & reference scales","Prandtl lifting line (Glauert monoplane equation, odd n for a symmetric wing)",
+ ("E25","4.5  Drag, temperature and reference quantities","Prandtl lifting line (Glauert monoplane equation, odd n for a symmetric wing)",
    r"\sum_{n\ \mathrm{odd}} A_n \sin n\theta \left[\frac{4b}{a_0 c(\theta)} + \frac{n}{\sin\theta}\right] "
    r"= \alpha(\theta) - \alpha_{L0}, \quad y = -\frac{b}{2}\cos\theta"),
- ("E26","4.5  Drag, temperature & reference scales","Wing lift, induced drag and span efficiency from the loading",
+ ("E26","4.5  Drag, temperature and reference quantities","Wing lift, induced drag and span efficiency from the loading",
    r"C_L = \pi A\!R\, A_1, \quad C_{D_i} = \pi A\!R \sum_n n A_n^{2}, "
    r"\quad e = \frac{A_1^{2}}{\sum_n n A_n^{2}}"),
- ("E24","4.5  Drag, temperature & reference scales","Mean aerodynamic chord",
+ ("E24","4.5  Drag, temperature and reference quantities","Mean aerodynamic chord",
    r"\overline{c} = \frac{2}{3} c_{root}\frac{1+\lambda+\lambda^{2}}{1+\lambda}"),
 ]
 
