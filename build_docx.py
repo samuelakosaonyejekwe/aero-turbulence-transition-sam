@@ -453,6 +453,50 @@ para("The natural and bypass routes are the same transition seen through two clo
  italic=True, size=10)
 h2("4.4  Transitional region and turbulent closure")
 for k in ["E15","E16","E17","E18","E19"]: equation(k)
+_pol = pd.read_csv("04_solution/aero_polar.csv")
+
+
+def _narrative_probes():
+    """The solves that back statements in the narrative, run rather than recalled.
+
+    Two of them: the 16 deg / Re_c = 2e5 example outside the incidence
+    envelope, at three panel counts because the point being made is that the
+    quantity has stopped meaning anything and a single value would read as a
+    result; and the same section solved unswept, which is what says whether the
+    corrected swept-drag conversion leaves a 12 deg wing where a 12 deg wing
+    should be.
+    """
+    import case_config as _CC
+    from utss_solver import solve_airfoil as _sa, _swept_drag_factor as _sdf
+    _W, _cr = _CC.WING, _CC.CRUISE
+    _U = 2.0e5*_cr["nu_inf"]/_W["MAC"]
+    out = {}
+    for tag, npan in (("te160", 80), ("te260", 130), ("te360", 180)):
+        _X, _Y = _CC.nlf16_panel_points(npan)
+        _r = _sa(_X, _Y, 16.0, _U, _cr["nu_inf"], _W["MAC"], _cr["Tu_pct"],
+                 sweep_deg=_W["le_sweep_deg"], mach=_cr["mach"])
+        out[tag] = float(_r["theta_te_c"])
+        if tag == "te260":
+            # the C_d the thin-layer guard suppresses, which is the number the
+            # sentence is about
+            out["cd"] = sum(
+                2.0*_s["theta_te_c"]*_sdf(_s["Ue_te_ratio"],
+                                          _s["H_te_squire_young"],
+                                          _W["le_sweep_deg"], swept=True)
+                for _s in _r["surfaces"].values())
+    _X, _Y = _CC.nlf16_panel_points(130)
+    _kw = dict(mach=_cr["mach"], T_inf_K=_cr["T_inf_K"])
+    _u = _sa(_X, _Y, _cr["alpha_deg"], _cr["U_inf"], _cr["nu_inf"], _W["MAC"],
+             _cr["Tu_pct"], sweep_deg=0.0, **_kw)
+    _s12 = _sa(_X, _Y, _cr["alpha_deg"], _cr["U_inf"], _cr["nu_inf"], _W["MAC"],
+               _cr["Tu_pct"], sweep_deg=_W["le_sweep_deg"], **_kw)
+    out["cd_unswept"] = float(_u["Cd"])*1e4
+    out["cd_swept"] = float(_s12["Cd"])*1e4
+    return out
+
+
+_OFF = _narrative_probes()
+
 h2("4.5  Drag, temperature and reference quantities")
 for k in ["E20","E20b","E20c","E21","E22","E22b","E25","E26","E23","E24"]: equation(k)
 para("Eq. E20c is the conversion of the profile drag out of the plane normal to the leading "
@@ -478,9 +522,12 @@ para("This work previously applied cos²Λ to the drag as well as to the lift, j
  "independence principle giving θ_n = θ_streamwise. cos²Λ is short by a further cosΛ — 2 per "
  "cent at the 12° of this wing, 29 per cent at 45° — and keeping only the correct cos³Λ on "
  "Squire-Young, with the span-wise term dropped, would be short by cos²Λ. The check is "
- "asserted in tools/smoke.py rather than described. On the case-study wing the correction "
- "raises the section profile drag by 2.3 counts and leaves it within half a count of the same "
- "section unswept, which is what a 12° sweep should do to a viscous drag; the drag REDUCTION "
+ "asserted in tools/smoke.py rather than described. On the case-study wing the corrected "
+ "conversion leaves the section profile drag within "
+ + ("%.2f" % abs(_OFF["cd_swept"] - _OFF["cd_unswept"]))
+ + " counts of the same section solved unswept ("
+ + ("%.1f against %.1f" % (_OFF["cd_swept"], _OFF["cd_unswept"]))
+ + "), which is what a 12° sweep should do to a viscous drag; the drag REDUCTION "
  "relative to the fully-turbulent reference is unchanged, both configurations scaling "
  "together. θ_12 is taken as θ_n, the small-cross-flow closure w/W = u/U_e,n, which is exact "
  "at zero pressure gradient and is the standard turbulent one; the span-wise term is 4 per "
@@ -703,37 +750,6 @@ for f,c in [("climb_Cp","Pressure coefficient C_p — climb."),
             ("compare_cruise_climb_Cf","C_f cruise vs climb — regime-dependent transition.")]:
     image(f"05_postprocessing/csv_plots/{f}.png", width=5.8, cap=c)
 h2("9.5  Aerodynamic polars")
-_pol = pd.read_csv("04_solution/aero_polar.csv")
-
-
-def _off_envelope():
-    """The 16 deg / Re_c = 2e5 example, solved rather than remembered.
-
-    Three panel counts, because the point being made is that the quantity has
-    stopped meaning anything and a single value would read as a result.
-    """
-    import case_config as _CC
-    from utss_solver import solve_airfoil as _sa, _swept_drag_factor as _sdf
-    _W, _cr = _CC.WING, _CC.CRUISE
-    _U = 2.0e5*_cr["nu_inf"]/_W["MAC"]
-    out = {}
-    for tag, npan in (("te160", 80), ("te260", 130), ("te360", 180)):
-        _X, _Y = _CC.nlf16_panel_points(npan)
-        _r = _sa(_X, _Y, 16.0, _U, _cr["nu_inf"], _W["MAC"], _cr["Tu_pct"],
-                 sweep_deg=_W["le_sweep_deg"], mach=_cr["mach"])
-        out[tag] = float(_r["theta_te_c"])
-        if tag == "te260":
-            # the C_d the thin-layer guard suppresses, which is the number the
-            # sentence is about
-            out["cd"] = sum(
-                2.0*_s["theta_te_c"]*_sdf(_s["Ue_te_ratio"],
-                                          _s["H_te_squire_young"],
-                                          _W["le_sweep_deg"], swept=True)
-                for _s in _r["surfaces"].values())
-    return out
-
-
-_OFF = _off_envelope()
 para("The polar carries θ_TE/c, the trailing-edge momentum thickness as a fraction of chord, "
  "because that is the assumption Squire-Young rests on and it is the quantity that bounds "
  "where the drag can be believed. Over the sweep it stays below %.3f - read from the table "
@@ -1193,16 +1209,17 @@ para("The UTSS universal transition & skin-friction solver predicts boundary-lay
 # conditions at three against the two the point-by-point file flags.
 _gap_pct = (100.0*(_bol.mean_critical_value - _dag.mean_critical_value)
             / _dag.mean_critical_value)
-_n_declared = int(pd.read_csv("06_validation/aerofoil_nlf0416.csv").degenerate.sum())
+_nlf_pts = pd.read_csv("06_validation/aerofoil_nlf0416.csv")
+_n_declared = int(_nlf_pts.degenerate.sum())
 para("Two limitations bound that claim and are stated here rather than left to be discovered. "
  "The cross-flow critical constant does not transfer between facilities: the two independent "
  "swept-wing experiments support the functional form of the criterion, and the measured data "
  "collapse on it, but reproducing the second requires a critical value %.0f %% larger than the "
  "first. And the method is an attached-flow formulation, so it has an incidence envelope — but "
  "that envelope is asymmetric and is set by the section, not by a round number. On the "
- "NLF(1)-0416 it declares its first condition at −9.5° of incidence, where the upper-surface "
- "layer separates within two per cent of chord, and it handles the same section down to −12.0° "
- "without complaint; at positive incidence nothing in the 86 conditions, which reach +8.7°, is "
+ "NLF(1)-0416 it declares its first condition at %.1f° of incidence, where the upper-surface "
+ "layer separates within two per cent of chord, and it handles the same section down to %.1f° "
+ "without complaint; at positive incidence nothing in the 86 conditions, which reach +%.1f°, is "
  "declared. %d of the 86 fall outside it and the method says so rather than "
  "returning a location. An earlier version of this report quoted ±8.5°, which was a plotting "
  "threshold rather than a measured envelope, and a later one added that a leading-edge bubble "
@@ -1211,7 +1228,9 @@ para("Two limitations bound that claim and are stated here rather than left to b
  "alternating between a leading-edge bubble and a trailing-edge one. A single positive-"
  "incidence bound is therefore not a meaningful thing to quote for that section, and the "
  "evidence for the asymmetry is the aerofoil set, where it is measured."
- % (_gap_pct, _n_declared))
+ % (_gap_pct, _nlf_pts[_nlf_pts.degenerate].alpha_deg.max(),
+    _nlf_pts[~_nlf_pts.degenerate].alpha_deg.min(),
+    _nlf_pts.alpha_deg.max(), _n_declared))
 
 # ======================================================================
 h1("Appendix A.  Complete Generated-Output Inventory")
