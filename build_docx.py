@@ -711,12 +711,19 @@ table_from_csv("04_solution/integrated_forces.csv", key="forces", cap="Integrate
 table_from_csv("04_solution/nlf_vs_turbulent.csv", cap="NLF vs fully-turbulent drag.")
 image("05_postprocessing/csv_plots/nlf_vs_turbulent.png", width=5.4,
       cap="Drag benefit of predicted laminar flow vs fully-turbulent.")
+# The wing's transition Reynolds number was typed here as 3.6e6 and in the
+# README as 3.7e6, for the same quantity.  It is 3.554e6.
+_ts_cr = pd.read_csv("04_solution/transition_summary.csv")
+_ts_cr = _ts_cr[(_ts_cr.case == "CRUISE") & (_ts_cr.surface == "upper")].iloc[0]
 h2("9.2a  The transition-length closure and what the result owes to it")
 para("The extent of the transitional region is Dhawan and Narasimha's published correlation, "
  "Re_λ = 9 Re_x,t^0.75, with λ the distance over which the intermittency rises from 0.25 to "
  "0.75. This work previously reported it as validated on the flat plates of Section 11.1, "
- "which span Re_x,t = 6×10⁴ to 1.4×10⁶, and EXTRAPOLATED on the wing, which transitions at "
- "3.6×10⁶. That extrapolation was of the variable, not of the physics.")
+ "which span Re_x,t = 6×10⁴ to 1.4×10⁶ — the four ERCOFTAC plates, which are the ones that "
+ "carry C_f through transition and so constrain a length rather than an onset; Schubauer & "
+ "Skramstad reaches 2.8×10⁶ but gives only a station — and EXTRAPOLATED on the wing, which "
+ "transitions at %.1f×10⁶. That extrapolation was of the variable, not of the physics."
+ % (_ts_cr.Re_x_tr/1e6))
 para("Their correlation is Narasimha's spot model with a constant dimensionless spot formation "
  "rate. Matching γ = 1 − exp(−0.412 ξ²) against γ = 1 − exp(−n σ (x−x_t)²/U), with "
  "N̂ = n σ θ_t³/ν, gives Re_λ = √(0.412/N̂) Re_θ,t^1.5; and on a Blasius plate "
@@ -771,6 +778,10 @@ table_from_csv("04_solution/surface_cruise_lower.csv", max_rows=30, sample=True,
 h2("9.4  Surface distributions — climb (off-design, elevated Tu)")
 for f,c in [("climb_Cp","Pressure coefficient C_p — climb."),
             ("climb_Cf","Skin-friction C_f and laminar run — climb."),
+            # generated for both conditions and shown for one: the cruise block
+            # above carries cruise_theta_H and this one dropped its counterpart,
+            # so the two sections were not the same section twice
+            ("climb_theta_H","Momentum thickness θ and shape factor H — climb."),
             ("climb_Retheta","The governing transition criterion — climb: "
              "here Re_θ crosses the falling Abu-Ghannam & Shaw bypass threshold "
              "while N is still far below N_crit."),

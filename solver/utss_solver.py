@@ -716,11 +716,16 @@ def _edge_from_cp(Cp, mach, gamma=1.4):
     corrects the pressure with Karman-Tsien.  Taking the edge velocity as that
     uncorrected V, as this did, leaves the boundary layer running on a
     different flow from the one the loads are computed from: at M = 0.42 the
-    corrected C_p at the suction peak implies U_e/U_inf = 1.3475 while the
-    march was handed 1.3090, an error of 2.9 per cent in the edge velocity and
-    in its GRADIENT, which is what drives lambda and hence the whole transition
-    kernel.  The pressure was compressible and the boundary layer it fed was
-    not.
+    corrected C_p at the suction peak implies U_e/U_inf = 1.3590 by the
+    relations below, while the march was handed 1.3090 - an error of 3.8 per
+    cent in the edge velocity and in its GRADIENT, which is what drives lambda
+    and hence the whole transition kernel.  The pressure was compressible and
+    the boundary layer it fed was not.
+
+    (This said 1.3475 and 2.9 per cent.  1.3475 is sqrt(1 - C_p) at that
+    station: the INCOMPRESSIBLE inversion of the corrected pressure, which is
+    not what the isentropic chain below returns and not what the march is
+    given.  The example contradicted the equations three lines under it.)
 
     Both follow from the corrected pressure by the isentropic relations, with
     no new constant.  From C_p,

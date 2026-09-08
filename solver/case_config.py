@@ -47,7 +47,12 @@ CRUISE = dict(
     gamma_air   = 1.4,
     R_air       = 287.05,
     Pr          = 0.72,
-    recovery_r  = 0.89,       # turbulent recovery factor ~ Pr^(1/3)
+    # No recovery_r here.  It sat here as 0.89 and NOTHING read it:
+    # run_solution forms the recovery factor as Pr^(1/2) laminar and Pr^(1/3)
+    # turbulent, blended by the intermittency, which at Pr = 0.72 gives 0.896
+    # turbulent - so the constant declared here and quoted in
+    # 03_model_setup/material_properties.csv was not the one in force.  The
+    # exponent form adds no constant and is what the table reports now.
 )
 CRUISE["U_inf"] = CRUISE["mach"]*CRUISE["a_sound"]
 CRUISE["nu_inf"] = CRUISE["mu_inf"]/CRUISE["rho_inf"]

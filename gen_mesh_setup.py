@@ -273,23 +273,30 @@ def setup_tables():
     pd.DataFrame(rows).to_csv(f"{SET}/flow_conditions.csv",index=False)
 
     # material props
+    # Every value read from the constant the solver actually uses, not typed
+    # beside it.  The turbulent recovery factor was declared here as 0.89 and
+    # in case_config as a constant nothing read, while run_solution forms it as
+    # Pr^(1/3) = 0.896: the table stated a value that was not in force.
+    from utss_solver import _SUTH_MU0, _SUTH_T0, _SUTH_S
     mat=[("Working fluid","air (ideal gas)","-"),
-         ("Specific gas constant R","287.05","J/kg.K"),
-         ("Ratio of specific heats gamma","1.40","-"),
-         ("Prandtl number Pr","0.72","-"),
-         ("Sutherland reference mu0","1.716e-5","Pa.s"),
-         ("Sutherland reference T0","273.15","K"),
-         ("Sutherland constant S","110.4","K"),
-         ("Recovery factor (turbulent)","0.89","-"),
-         ("Cruise dynamic viscosity","1.422e-5","Pa.s"),
-         ("Cruise density","0.36392","kg/m^3")]
+         ("Specific gas constant R",f"{cr['R_air']:.2f}","J/kg.K"),
+         ("Ratio of specific heats gamma",f"{cr['gamma_air']:.2f}","-"),
+         ("Prandtl number Pr",f"{cr['Pr']:.2f}","-"),
+         ("Sutherland reference mu0",f"{_SUTH_MU0:.3e}","Pa.s"),
+         ("Sutherland reference T0",f"{_SUTH_T0:g}","K"),
+         ("Sutherland constant S",f"{_SUTH_S:g}","K"),
+         ("Recovery factor, laminar (Pr^1/2)",f"{cr['Pr']**0.5:.3f}","-"),
+         ("Recovery factor, turbulent (Pr^1/3)",
+          f"{cr['Pr']**(1.0/3.0):.3f}","-"),
+         ("Cruise dynamic viscosity",f"{cr['mu_inf']:.3e}","Pa.s"),
+         ("Cruise density",f"{cr['rho_inf']:.5f}","kg/m^3")]
     pd.DataFrame(mat,columns=["property","value","unit"]).to_csv(
         f"{SET}/material_properties.csv",index=False)
 
     # solver settings
     ss=[("Inviscid method","Constant-strength vortex-panel (Kuethe-Chow)"),
         ("Kutta condition","Enforced at sharp trailing edge"),
-        ("Surface panels","260 (cosine-clustered)"),
+        ("Surface panels","%d (cosine-clustered)" % (2*N_PANEL_HALF)),
         ("Compressibility (pressure)","Karman-Tsien correction on C_p"),
         ("Compressibility (boundary layer)",
          "closures evaluated at Eckert's reference temperature"),
@@ -306,14 +313,22 @@ def setup_tables():
         ("Intermittency closure","Narasimha universal (gamma)"),
         ("Transition length",
          "Dhawan & Narasimha at constant spot formation rate, stated in "
-         "Re_theta: Re_lambda = (9/0.664^1.5) Re_theta_t^1.5, which is their "
-         "published Re_lambda = 9 Re_x_t^0.75 wherever Re_theta = 0.664 "
+         "Re_theta: Re_lambda = (%g/0.664^1.5) Re_theta_t^1.5, which is their "
+         "published Re_lambda = %g Re_x_t^0.75 wherever Re_theta = 0.664 "
          "sqrt(Re_x) and is the form that stays exact in a pressure gradient "
-         "(cal['len_re_x'] = True recovers the published form)"),
+         "(cal['len_re_x'] = True recovers the published form)"
+         % (CAL["C_len"], CAL["C_len"])),
         ("Turbulent BL closure","Head entrainment + Ludwieg-Tillmann Cf"),
-        ("Laminar separation criterion","Thwaites lambda <= -0.09"),
+        # Read from CAL, not typed beside it.  The separation criterion in force
+        # is the Thwaites one only while H_sep is zero; if it is ever given a
+        # positive value the march switches to a shape-factor test and this row
+        # would have gone on describing the other one.
+        ("Laminar separation criterion",
+         ("shape factor H >= %g" % CAL["H_sep"]) if CAL["H_sep"] > 0.0
+         else ("Thwaites lambda <= %g" % CAL["lam_sep"])),
         ("Turbulent separation flag","H > 2.6"),
-        ("Drag integration","Squire-Young far-wake, evaluated at 0.98c"),
+        ("Drag integration",
+         "Squire-Young far-wake, evaluated at %gc" % CAL["sy_x_ref"]),
         ("Marching scheme","explicit trapezoidal, arc-length stepping with "
          "sub-stepping on the kinetic-energy equation"),
         ("Convergence tol (panel)","1e-10 (direct solve)"),

@@ -93,12 +93,22 @@ state to the trailing edge and applying the wake relation returns 18 counts
 against 47, because θ has by then grown to a per cent of chord in response to a
 deceleration the viscous flow does not have.
 
-The transition-length correlation is validated on the flat plates below, which
-span Re_x,t = 6×10⁴ to 1.4×10⁶, and extrapolated on the wing, which transitions
-at 3.7×10⁶.  The extrapolation is not damped — that would add an undeclared
-constant — but what it costs is measured: sweeping the constant over a factor
-of four moves the section drag by a tenth of a count
-(`04_solution/transition_length_sensitivity.csv`).
+The transition-length correlation is validated on the four ERCOFTAC plates
+below — the ones that carry C_f measurements through transition, and therefore
+the only ones that constrain a LENGTH rather than an onset — which span
+Re_x,t = 6×10⁴ to 1.4×10⁶, and extrapolated on the wing, which transitions
+at 3.6×10⁶ (`04_solution/transition_summary.csv`, Re_x_tr = 3.554×10⁶ on the
+upper surface; this said 3.7).  The extrapolation is not damped — that would add an undeclared
+constant — but what it costs is measured: over the range in which the
+transitional region still closes on the section, C_len from a quarter of the
+published value up to it, the section drag moves **0.04 counts**. Above the
+published value it does not close — the layer is still transitional at the
+trailing edge — and the drag then falls steeply, which is the closure running
+out of section rather than a sensitivity. Both regimes, and the column that
+says which is which, are in
+`04_solution/transition_length_sensitivity.csv`. (This said "a factor of four
+moves the drag by a tenth of a count" without saying in which direction; a
+factor of four upwards moves it by eight.)
 
 Three elements are not correlations:
 
