@@ -679,9 +679,10 @@ para("The surface is discretised with cosine-clustered streamwise nodes; the wal
  "  The residual wander is not a truncation error that refinement removes — "
  "it is set by which panel the transition point lands on, so it scales with the panel "
  "spacing at transition and is of the same order as the ±0.025c bracket the aerofoil "
- "measurements themselves carry. The 260-panel grid is used for every case-study "
+ "measurements themselves carry. The %d-panel grid is used for every case-study "
  "result; the tabulated validation sections are re-splined onto their own "
- "cosine-clustered grids of 400 and 440 panels.")
+ "cosine-clustered grids of 400 and 440 panels."
+ % (int(float(_mm.loc["Surface streamwise nodes", "value"])) - 1))
 table_from_csv("02_mesh/mesh_metrics.csv", key="mesh_metrics",
                cap="Metrics of the surface discretisation and of the wall-normal reconstruction stack. No volume mesh is generated.")
 table_from_csv("02_mesh/mesh_independence.csv",

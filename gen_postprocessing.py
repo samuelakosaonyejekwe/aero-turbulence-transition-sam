@@ -149,9 +149,16 @@ def plot_mesh_csvs():
     # off the bottom of the frame; the grid starts at the first cell
     b1=bl[bl["y_plus"]>0]
     ax.semilogy(b1["layer"],b1["y_plus"],"o-",color=PALETTE[1])
-    ax.axhline(1.0,color=PALETTE[2],ls="--",lw=1.2,label="y⁺ = 1 target")
+    # The target is the first cell's own y+, which is what gen_mesh_setup sized
+    # the stack on and what 02_mesh/mesh_metrics.csv reports.  This drew the
+    # line at y+ = 1 and labelled it "y+ = 1 target" while the title on the
+    # same axes said 0.8 and the metrics table said 0.80: one figure carrying
+    # two different targets for one grid.
+    yp1=float(b1["y_plus"].iloc[0])
+    ax.axhline(yp1,color=PALETTE[2],ls="--",lw=1.2,
+               label="y⁺ = %.2f target (first cell)"%yp1)
     ax.set_xlabel("wall-normal layer"); ax.set_ylabel("y⁺")
-    ax.set_title("Wall-normal grid resolution (first cell y⁺≈0.8)")
+    ax.set_title("Wall-normal grid resolution (first cell y⁺ = %.2f)"%yp1)
     ax.legend(fontsize=10); finish(fig,f"{CSVP}/mesh_yplus.png")
 
     mi=pd.read_csv("02_mesh/mesh_independence.csv")
@@ -160,8 +167,12 @@ def plot_mesh_csvs():
     ax.set_xlabel("surface panels"); ax.set_ylabel("C_d [counts]",color=PALETTE[0])
     ax2=ax.twinx(); ax2.plot(mi["n_surface_panels"],mi["x_tr_upper_c"],"s--",color=PALETTE[1])
     ax2.set_ylabel("x_tr/c upper",color=PALETTE[1])
-    ax.axvline(260,color=PALETTE[2],ls=":")
-    ax.text(260,ax.get_ylim()[1],"  selected grid (260)",color=PALETTE[2],
+    # The shipped grid, from the metrics table rather than typed: 260 was a
+    # literal on a figure whose whole subject is the panel count.
+    _mm=pd.read_csv("02_mesh/mesh_metrics.csv").set_index("metric")
+    npan=int(float(_mm.loc["Surface streamwise nodes","value"]))-1
+    ax.axvline(npan,color=PALETTE[2],ls=":")
+    ax.text(npan,ax.get_ylim()[1],"  selected grid (%d)"%npan,color=PALETTE[2],
             fontsize=9,va="top",ha="left")
     ax.set_title("Mesh sensitivity: C_d and transition location vs panel count")
     finish(fig,f"{CSVP}/mesh_independence.png")

@@ -248,9 +248,13 @@ def plot_independence(df):
     band=0.5*(cdc[1:].max()-cdc[1:].min())
     ax.set_title("Mesh sensitivity (cruise): C_d within ±%.1f count above 180 "
                  "panels" % band)
-    ax.axvline(260,color=PALETTE[2],ls=":",lw=1.5)
-    ax.text(252,0.96,"selected grid (260)",color=PALETTE[2],fontsize=10,
-            ha="right",va="top",transform=ax.get_xaxis_transform())
+    # The shipped grid, from the constant this module already declares.  It was
+    # a literal 260 in three places on a figure whose subject is the panel
+    # count, and the module that draws it defines N_PANEL_HALF ten lines above.
+    _np_sel = 2*N_PANEL_HALF
+    ax.axvline(_np_sel,color=PALETTE[2],ls=":",lw=1.5)
+    ax.text(_np_sel-8,0.96,"selected grid (%d)"%_np_sel,color=PALETTE[2],
+            fontsize=10,ha="right",va="top",transform=ax.get_xaxis_transform())
     finish(fig,f"{MP}/mesh_03_independence.png")
 
 # ======================================================================
