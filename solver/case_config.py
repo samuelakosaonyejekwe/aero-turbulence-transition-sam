@@ -198,6 +198,16 @@ SWEPT = dict(
 # uncertainty.  The chord Reynolds number at which the break occurs falls by a
 # factor of nearly three between 20 and 50 deg of sweep, and it is that trend
 # the cross-flow criterion has to reproduce.
+#
+# These four cannot be checked value by value: Fig. 9(g) is a raster scan and
+# TN D-338's full text is not reachable online - NTRS returns 404 for the
+# record, archive.org does not hold it, and the UNT catalogue refuses
+# automated access.  What IS checked, in tools/smoke.py, is the two statements
+# the digitisation rests on and which the report does make in its abstract: the
+# station barely moves with sweep (the spread is exactly the stated reading
+# uncertainty) and the break Reynolds number falls monotonically by nearly a
+# factor of three.  The sweep angles and the -3 to +3 deg incidence range are
+# checked against the same abstract.
 SWEPT2 = dict(
     name      = "Boltz, Kenyon & Allen NACA 64(2)A015 untapered wing",
     section   = "01_geometry/naca642a015.dat",
@@ -228,7 +238,18 @@ SWEPT2 = dict(
 # between two adjacent orifices".  The report does not quote a pitch; 0.05c is
 # read from the chord stations of its Table II over the range where transition
 # falls.  The tables below give the midpoint of each bracket, uncertainty
-# +/-0.025c.  The values
+# +/-0.025c.
+#
+# THE READINGS ARE ON THE MEASUREMENT GRID, which is as far as a figure
+# digitisation can be checked and further than it usually is.  Table II of
+# TP-1861 gives the orifice stations, and 15 of the 16 distinct x_tr/c values
+# below are the MIDPOINT of an adjacent orifice pair to within 0.0015c -
+# seventeen times tighter than the +/-0.025c bracket they reproduce, which a
+# careless read off Fig. 9 would not achieve.  The sixteenth, x/c = 0.075 at
+# c_l = 1.466 and R = 2e6, is the most forward transition in the whole set and
+# sits ON the orifice at 0.075659 rather than between a pair, which is what a
+# reading with no laminar orifice ahead of it to bracket against looks like.
+# tools/smoke.py holds every reading to that grid.  The values
 # were digitised by the present author from Fig. 9(a)-(d) of TP-1861, in
 # which open symbols mark orifices running laminar and solid symbols orifices
 # running turbulent.  No measurements exist above R = 4.0e6 because the tunnel

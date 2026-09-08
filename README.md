@@ -314,18 +314,26 @@ is evaluated there.
 Each facility is internally consistent — Boltz to 4 % across four sweep angles
 and a factor of three in chord Reynolds number — and the two differ by 53 %.
 
-**The two reports themselves suggest why.** TN D-338 states its own crossflow
-Reynolds numbers: *"The critical values of crossflow Reynolds number for vortex
-formation ... range from about 135 to 190"*, while *"the values of crossflow
-Reynolds number for beginning transition were found to be between 190 and
-260."* The values this work's surrogate requires — **153** on Dagenhart & Saric
-and **234** on Boltz — fall in those two ranges respectively. That is consistent
-with the two datasets marking two *different events* — vortex formation against
-the beginning of transition — rather than with one criterion needing two
-constants. It is corroboration, not calibration: whether the surrogate
-Re_θ2 = 0.47 Re_θ sin Λ is on the same scale as the crossflow Reynolds number
-TN D-338 forms is not established here. But it is external evidence pointing at
-a mechanism, and the receptivity attribution below was reached without it.  Two attempts to close the gap fail and are recorded rather than
+**A tempting external corroboration, checked and rejected.** TN D-338 states
+crossflow Reynolds numbers of its own: *"the critical values ... for vortex
+formation ... range from about 135 to 190"*, and *"the values ... for beginning
+transition were found to be between 190 and 260."* The values this work's
+**surrogate** requires — 153 on Dagenhart and 234 on Boltz — fall in those two
+ranges respectively, which looks like the two datasets marking two different
+events. It does not hold. The surrogate Re_θ2 = 0.47 Re_θ sin Λ is a
+*momentum-thickness* quantity; what a 1960 report means by a crossflow Reynolds
+number is w_max·δ₁₀/ν, the displacement-type one. This work computes that too —
+the "exact Falkner–Skan–Cooke" rows of `crossflow_criticals_summary.csv` — and
+it gives **429 and 118**: the first far above their transition range, the second
+below their vortex-formation range, and the two *inverted* against the
+surrogate. Two quantities on different scales landing in the right intervals is
+a coincidence. It is recorded as rejected rather than dropped.
+
+What survives is weaker and qualitative: TN D-338 separates two events within
+*one* facility by about a factor of 1.4, and the two facilities here differ by a
+factor of 1.5. So what each experiment *calls* transition remains a candidate
+explanation alongside receptivity — as an argument about event definition, not
+as a numerical match.  Two attempts to close the gap fail and are recorded rather than
 dropped: the exact Falkner–Skan–Cooke factor K(λ) in place of the constant
 surrogate makes it worse (pooled variation 77 % against 24 %, and the ratio
 between the two sets inverts), and giving the cross-flow branch its own

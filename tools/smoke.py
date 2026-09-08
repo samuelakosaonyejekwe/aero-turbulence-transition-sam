@@ -322,6 +322,42 @@ def section_coordinates_against_their_source():
             ("nlf1_0416.dat departs from TP-1861 Table I at x/c = %.5f: "
              "file has (%.5f, %.5f), the report has (%.5f, %.5f)"
              % (xs, up[j, 0], up[j, 1], xs, ys))
+    # THE READINGS THEMSELVES, against the grid the experiment could produce.
+    # The transition locations come off Fig. 9, a raster figure, so the values
+    # cannot be checked one by one.  What CAN be checked is that every one of
+    # them lands on the measurement grid: TP-1861 locates transition "as lying
+    # somewhere between two adjacent orifices", so each reading must be the
+    # midpoint of an adjacent pair from Table II - or, where transition is
+    # ahead of the first laminar orifice, an orifice itself.  A digitisation
+    # read carelessly off the figure would not land on that grid.
+    orifices = np.array([
+        .000213, .005943, .010810, .015611, .020386, .025562, .030900,
+        .040805, .049943, .060449, .075659, .100465, .150788, .200643,
+        .250853, .300862, .350976, .401194, .451321, .501385, .551373,
+        .601583, .651438, .701515, .751383, .800888, .850063, .900636,
+        .952055, .976540])
+    mids = 0.5*(orifices[:-1] + orifices[1:])
+    reads = sorted({round(x, 6) for Re in C.NLF0416["data"]
+                    for sf in ("upper", "lower")
+                    for _, x in C.NLF0416["data"][Re][sf]})
+    on_mid = 0
+    for x in reads:
+        dm = float(np.min(np.abs(mids - x)))
+        do = float(np.min(np.abs(orifices - x)))
+        assert min(dm, do) < 0.003, (
+            "x_tr/c = %.3f is %.4f c from the nearest orifice-pair midpoint and "
+            "%.4f c from the nearest orifice; it is not on TP-1861's measurement "
+            "grid" % (x, dm, do))
+        on_mid += dm <= do
+    assert on_mid >= len(reads) - 1, (
+        "only %d of %d distinct readings are orifice-pair midpoints; the "
+        "digitisation has stopped following the bracketing the report describes"
+        % (on_mid, len(reads)))
+    # the pitch the +/-0.025c bracket is derived from
+    span = orifices[(orifices > 0.09) & (orifices < 0.96)]
+    assert abs(np.median(np.diff(span)) - C.NLF0416["orifice_pitch"]) < 0.002, \
+        "orifice_pitch does not match Table II over the range transition falls in"
+
     # and the chord the report states
     assert abs(C.NLF0416["chord_m"] - 0.60902) < 1e-9, \
         "chord is not the 60.902 cm TP-1861 tested at"
@@ -336,6 +372,22 @@ def section_coordinates_against_their_source():
         "an incidence outside the -3 to +3 deg TN D-338 tested"
     assert all(0.0 <= s_ <= 50.0 for s_ in C.SWEPT2["sweep_deg"]), \
         "a sweep angle outside the 0 to 50 deg TN D-338 tested"
+    # The four Boltz readings come off Fig. 9(g) and cannot be checked value by
+    # value either; what can be checked is the two statements the digitisation
+    # rests on.  The report describes transition breaking away and jumping to a
+    # chordwise station that barely moves with sweep, and the chord Reynolds
+    # number of the break falling by nearly a factor of three across the range.
+    xt = np.asarray(C.SWEPT2["x_tr_c"], float)
+    rc = np.asarray(C.SWEPT2["Re_c"], float)
+    assert float(xt.ptp()) <= C.SWEPT2["read_unc"] + 1e-9, (
+        "the transition station is not 'barely moving with sweep': spread "
+        "%.3f c against the stated reading uncertainty %.3f"
+        % (xt.ptp(), C.SWEPT2["read_unc"]))
+    assert 2.5 < rc.max()/rc.min() < 3.5, (
+        "the break Reynolds number does not fall by nearly a factor of three "
+        "across the sweep range: %.2f" % (rc.max()/rc.min()))
+    assert np.all(np.diff(rc) < 0), \
+        "the break Reynolds number must fall monotonically with increasing sweep"
 
     # Dagenhart & Saric, Table 2 of NASA/TP-1999-209344, verbatim.  This one is
     # a printed table rather than a figure, so it can be checked line by line -
