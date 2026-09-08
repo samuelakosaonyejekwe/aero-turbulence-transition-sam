@@ -1,4 +1,19 @@
-NACA 642-015A AIRFOIL
+NACA 64(2)A015
+# Section of the untapered wing of Boltz F.W., Kenyon G.C. & Allen C.Q. (1960),
+# 'Effects of Sweep Angle on the Boundary-Layer Stability Characteristics of an
+# Untapered Wing at Low Speeds', NACA TN D-338 - the independent swept-wing
+# validation set.  Six-series laminar-flow section: "64" places the minimum
+# pressure at 0.4c, the subscript 2 is a design lift coefficient of 0.2, "A"
+# is the modified straight-sided aft, "015" is 15 per cent thickness.
+#
+# PROVENANCE, stated rather than implied.  These coordinates are NOT
+# transcribed from a printed table, as nlf1_0416.dat's are from TP-1861
+# Table I; they came in as a standard airfoil-database file, whose own first
+# line read "NACA 642-015A AIRFOIL" - a database rendering of the designation,
+# not the designation.  What CAN be checked about them is checked, in
+# tools/smoke.py: the section is 15.0 per cent thick and its maximum thickness
+# sits at 0.400c, which are the two numbers the designation itself asserts.
+# Selig order: TE -> upper -> LE -> lower -> TE.
   1.000000  0.000320
   0.950000  0.007950
   0.900000  0.015580

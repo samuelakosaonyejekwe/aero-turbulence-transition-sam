@@ -1,0 +1,5 @@
+claim,value,unit,source
+viscous drag reduction vs fully turbulent,50.4,%,04_solution/nlf_vs_turbulent.csv:viscous_drag_reduction_pct
+mean laminar extent,55.4,% chord,04_solution/nlf_vs_turbulent.csv:mean_laminar_pct
+mean transition-onset error over the flat plates,8.3,%,"06_validation/validation_summary.csv:Re_theta_t_err_bracket_pct, point error where no bracket"
+transition mechanisms in the kernel,4,-,"natural, bypass, separation, cross-flow"

@@ -1541,11 +1541,14 @@ def inventory():
     committed precisely because regenerating them costs minutes and hours -
     so leaving them out made the title false and, since 04_solution's field
     .npz was removed, left the NPZ count reading zero on a project that ships
-    two of them.
+    two of them.  assets/ is walked for the same reason: since gen_assets.py
+    exists, the banner, the social card and their headline provenance file are
+    generated outputs like any other.
     """
     rows=[]
     for root in ["01_geometry","02_mesh","03_model_setup","04_solution",
-                 "05_postprocessing","06_validation","07_equations","solver"]:
+                 "05_postprocessing","06_validation","07_equations","solver",
+                 "assets"]:
         for dp,_,fs in os.walk(root):
             if "__pycache__" in dp or "_slabs" in dp:
                 continue

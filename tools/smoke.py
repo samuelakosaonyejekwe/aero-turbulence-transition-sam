@@ -1134,6 +1134,45 @@ def generated_csvs_carry_no_signed_zero():
         ", ".join("%s (%d)" % b for b in bad)
 
 
+@check
+def section_files_match_their_designations():
+    """every section coordinate file is the thickness its name claims"""
+    import numpy as np
+    # nlf1_0416.dat is transcribed from TP-1861 Table I and is checked against
+    # it point by point in section_coordinates_against_their_source.  The other
+    # two came in as database files: TP-1999-209344 shows the NLF(2)-0415 only
+    # as a picture and TN D-338 is unreachable, so a printed table cannot be
+    # used.  What the DESIGNATION asserts can be, and is the only independent
+    # statement about them the project has.
+    want = [("01_geometry/nlf2_0415.dat",    "NLF(2)-0415",    0.15, None),
+            ("01_geometry/naca642a015.dat",  "NACA 64(2)A015", 0.15, 0.40),
+            ("01_geometry/nlf1_0416.dat",    "NLF(1)-0416",    0.16, None)]
+    for path, name, t_want, x_want in want:
+        pts = []
+        for line in open(path):
+            q = line.split()
+            if len(q) == 2:
+                try:
+                    pts.append((float(q[0]), float(q[1])))
+                except ValueError:
+                    pass
+        a = np.array(pts)
+        assert len(a) > 30, "%s has only %d coordinate pairs" % (path, len(a))
+        i = int(np.argmin(a[:, 0]))
+        up = a[:i+1][::-1]; lo = a[i:]
+        xs = np.linspace(0.005, 0.995, 400)
+        t = np.interp(xs, up[:, 0], up[:, 1]) - np.interp(xs, lo[:, 0], lo[:, 1])
+        assert abs(t.max() - t_want) < 0.006, \
+            "%s is %.4f thick; %s asserts %.2f" % (path, t.max(), name, t_want)
+        if x_want is not None:
+            # "64" in the six-series designation places the minimum pressure,
+            # and hence the maximum thickness, at 0.4c
+            xt = float(xs[int(np.argmax(t))])
+            assert abs(xt - x_want) < 0.02, \
+                "%s peaks at x/c = %.3f; the 6-series designation puts it at " \
+                "%.2f" % (path, xt, x_want)
+
+
 def main():
     only = None
     if "-k" in sys.argv:

@@ -1,4 +1,15 @@
-NASA/LANGLEY NLF(2)-0415 AIRFOIL
+NASA NLF(2)-0415
+# Section of the 45 deg swept model of Dagenhart J.R. & Saric W.S. (1999),
+# 'Crossflow Stability and Transition Experiments in Swept-Wing Flow',
+# NASA/TP-1999-209344 - the cross-flow calibration set.  "04" is a design lift
+# coefficient of 0.4 and "15" is 15 per cent thickness.
+#
+# PROVENANCE, stated rather than implied.  TP-1999-209344 shows this section
+# only as a picture, its Figure 5; it tabulates no coordinates, so these are
+# NOT transcribed from a printed table the way nlf1_0416.dat's are from
+# TP-1861 Table I.  What CAN be checked is checked, in tools/smoke.py: the
+# section is 15.0 per cent thick, which is the number the designation asserts.
+# Selig order: TE -> upper -> LE -> lower -> TE.
   1.000000  0.000000
   0.994188  0.001735
   0.987975  0.003826

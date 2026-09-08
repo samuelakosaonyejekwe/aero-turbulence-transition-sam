@@ -82,11 +82,19 @@ jobs:
             --stages geometry,equations,mesh
 
       - name: Data outputs regenerate identically
-        # The NUMBERS must reproduce, and on a clean runner with a fresh install
-        # of the pinned environment they do, bit for bit.  This is the check that
-        # would have caught the CSVs being written at full float64, whose last
-        # bits moved with the BLAS thread count and made every regeneration a new
-        # blob.
+        # The numbers THESE STAGES OWN must reproduce, and on a clean runner
+        # with a fresh install of the pinned environment they do, bit for bit.
+        # That is thirteen of the sixty tracked CSVs - 01_geometry, 02_mesh,
+        # 03_model_setup and 07_equations - because the step above runs the
+        # cheap stages only; 04_solution and 06_validation need the solve and
+        # the validation sweep, which belong on the machine the results are
+        # published from.  The `git diff` below is over ALL CSVs, so it would
+        # also fail on a committed 04_solution or 06_validation file that
+        # disagrees with the checkout, but nothing here regenerates those.
+        #
+        # This is the check that would have caught the CSVs being written at
+        # full float64, whose last bits moved with the BLAS thread count and
+        # made every regeneration a new blob.
         #
         # Rendered images are deliberately NOT compared.  matplotlib output is
         # not byte-reproducible across machines - font rasterisation depends on

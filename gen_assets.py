@@ -173,10 +173,37 @@ def social(h):
     plt.close(fig)
 
 
+def provenance(h):
+    """The three claims on the images, as a tracked, diffable file.
+
+    A number rendered into a PNG cannot be checked without reading pixels, so
+    the same three figures are written beside them.  That is what makes a
+    stale banner visible in a diff rather than only to whoever looks at the
+    picture - which is how "~37 % drag reduction" survived against 50.4.
+    """
+    pd.DataFrame([
+        dict(claim="viscous drag reduction vs fully turbulent",
+             value="%.1f" % h["drag"], unit="%",
+             source="04_solution/nlf_vs_turbulent.csv:viscous_drag_reduction_pct"),
+        dict(claim="mean laminar extent", value="%.1f" % h["laminar"],
+             unit="% chord",
+             source="04_solution/nlf_vs_turbulent.csv:mean_laminar_pct"),
+        dict(claim="mean transition-onset error over the flat plates",
+             value="%.1f" % h["onset_mean"], unit="%",
+             source="06_validation/validation_summary.csv:"
+                    "Re_theta_t_err_bracket_pct, point error where no bracket"),
+        # a count, so it is written as one: mixing it with the percentages
+        # in a numeric column rendered it "4.0"
+        dict(claim="transition mechanisms in the kernel", value="4", unit="-",
+             source="natural, bypass, separation, cross-flow"),
+    ]).to_csv(f"{ASSETS}/headline.csv", index=False)
+
+
 if __name__ == "__main__":
     h = headline()
     banner(h)
     social(h)
+    provenance(h)
     print("assets rebuilt from the CSVs: %.1f %% drag reduction, %.1f %% mean "
           "laminar chord, %.1f %% mean onset error over %d plates"
           % (h["drag"], h["laminar"], h["onset_mean"], h["n_plates"]))
