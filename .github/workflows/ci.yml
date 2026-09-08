@@ -3,9 +3,13 @@ name: checks
 # The self-checks in this project were three __main__ blocks run by hand.  They
 # are worth running, and nothing made anyone run them: a commit that broke the
 # march's output contract, or a rename that left a generator reading a column
-# that no longer exists, would be found by whoever next spent four minutes on a
-# full regeneration.  tools/smoke.py finds both in seven seconds, so it runs on
-# every push.
+# that no longer exists, would be found by whoever next spent the best part of
+# ten minutes on a full regeneration.  tools/smoke.py finds both in well under a
+# minute, so it runs on every push.  (Timings here are orders of magnitude, not
+# measurements: they are machine-dependent, and the precise figures this comment
+# used to give - seven seconds, four minutes - were both a third of what the
+# same work costs now.  tools/pipeline.py writes the real ones to
+# .pipeline/timings.json every run.)
 #
 # The full regeneration is NOT run here.  It needs the Falkner-Skan families and
 # the amplification database, which take about seven minutes to build on two
@@ -47,7 +51,8 @@ jobs:
       - name: Cache the Falkner-Skan families
         # Deterministic functions of the source, so they are keyed on it.  The
         # amplification database is committed; these two are not, because they
-        # rebuild in fourteen seconds - but not on every job if we can help it.
+        # rebuild in well under a minute - but not on every job if we can help
+        # it.  (Measured at 35 s on the reference machine; this said fourteen.)
         uses: actions/cache@v6
         with:
           path: |
@@ -71,7 +76,7 @@ jobs:
       - name: Generators still run
         # Cheap stages only - geometry, equations and the model setup - which
         # between them import every module and exercise the writers without
-        # spending the four minutes the validation sweep costs.
+        # spending the several minutes the validation sweep costs.
         run: |
           python tools/pipeline.py --no-smoke --jobs 2 \
             --stages geometry,equations,mesh

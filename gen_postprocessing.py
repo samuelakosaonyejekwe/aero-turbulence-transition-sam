@@ -48,9 +48,26 @@ W=C.WING; cr=C.CRUISE; cl=C.CLIMB
 
 LAM_BAND="#d7e3ef"      # single soft tint for the laminar run
 
+def _onset_index(df):
+    """The station the kernel fired at, as the march recorded it.
+
+    NOT the first station with gamma > 0.  The Narasimha intermittency is
+    1 - exp(-0.412 xi^2) with xi = (s - s_tr)/lambda, so gamma is EXACTLY zero
+    at onset and only becomes positive one station later.  Every figure in this
+    module drew its "transition onset" line there, one panel downstream of the
+    x_tr/c that transition_summary.csv and validation_summary.csv report - on
+    the cruise upper surface, 0.554 against the table's 0.542.  Two artefacts in
+    the same report placing the same event 0.012c apart.
+
+    The state column is exact: march_bl writes "laminar" strictly below i_tr and
+    "transitional" or "turbulent" from i_tr on.
+    """
+    it=df.index[df["state"]!="laminar"]
+    return int(it[0]) if len(it) else None
+
 def _onset(df):
-    it=df.index[df["intermittency_gamma"]>1e-6]
-    return float(df["x_c"][it[0]]) if len(it) else None
+    i=_onset_index(df)
+    return float(df["x_c"][i]) if i is not None else None
 
 def _state_bands(ax, up, lo, cu=PALETTE[0], cl=PALETTE[6]):
     """Clean regime cue: shade only the laminar run (one soft tint) and mark
@@ -161,8 +178,8 @@ def plot_surface(case):
     ax.plot(up["x_c"],up["Cp"],color=PALETTE[0],lw=2.2,label="upper")
     ax.plot(lo["x_c"],lo["Cp"],color=PALETTE[2],lw=2.2,label="lower")
     for d,c in [(up,PALETTE[0]),(lo,PALETTE[2])]:
-        it=d.index[d["intermittency_gamma"]>1e-6]
-        if len(it): ax.axvline(d["x_c"][it[0]],color=c,ls="-.",lw=1.0,alpha=0.7)
+        i=_onset_index(d)
+        if i is not None: ax.axvline(d["x_c"][i],color=c,ls="-.",lw=1.0,alpha=0.7)
     ax.invert_yaxis(); ax.set_xlabel("x/c"); ax.set_ylabel("C_p")
     ax.set_title(f"Pressure coefficient — {case} (dash-dot = transition onset)")
     ax.legend(fontsize=10); finish(fig,f"{CSVP}/{case}_Cp.png")
@@ -215,8 +232,8 @@ def plot_surface(case):
     # threshold is simply absent there.  Both are drawn, the amplification
     # factor on its own axis, and the mechanism is named in the title so the
     # reader knows which pair to read.
-    lam_only=up[up["x_c"]<=(up["x_c"][up.index[up["intermittency_gamma"]>1e-6][0]]
-                            if len(up.index[up["intermittency_gamma"]>1e-6])
+    _i0=_onset_index(up)
+    lam_only=up[up["x_c"]<=(up["x_c"][_i0] if _i0 is not None
                             else up["x_c"].max())]
     fig,ax=new_fig(8.6,5.2)
     ax.plot(up["x_c"],up["Re_theta"],color=PALETTE[0],lw=2.2,label="Re_θ")
@@ -231,19 +248,19 @@ def plot_surface(case):
     ax2.plot(up["x_c"],up["n_crit"],color=PALETTE[5],lw=1.6,ls=":",label="N_crit")
     ax2.set_ylabel("amplification factor N",color=PALETTE[4])
     ax2.set_ylim(0, max(float(up["n_crit"].max()), float(up["n_factor"].max()))*1.35)
-    it=up.index[up["intermittency_gamma"]>1e-6]
-    if len(it):
-        xt=up["x_c"][it[0]]
+    it=_onset_index(up)
+    if it is not None:
+        xt=up["x_c"][it]
         ax.axvline(xt,color=PALETTE[1],ls="-.",lw=1.3)
-        ax.scatter([xt],[up["Re_theta"][it[0]]],s=80,color=PALETTE[1],zorder=5,
+        ax.scatter([xt],[up["Re_theta"][it]],s=80,color=PALETTE[1],zorder=5,
                    label="transition onset")
     # Show the run over which the criterion is live.  On the climb case
     # transition is at 0.025c, so the whole crossing sits in the leftmost three
     # per cent of a full-chord axis and cannot be read.
-    if len(it):
-        ax.set_xlim(-0.01, min(1.0, max(3.0*float(up["x_c"][it[0]]), 0.2)))
+    if it is not None:
+        ax.set_xlim(-0.01, min(1.0, max(3.0*float(up["x_c"][it]), 0.2)))
     ax.set_xlabel("x/c"); ax.set_ylabel("Re_θ",color=PALETTE[0])
-    mech=(up["state"].iloc[-1] if not len(it) else
+    mech=(up["state"].iloc[-1] if it is None else
           pd.read_csv(f"{SOL}/transition_summary.csv")
             .query("case==@case.upper() and surface=='upper'")["mechanism"].iloc[0])
     ax.set_title(f"Transition criterion — {case} upper (governing mechanism: {mech})")
@@ -271,8 +288,8 @@ def plot_cruise_climb_compare():
     ax.plot(mcm["x_c"],mcm["Cf"]*1e3,color=PALETTE[1],lw=2.4,
             label="climb (Tu=0.9%, bypass)")
     for d,c in [(cu,PALETTE[0]),(cm,PALETTE[1])]:
-        it=d.index[d["intermittency_gamma"]>1e-6]
-        if len(it): ax.axvline(d["x_c"][it[0]],color=c,ls="-.",lw=1.1)
+        i=_onset_index(d)
+        if i is not None: ax.axvline(d["x_c"][i],color=c,ls="-.",lw=1.1)
     ax.set_ylim(0,_cf_ylim(cu,cm))
     ax.set_xlabel("x/c"); ax.set_ylabel("C_f ×10³")
     ax.set_title("Upper-surface C_f: cruise vs climb — regime-dependent transition")

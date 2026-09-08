@@ -62,9 +62,14 @@ def peak_turbulent_cf():
 
     The wall-normal stack was sized on a typed Cf = 0.0030, described as a
     "representative turbulent Cf at trailing edge".  It is neither: the cruise
-    section's peak turbulent C_f is 0.0018, just behind transition, and its
-    TRAILING-EDGE value is 2.0e-4, because the layer there is close to
-    separation and sits on the H = 2.8 clamp.  A y+ criterion has to be met
+    section's peak turbulent C_f is well under half that, just behind
+    transition, and its TRAILING-EDGE value is smaller again by an order of
+    magnitude, because the layer there is close to separation and sits on the
+    H = 2.8 clamp.  Both are written to 02_mesh/mesh_metrics.csv and
+    04_solution/transition_summary.csv respectively rather than quoted here -
+    this docstring said 0.0018 for the peak, which was read off the surface CSV
+    before the swept-drag correction and the panel count both moved it, and was
+    stale within the hour.  A y+ criterion has to be met
     where the shear is HIGHEST, so the peak is the quantity that sizes the
     grid - and quoting a friction velocity "at the TE" formed from a number
     that is neither the peak nor the TE value made the y+ = 0.8 in the metrics
@@ -85,6 +90,15 @@ def peak_turbulent_cf():
         m=(x>0.006)&(ue>0.12)&(cf<0.008)&(np.asarray(s["gamma"],float)>0.99)
         if m.any():
             best=max(best,float(cf[m].max()))
+    if not best > 0.0:
+        # Neither surface reached gamma = 0.99, so there is no turbulent wall
+        # shear to size a y+ grid against.  Unreachable at the cruise condition,
+        # where both surfaces transition - but a zero here divides into the
+        # first-cell height below and returns inf, which would be written into
+        # the metrics table as a number.
+        raise RuntimeError(
+            "no turbulent run on either surface at the cruise condition, so "
+            "the wall-normal grid has no wall shear to be sized against")
     return best
 
 

@@ -293,11 +293,11 @@ def _n_crit(Tu_pct, floor=0.5, anchor=1.10):
     the mean absolute error rose, which is what happens when a constant stops
     being fitted to the set it is scored on.  The flat plate goes from +5.6 per
     cent to +0.07 per cent.  The error figures are NOT quoted here: this said
-    "0.0319c to 0.0334c", and the set's mean has since moved to 0.0384c with
-    corrections that have nothing to do with the anchor, so a before-and-after
-    pair frozen in a docstring stops describing the model as soon as anything
-    else changes.  06_validation/aerofoil_nlf0416_summary.csv carries the
-    current value and is regenerated with the rest.
+    "0.0319c to 0.0334c", and the set's mean has since moved with corrections
+    that have nothing to do with the anchor, so a before-and-after pair frozen
+    in a docstring stops describing the model as soon as anything else changes.
+    06_validation/aerofoil_nlf0416_summary.csv carries the current value and is
+    regenerated with the rest; it is deliberately not repeated here.
 
     Note that the quoted 1100 is itself approximate - the literature gives
     Re_x,tr ~ 2.8e6 and Re_theta = 0.664 sqrt(Re_x) - so the anchor is quoted
@@ -1113,9 +1113,10 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # This comment used to say about 40 momentum thicknesses on T3C4 at
         # Tu = 2.1 % and about 180 on the aerofoil at 0.03 %, "a spread of four
         # and a half", while the report and the README said 42 and 226, "a
-        # spread of five and a half"; the solver returns 26 and a median of
-        # 206, a spread of nearly eight.  The claim was true and all three
-        # statements of it were wrong, in both directions.
+        # spread of five and a half".  All three were wrong, in both
+        # directions, which is why the current lengths are NOT restated here -
+        # a comment cannot read a CSV, so quoting one is how this happened.
+        # The generated file is the answer.
         # Separation is detected on the Thwaites parameter rather than on the
         # shape factor.  Testing H >= 3.95, the value at which the exact family
         # loses its wall shear, is the more principled statement and it does
@@ -1344,11 +1345,13 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         #     predicts some.  Replacing
         #     the surrogate by K was tried and is not adopted: it does not make
         #     the two swept-wing experiments agree on a critical value, and it
-        #     degrades the calibration set from 22.0 to 44.3 per cent in mean
-        #     transition location.  (Those figures stood at 13.2 and 23.8 here,
-        #     both from before the swept sections were solved in the plane
-        #     normal to the leading edge: the direction of the result held, the
-        #     numbers did not.)  The
+        #     degrades the calibration set, roughly doubling its mean error in
+        #     transition location - the figures are generated into
+        #     06_validation/crossflow_formulations.csv, which scores this
+        #     variant against the shipped one, and are not restated here
+        #     because the pair that used to be (13.2 and 23.8) had gone stale
+        #     the moment the swept sections began being solved in the plane
+        #     normal to the leading edge.  The
         #     limiting approximation is therefore the C1 criterion itself,
         #     which reduces the stability of an inflectional three-dimensional
         #     profile to a single Reynolds number, and not the surrogate for

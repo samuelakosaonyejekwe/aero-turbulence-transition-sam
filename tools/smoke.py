@@ -172,6 +172,17 @@ def correlations_against_their_sources():
     # -- Dhawan & Narasimha, the two forms of one law ----------------------
     assert abs(9.0/0.664**1.5 - 16.63) < 5e-3
 
+    # -- the reverse-flow amplification rates the report and README quote ---
+    # 0.0435 at Re_theta = 400 appears in Eq. E12b and in the README, and
+    # 0.0417/0.0461 bound it in two solver comments.  They are properties of
+    # the committed database and nothing checked that the database still has
+    # them.
+    import stability as _st
+    for Re, want in ((200.0, 0.0417), (400.0, 0.0435), (8000.0, 0.0461)):
+        got = float(_st.sigma_curve(_st.H_REVERSE, Re).max())
+        assert abs(got - want) < 5e-5, \
+            "sigma(H_REVERSE, Re_theta=%g) = %.4f, quoted as %.4f" % (Re, got, want)
+
     # -- the flight conditions against Sutherland and the ISA --------------
     # These are typed into case_config, and nothing checked that they are the
     # gas they claim to be.
@@ -217,6 +228,27 @@ def panel_solution():
 
 
 @check
+def section_panel_loops_are_closed():
+    """every section the project panels is a closed loop, not just the designed one"""
+    import case_config as C
+    import gen_validation as V
+    secs = [("UTSS-NLF16", None),
+            ("NLF(2)-0415", V.NLF415),
+            ("NACA 64(2)A015", C.SWEPT2["section"]),
+            ("NLF(1)-0416", C.NLF0416["section"])]
+    for name, fn in secs:
+        X, Y = (C.nlf16_panel_points(60) if fn is None
+                else V._section_points(fn, n=120))
+        gap = float(np.hypot(X[0] - X[-1], Y[0] - Y[-1]))
+        assert gap < 1e-12, (
+            "%s panels do not close: gap %.6f c.  panel_solve is a closed-body "
+            "method and the Kutta condition presumes one trailing-edge point; "
+            "the NACA 64(2)A015 is tabulated with a blunt trailing edge and "
+            "came back open by 0.00064c." % (name, gap))
+        assert len(X) == len(Y) and len(X) > 8
+
+
+@check
 def offbody_field_matches_surface():
     """the off-body field reproduces the surface solution just off the wall"""
     import case_config as C
@@ -238,6 +270,27 @@ def _plate(**kw):
     return solve_flat_plate(kw.pop("L", 1.7), kw.pop("U", 5.4),
                             kw.pop("nu", 1.5e-5), kw.pop("Tu", 3.043),
                             npts=kw.pop("npts", 220), **kw)
+
+
+@check
+def onset_station_is_unambiguous():
+    """the state column marks onset where the march fired, and gamma does not"""
+    r = _plate()
+    i_tr = r["i_tr"]
+    assert i_tr is not None
+    g = np.asarray(r["gamma"], float)
+    st = np.asarray(r["state"], dtype=object)
+    # Narasimha's gamma is 1 - exp(-0.412 xi^2) and xi = 0 at onset, so gamma
+    # is EXACTLY zero at the station the kernel fired at.  A consumer looking
+    # for the first gamma > 0 lands one station downstream, which is how the
+    # figures came to mark transition 0.012c aft of the tables.
+    assert g[i_tr] == 0.0, "gamma at onset is %g, not 0" % g[i_tr]
+    assert st[i_tr] != "laminar", "the onset station is still labelled laminar"
+    assert all(s == "laminar" for s in st[:i_tr]), "a station below onset is not laminar"
+    first_pos = int(np.argmax(g > 1e-6))
+    assert first_pos == i_tr + 1, (
+        "gamma first exceeds 1e-6 at %d, onset is %d - consumers must key on "
+        "the state column, not on gamma" % (first_pos, i_tr))
 
 
 @check

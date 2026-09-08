@@ -384,6 +384,19 @@ def _section_points(fn, n=200):
         x,y=x[keep],y[keep]
         out.append(CubicSpline(np.sqrt(x), y, bc_type="natural")(np.sqrt(xc)))
     yu,yl=out
+    # Close the loop.  panel_solve is a CLOSED-body method - N+1 points, N
+    # panels, first point equal to last, with the Kutta condition applied at a
+    # trailing edge that is one point.  Selig files need not oblige: the NACA
+    # 64(2)A015 of the Boltz swept-wing set is tabulated with a blunt trailing
+    # edge at y = +/-0.00032, so the splined loop came back open by 0.00064c
+    # and the "body" the panel method saw had a slit in it.  Measured, it moved
+    # no transition location on that set to three decimals - but a section with
+    # a genuinely thick trailing edge would not be so forgiving, and nothing
+    # was checking.  The two surfaces are brought to their mean at the trailing
+    # edge, which is the smallest change that closes it.
+    y_te = 0.5*(yu[-1] + yl[-1])
+    yu = yu.copy(); yl = yl.copy()
+    yu[-1] = yl[-1] = y_te
     return (np.concatenate([xc[::-1],xc[1:]]),
             np.concatenate([yl[::-1],yu[1:]]))
 
@@ -723,8 +736,10 @@ def crossflow_receptivity(write=True, quiet=False):
 
     So the honest statement is narrower than the report's, and firmer.  The gap
     is a difference in the critical cross-flow REYNOLDS NUMBER, which is
-    internally consistent within each facility - 19.5 and 4.6 per cent - and
-    differs between them by 53 per cent.  It is consistent with a receptivity
+    internally consistent within each facility, and differs between them by
+    about half.  The coefficients of variation are the summary this function
+    writes; they are not restated here, because the pair that was (17.9 and
+    4.0) went stale unnoticed and a docstring cannot read its own output.  It is consistent with a receptivity
     difference, and it cannot be converted into a roughness ratio by this
     method, because this method carries no cross-flow instability rate.  Doing
     that needs the Orr-Sommerfeld problem solved on the Falkner-Skan-Cooke
@@ -1157,10 +1172,11 @@ def bubble_length_scaling(df_nlf, write=True, quiet=False):
     a turbulent stream and stretches in a quiet one.  That claim was supported
     by three figures typed into three files, and all three disagreed: the report
     and the README said 42 momentum thicknesses at Tu = 2.1 per cent and 226 at
-    0.03, "a spread of five and a half"; the solver's own comment said about 40
-    and about 180, "a spread of four and a half"; and the solver returns 26 and
-    a median of 206, a spread of nearly eight.  The claim is true and it is
-    stronger than any of the three said.  It is measured here.
+    0.03, "a spread of five and a half", while the solver's own comment said
+    about 40 and about 180, "a spread of four and a half".  The claim is true
+    and stronger than any of them said.  It is measured here, and the measured
+    values live in the CSV rather than in this docstring - restating them would
+    reintroduce exactly the failure it documents.
 
     T3C4 is the separating flat plate at Tu = 2.11 per cent; the aerofoil set is
     every NLF(1)-0416 condition at Tu = 0.03 per cent on which a bubble forms

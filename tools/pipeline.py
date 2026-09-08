@@ -10,8 +10,9 @@ later.
 This driver declares what each stage needs and what it produces, runs the
 independent ones concurrently up to a worker cap, times every stage, and stops
 at the first failure with the log of the stage that failed.  It runs
-tools/smoke.py first by default, because seven seconds spent there is cheaper
-than any of the failures it catches.
+tools/smoke.py first by default, because well under a minute spent there is
+cheaper than any of the failures it catches.  Per-stage timings are written to
+.pipeline/timings.json rather than quoted here, where they went stale.
 
     python3 tools/pipeline.py                    # everything, smoke-gated
     python3 tools/pipeline.py --stages solution,validation

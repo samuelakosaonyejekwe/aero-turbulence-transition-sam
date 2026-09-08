@@ -76,7 +76,7 @@ Two elements are not correlations:
   "the nearest node of its Reynolds-number grid, Re_θ = 210", which is neither
   the value nor a node.)  Regenerate with
   `python3 -c "import sys; sys.path.insert(0,'solver'); import stability;
-  stability.build_database()"` (~4 min on 4 cores); the build is checkpointed
+  stability.build_database()"` (minutes, on several cores); the build is checkpointed
   per shape factor, so an interrupted run resumes rather than restarting.
 * **Separation-bubble closure.** The shear layer is carried across the dead-air
   region by the same two integral equations as the attached layer with the wall
@@ -385,9 +385,10 @@ Sources recorded in `06_validation/sources_and_references.csv`.
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
 solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld +
                   amplification database), case_config.py, uplot.py (style)
-tools/            smoke.py (20 checks over the whole solver in ~45 s),
-                  pipeline.py (staged regeneration), baseline.py (numeric diff
-                  of every generated CSV against a snapshot)
+tools/            smoke.py (22 checks over the whole solver, well under a
+                  minute), pipeline.py (staged regeneration, timings written to
+                  .pipeline/timings.json), baseline.py (numeric diff of every
+                  generated CSV against a snapshot)
 utss_paths.py     anchors every entry point to the repository root, so a
                   generator run from another directory still reads and writes
                   here
@@ -398,15 +399,17 @@ case.docx         the same report as .docx - a build product, not tracked
 
 ## Reproduce
 ```bash
-python3 tools/smoke.py         # 20 checks over the whole solver, ~45 s.
+python3 tools/smoke.py         # 22 checks over the whole solver, under a minute.
                                #   Run this FIRST and after every edit: a full
-                               #   regeneration is four minutes and the faults
+                               #   regeneration is minutes and the faults
                                #   that waste it are all visible here in the
                                #   first second.
 python3 tools/pipeline.py      # the whole regeneration, as dependency-ordered
                                #   stages, two at a time, smoke-gated and
                                #   timed, stopping at the first failure with
-                               #   that stage's log.  ~4.3 min on two cores.
+                               #   that stage's log.  Per-stage timings land
+                               #   in .pipeline/timings.json; quoting them
+                               #   here is how they went stale.
 ```
 
 The stages can still be run one at a time, in this order, from any directory:
