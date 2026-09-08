@@ -368,7 +368,7 @@ def run_swept():
     ax.set_title("Cross-flow validation: 45° swept NLF(2)-0415, α = −4°")
     ax.legend(loc="upper right",fontsize=10)
     finish(fig,f"{VP}/val_swept_crossflow.png",
-           caption="Source: "+v["source"][:95]+"...")
+           caption="Source: "+_cite(v["source"]))
     print("swept-wing cross-flow: mean |err| = %.1f%%"
           % float(np.mean(np.abs(df["err_pct"]))))
     return df
@@ -489,7 +489,7 @@ def run_swept2():
     ax.legend(loc="upper right",fontsize=9)
     finish(fig,f"{VP}/val_swept_independent.png",
            caption="Nothing is calibrated on this set.  Source: "
-                   +v["source"][:80]+"...")
+                   +_cite(v["source"], 80))
     for c1 in CF_BAND:
         print("independent swept-wing, C1 = %3d: mean |err| = %.1f%%"
               % (c1, float(np.mean(np.abs(df[f"err_pct_C1_{int(c1)}"])))))
@@ -1502,12 +1502,25 @@ def plot_nlf0416(df=None):
     v = C.NLF0416
     if df is None:
         df = run_nlf0416(quiet=True)
+    # Re_c is WRITTEN as a formatted string, "1.0e+06", so an in-memory frame
+    # from run_nlf0416 carries strings and one read back from the CSV carries
+    # floats.  The panel selection used to compare against the string form, so
+    # calling this with its own committed CSV matched no row in any panel and
+    # produced four EMPTY axes with a full legend and no error - which is how
+    # it was found.  Selecting on a numeric column works from either.
+    df = df.copy()
+    df["_Re_c_num"] = pd.to_numeric(df["Re_c"], errors="coerce")
     fig, axes = plt.subplots(2, 2, figsize=(10.4, 8.2), sharex=True, sharey=True)
     half = v["orifice_pitch"]/2.0
     for ax, Rec in zip(axes.ravel(), sorted(v["data"])):
-        tag = f"{Rec:.1e}"
         for surf, col, mk in (("upper", PALETTE[0], "o"), ("lower", PALETTE[3], "s")):
-            d = df[(df.Re_c == tag) & (df.surface == surf)].sort_values("c_l_exp")
+            d = df[np.isclose(df["_Re_c_num"], Rec, rtol=1e-6)
+                   & (df.surface == surf)].sort_values("c_l_exp")
+            if not len(d):
+                raise ValueError(
+                    "no %s-surface rows at Re_c = %.3g; the panel selection "
+                    "matched nothing, which is the empty-figure fault"
+                    % (surf, Rec))
             ax.errorbar(d.x_tr_c_exp, d.c_l_exp, xerr=half, fmt=mk, ms=6,
                         color=col, mec=INK_SOFT, lw=0, elinewidth=1.1,
                         capsize=2.5, ecolor=col, alpha=0.95,
@@ -1544,7 +1557,11 @@ def plot_nlf0416(df=None):
     handles.append(Line2D([], [], color=PALETTE[2], marker="x", ms=7, mew=1.6,
                           lw=0))
     labels.append("declared: burst or leading-edge bubble")
-    axes[0, 0].legend(handles, labels, loc="upper left", fontsize=8,
+    # "best", not "upper left".  The lower-surface curve in the R = 1e6 panel
+    # rises steeply into the top-left corner, and a hardcoded corner put the
+    # legend box on top of it.  matplotlib places "best" by minimising overlap
+    # with the artists actually drawn, so it follows the data if the data moves.
+    axes[0, 0].legend(handles, labels, loc="best", fontsize=8,
                       framealpha=0.9)
     fig.suptitle("NLF(1)-0416 transition location, M = 0.10  —  "
                  "86 points digitised from NASA TP-1861, Fig. 9", fontsize=12)
@@ -1595,6 +1612,22 @@ def plot_case(key):
     ax.legend(loc="lower left",fontsize=10)
     finish(fig,f"{VP}/val_{key}.png",
            caption=f"Source: {v['source'][:95]}...")
+
+def _cite(source, n=95):
+    """A figure-caption citation cut at a WORD boundary, not mid-word.
+
+    Both swept-wing captions truncated a source string at a fixed character
+    count, so they trailed off as "...Effects of Sweep Angle on the Boun...",
+    which reads as a rendering fault rather than as a deliberate shortening.
+    The full string is in the _source.csv beside the figure and in
+    sources_and_references.csv, and the caption says so.
+    """
+    src = " ".join(str(source).split())
+    if len(src) <= n:
+        return src
+    cut = src[:n].rsplit(" ", 1)[0].rstrip(",;:")
+    return cut + " … (full citation in sources_and_references.csv)"
+
 
 def _short(key):
     """The case key as the report and the README write it.

@@ -1238,6 +1238,36 @@ def no_axis_limit_is_set_before_its_scale():
         "\n   ".join(bad)
 
 
+@check
+def plotters_work_from_their_own_committed_csvs():
+    """a figure must not come out empty when fed the CSV it was written from"""
+    import pandas as pd
+    p = "06_validation/aerofoil_nlf0416.csv"
+    if not os.path.exists(p):
+        return
+    import gen_validation as GV
+    # Re_c is WRITTEN as the formatted string "1.0e+06" and comes back from a
+    # CSV as the float 1000000.0, so a panel selection that compared against
+    # the string matched nothing and produced four empty axes with a full
+    # legend and no error at all.  The committed CSV is the round trip, so it
+    # is what the check feeds in.
+    n = 0
+    GV.plot_nlf0416(pd.read_csv(p))
+    # the figure is written to disk; assert it is not the empty one by counting
+    # the rows the selection would find
+    df = pd.read_csv(p)
+    rec = pd.to_numeric(df["Re_c"], errors="coerce")
+    for Rec in sorted(GV.C.NLF0416["data"]):
+        for surf in ("upper", "lower"):
+            sel = (np.isclose(rec, Rec, rtol=1e-6)) & (df.surface == surf)
+            n += int(sel.sum())
+            assert sel.any(), \
+                "no %s rows at Re_c = %.3g when the CSV is read back" \
+                % (surf, Rec)
+    assert n == len(df), \
+        "the panel selections cover %d of the %d rows" % (n, len(df))
+
+
 def main():
     only = None
     if "-k" in sys.argv:
