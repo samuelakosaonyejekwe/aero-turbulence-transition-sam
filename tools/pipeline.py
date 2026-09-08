@@ -59,12 +59,29 @@ _WEIGHT = {"validation": 100, "solution": 40, "post": 25, "mesh": 12,
 
 
 def _physical_cores():
+    """Physical cores, from cpu0's sibling list.
+
+    The list is a mixed range/comma format - "0,4" or "0-1" or "0-3" - and
+    replacing "-" with "," then counting fields reads "0-3" as TWO siblings
+    instead of four, so a 4-way SMT machine was reported with twice the physical
+    cores it has and the worker budget was oversubscribed.  Ranges are expanded.
+    """
     n = os.cpu_count() or 1
     try:
         with open("/sys/devices/system/cpu/cpu0/topology/thread_siblings_list") as fh:
-            sibs = len([s for s in fh.read().strip().replace("-", ",").split(",") if s])
+            txt = fh.read().strip()
+        sibs = 0
+        for part in txt.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                a, b = part.split("-", 1)
+                sibs += int(b) - int(a) + 1
+            else:
+                sibs += 1
         return max(1, n // max(1, sibs))
-    except OSError:
+    except (OSError, ValueError):
         return max(1, n // 2)
 
 
@@ -90,6 +107,16 @@ def run_stage(name, args, env):
     extra = []
     if name == "validation" and args.no_ablations:
         extra = ["--no-ablations"]
+    if name == "verify":
+        # Check the document this run just built.  verify_outputs.py defaults to
+        # the committed PDF when one is present, so the pipeline's final gate
+        # was reading a rendered report that could pre-date every stage above it
+        # and never looked at the case.docx the docx stage had just written -
+        # while `verify` is declared as depending on `docx`.  Rendering the PDF
+        # needs Word and is not a pipeline stage, so the docx is the artefact
+        # this run is answerable for; CI still runs verify_outputs.py bare,
+        # against the committed PDF.
+        extra = ["case.docx"]
     t0 = time.time()
     with open(log, "w") as fh:
         # -u so the log fills as the stage runs.  Python buffers stdout when

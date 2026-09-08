@@ -81,8 +81,11 @@ EQS = [
  # ---- 4.4  Transitional & turbulent boundary layer -------------------
  ("E15","4.4  Transitional & turbulent boundary layer","Narasimha universal intermittency",
    r"\gamma(x) = 1 - \exp\left[-0.412\,\xi^{2}\right], \quad \xi = \frac{x-x_t}{\lambda_{tr}}"),
- ("E16","4.4  Transitional & turbulent boundary layer","Transition-length scale",
-   r"\lambda_{tr} = \frac{\nu}{U_e} C_{len}\, Re_{x,t}^{0.75}, \quad C_{len} = 9"),
+ ("E16","4.4  Transitional & turbulent boundary layer",
+   "Transition-length scale (Dhawan & Narasimha, in the two equivalent variables)",
+   r"\lambda_{tr} = \frac{\nu}{U_e}\,\frac{C_{len}}{0.664^{3/2}}\,"
+   r"Re_{\theta,t}^{3/2} \;=\; \frac{\nu}{U_e} C_{len}\, Re_{x,t}^{0.75}"
+   r"\Big|_{Re_\theta = 0.664\sqrt{Re_x}}, \quad C_{len} = 9"),
  ("E17","4.4  Transitional & turbulent boundary layer","Intermittency-weighted property blend",
    r"\phi = (1-\gamma)\phi_{lam} + \gamma\,\phi_{turb}"),
  ("E18","4.4  Transitional & turbulent boundary layer","Head entrainment (turbulent)",
@@ -92,6 +95,17 @@ EQS = [
  # ---- 4.5  Drag, compressible temperature & reference ----------------
  ("E20","4.5  Drag, temperature & reference scales","Squire-Young profile drag",
    r"C_d = 2\frac{\theta_{TE}}{c}\left(\frac{U_{e,TE}}{U_\infty}\right)^{(H_{TE}+5)/2}"),
+ ("E20b","4.5  Drag, temperature & reference scales",
+   "Span-wise momentum integral on an infinite swept wing (no span-wise pressure gradient)",
+   r"\frac{d}{dx_n}\left[\rho\,U_{e,n} W\,\theta_{12}\right] = \tau_{w,z}, \quad "
+   r"\theta_{12} = \int_{0}^{\delta}\frac{u}{U_{e,n}}\left(1-\frac{w}{W}\right)dy "
+   r"\;\Rightarrow\; F_z = \rho W\left(U_{e,n}\theta_{12}\right)_{TE}"),
+ ("E20c","4.5  Drag, temperature & reference scales",
+   "Swept-strip profile drag in the streamwise frame (chordwise wake + span-wise friction)",
+   r"C_d = 2\frac{\theta_{TE,n}}{c_n}\cos\Lambda\left[\cos^{2}\Lambda"
+   r"\left(\frac{U_{e,TE,n}}{U_n}\right)^{(H_{TE}+5)/2} "
+   r"+ \sin^{2}\Lambda\,\frac{U_{e,TE,n}}{U_n}\right], \quad "
+   r"c_l = c_{l,n}\cos^{2}\Lambda"),
  ("E21","4.5  Drag, temperature & reference scales","Crocco-Busemann temperature profile",
    r"\frac{T}{T_e} = 1 + r\frac{\gamma-1}{2}M_e^{2}\left[1-\left(\frac{u}{U_e}\right)^{2}\right]"),
  ("E22","4.5  Drag, temperature & reference scales","Recovery (adiabatic-wall) temperature",

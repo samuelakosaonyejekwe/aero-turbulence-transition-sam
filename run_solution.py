@@ -17,7 +17,7 @@ def run_case(cond, name):
     X,Y=C.nlf16_panel_points(130)
     r=solve_airfoil(X,Y,cond["alpha_deg"],cond["U_inf"],cond["nu_inf"],
                     W["MAC"],cond["Tu_pct"],sweep_deg=W["le_sweep_deg"],
-                    mach=cond["mach"])
+                    mach=cond["mach"],T_inf_K=cond["T_inf_K"])
     for surf in ["upper","lower"]:
         s=r["surfaces"][surf]
         # Rounded to the precision these quantities are meaningful to, as
@@ -76,7 +76,8 @@ def aero_polar():
     X,Y=C.nlf16_panel_points(130); rows=[]
     for a in np.arange(-3,8.01,1.0):
         r=solve_airfoil(X,Y,a,cr["U_inf"],cr["nu_inf"],W["MAC"],cr["Tu_pct"],
-                        sweep_deg=W["le_sweep_deg"],mach=cr["mach"])
+                        sweep_deg=W["le_sweep_deg"],mach=cr["mach"],
+                        T_inf_K=cr["T_inf_K"])
         u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
         rows.append(dict(alpha_deg=a, Cl=round(r["Cl"],4), Cd=round(r["Cd"],5),
             L_over_D=round(r["Cl"]/max(r["Cd"],1e-9),1),
@@ -101,7 +102,8 @@ def spanwise():
         ageo=cr["alpha_deg"]+twist
         aeff=ageo-float(a_ind)
         r=solve_airfoil(X,Y,aeff,cr["U_inf"],cr["nu_inf"],chord,cr["Tu_pct"],
-                        sweep_deg=W["le_sweep_deg"],mach=cr["mach"])
+                        sweep_deg=W["le_sweep_deg"],mach=cr["mach"],
+                        T_inf_K=cr["T_inf_K"])
         u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
         # a fully laminar surface counts as x_tr/c = 1.0 everywhere, so the
         # mean laminar fraction is defined at every station
@@ -185,7 +187,7 @@ def bl_profiles(rc, write=True):
     flight condition.
     """
     import stability as _stab
-    g=cr["gamma_air"]; a_inf=cr["a_sound"]
+    g=cr["gamma_air"]
     # Recovery factor by state, not one value for the whole surface.  The
     # profile reconstruction used the TURBULENT r = 0.89 at every station,
     # including the laminar ones, while _ref_temp_nu inside the solver has
@@ -225,10 +227,22 @@ def bl_profiles(rc, write=True):
         y=eta*delta
         u_Ue=(1.0-gam)*f_l(y/max(d_l,1e-12))+gam*f_t(y/max(d_t,1e-12))
         u_Ue=np.clip(u_Ue,0.0,1.0)
-        Ue=s["Ue"][i]; Me=Ue/a_inf
+        # The edge Mach number comes off the march, where solve_airfoil put
+        # the value _edge_from_cp formed from the CORRECTED pressure.  It used
+        # to be U_e/a_inf here - the free-stream speed of sound divided into
+        # the speed of gas that is at T_e - which is exactly the error
+        # _edge_from_cp's docstring records having removed from the solver, and
+        # it left the two halves of the same report running different
+        # compressible closures.  At cruise it reads M_e low by 1.4 per cent.
+        Ue=s["Ue"][i]; Me=float(s["Me"][i])
         r_rec=(1.0-gam)*r_lam+gam*r_turb
         T_Te=1+r_rec*(g-1)/2*Me**2*(1-u_Ue**2)
-        Tinf=cr["T_inf_K"]; Te=Tinf*(1+(g-1)/2*cr["mach"]**2)/(1+(g-1)/2*Me**2)
+        # The stagnation temperature is the free stream's, so the ratio is
+        # formed on the SAME Mach number the panel solve ran at - which on a
+        # swept section is the normal-plane one, M_inf cos(L), because that is
+        # what solve_airfoil handed the pressure correction.
+        Tinf=cr["T_inf_K"]; M_ref=float(rc["mach_solve"])
+        Te=Tinf*(1+(g-1)/2*M_ref**2)/(1+(g-1)/2*Me**2)
         Tabs=T_Te*Te
         for et,uu,tt,Ta in zip(eta,u_Ue,T_Te,Tabs):
             rows.append(dict(station=lab,x_c=round(xq,2),y_delta=round(et,3),
@@ -262,7 +276,7 @@ def nlf_vs_turbulent(rc):
     # did, put part of the quoted drag saving down to the change of flow model.
     rt=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
                      5.0,sweep_deg=W["le_sweep_deg"],cal=cal_trip,
-                     mach=cr["mach"])
+                     mach=cr["mach"],T_inf_K=cr["T_inf_K"])
     Cd_nlf=rc["Cd"]; Cd_turb=rt["Cd"]
     u=rc["surfaces"]["upper"]; l=rc["surfaces"]["lower"]
     # Laminar extent is a CHORDWISE fraction, the same quantity the transition
@@ -452,7 +466,8 @@ def transition_length_sensitivity():
     for c in (2.25, 4.5, 9.0, 18.0, 36.0):
         r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
                         cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
-                        mach=cr["mach"],cal=dict(C_len=c))
+                        mach=cr["mach"],cal=dict(C_len=c),
+                        T_inf_K=cr["T_inf_K"])
         u=r["surfaces"]["upper"]; g=u["gamma"]; x=u["x"]
         i0=int(np.argmax(g>1e-6))
         done=bool((g>=0.99).any())

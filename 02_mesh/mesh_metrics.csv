@@ -1,14 +1,15 @@
 metric,value,unit
-Surface streamwise nodes,321,-
+Surface streamwise nodes,261,-
 Wall-normal layers (reconstruction),44,-
-First-cell height y1,6.51,micron
+First-cell height y1,7.80,micron
 Target wall y+,0.80,-
 Wall-normal growth ratio,1.12,-
-Min streamwise spacing,0.099,1e-3 c
-Max streamwise spacing,9.927,1e-3 c
-Max streamwise spacing at MAC,20.074,mm
-LE clustering ratio,99.9,-
-BL grid outer extent,7.04,mm
-Friction velocity u_tau (TE),4.800,m/s
-Max cell aspect ratio (at MAC),3082,-
+Min streamwise spacing,0.151,1e-3 c
+Max streamwise spacing,12.217,1e-3 c
+Max streamwise spacing at MAC,24.705,mm
+LE clustering ratio,81.1,-
+BL grid outer extent,8.43,mm
+"Peak turbulent C_f (cruise, both surfaces)",0.00209,-
+Friction velocity u_tau at that peak,4.010,m/s
+Max cell aspect ratio (at MAC),3169,-
 Discretisation type,surface panel distribution + wall-normal reconstruction stack (no volume mesh is generated),-

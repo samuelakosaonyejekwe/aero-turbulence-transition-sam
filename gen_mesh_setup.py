@@ -25,13 +25,23 @@ cr=C.CRUISE; W=C.WING
 # ======================================================================
 # 1. SURFACE MESH  (streamwise nodes, cosine clustering)
 # ======================================================================
+# The panel count the case study is actually solved on.  run_solution.py,
+# gen_postprocessing.py and the polar all call nlf16_panel_points(130), which is
+# 261 nodes and 260 panels, and 03_model_setup/solver_settings.csv states 260.
+# This module used to sample the section at n=160 instead and report 321
+# "surface streamwise nodes", so the mesh table and the solver-settings table in
+# the same section of the report described two different discretisations, and
+# the spacing, clustering ratio and cell aspect ratio quoted as the case's
+# belonged to a grid nothing was solved on.
+N_PANEL_HALF = 130
+
+
 def surface_mesh():
-    co=C.nlf16_coords(n=160)
-    X=np.concatenate([co["xl"][::-1], co["xu"][1:]])
-    Y=np.concatenate([co["yl"][::-1], co["yu"][1:]])
+    X, Y = C.nlf16_panel_points(N_PANEL_HALF)
+    n_low = N_PANEL_HALF + 1                  # xl reversed, then xu[1:]
     s=np.concatenate([[0],np.cumsum(np.hypot(np.diff(X),np.diff(Y)))])
     ds=np.gradient(s)
-    surf=np.where(np.arange(len(X))<len(co["xl"]),"lower","upper")
+    surf=np.where(np.arange(len(X))<n_low,"lower","upper")
     # Rounded to the precision these quantities are meaningful to, the same
     # convention run_solution.py states and every table in the report relies
     # on.  Written raw, this file put seventeen-significant-figure numbers
@@ -47,10 +57,42 @@ def surface_mesh():
 # ======================================================================
 # 2. WALL-NORMAL BL RECONSTRUCTION GRID  (y+ target ~ 1)
 # ======================================================================
+def peak_turbulent_cf():
+    """The largest wall shear the cruise solution actually produces.
+
+    The wall-normal stack was sized on a typed Cf = 0.0030, described as a
+    "representative turbulent Cf at trailing edge".  It is neither: the cruise
+    section's peak turbulent C_f is 0.0018, just behind transition, and its
+    TRAILING-EDGE value is 2.0e-4, because the layer there is close to
+    separation and sits on the H = 2.8 clamp.  A y+ criterion has to be met
+    where the shear is HIGHEST, so the peak is the quantity that sizes the
+    grid - and quoting a friction velocity "at the TE" formed from a number
+    that is neither the peak nor the TE value made the y+ = 0.8 in the metrics
+    table true only by construction.
+
+    The stagnation singularity and the region where the integral C_f has no
+    meaning are excluded the same way gen_postprocessing masks them.
+    """
+    X,Y=C.nlf16_panel_points(N_PANEL_HALF)
+    r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
+                    cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],mach=cr["mach"],
+                    T_inf_K=cr["T_inf_K"])
+    best=0.0
+    for surf in ("upper","lower"):
+        s=r["surfaces"][surf]
+        x=np.asarray(s["x"],float); cf=np.asarray(s["Cf"],float)
+        ue=np.asarray(s["Ue"],float)/cr["U_inf"]
+        m=(x>0.006)&(ue>0.12)&(cf<0.008)&(np.asarray(s["gamma"],float)>0.99)
+        if m.any():
+            best=max(best,float(cf[m].max()))
+    return best
+
+
 def bl_normal_grid():
-    # representative turbulent Cf at trailing edge to size first cell
-    Cf_te=0.0030
-    tau_w=Cf_te*cr["q_inf"]; u_tau=np.sqrt(tau_w/cr["rho_inf"])
+    # The peak turbulent skin friction the cruise solution returns, which is
+    # what a y+ target has to be met against; see peak_turbulent_cf.
+    Cf_ref=peak_turbulent_cf()
+    tau_w=Cf_ref*cr["q_inf"]; u_tau=np.sqrt(tau_w/cr["rho_inf"])
     y1=0.8*cr["nu_inf"]/u_tau         # first-cell height for y+~0.8
     N=44; gr=1.12
     y=np.zeros(N); dy=y1
@@ -69,7 +111,7 @@ def bl_normal_grid():
                      "cell_dy_mm":(np.gradient(y)*1e3).round(5),
                      "growth_ratio":gr_arr.round(4)})
     df.to_csv(f"{MESH}/bl_normal_grid.csv",index=False)
-    return df,u_tau,y1,gr,N
+    return df,u_tau,y1,gr,N,Cf_ref
 
 # ======================================================================
 # 3. MESH METRICS + INDEPENDENCE STUDY
@@ -83,7 +125,7 @@ def mesh_independence():
         X,Y=C.nlf16_panel_points(npan)
         r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
                         cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
-                        mach=cr["mach"])
+                        mach=cr["mach"],T_inf_K=cr["T_inf_K"])
         u=r["surfaces"]["upper"]
         rows.append((2*npan,r["Cl"],r["Cd"],u["x_tr_chord"]))
     df=pd.DataFrame(rows,columns=["n_surface_panels","Cl","Cd","x_tr_upper_c"])
@@ -105,7 +147,7 @@ def mesh_independence():
     df.to_csv(f"{MESH}/mesh_independence.csv",index=False)
     return df
 
-def mesh_metrics(df_surf,df_bl,u_tau,y1,gr,N):
+def mesh_metrics(df_surf,df_bl,u_tau,y1,gr,N,Cf_ref):
     # The streamwise spacing is tabulated in chord units, which is what the
     # surface node file holds; converting it to a length needs the chord, so
     # the two are reported separately rather than mixed.  The cell aspect ratio
@@ -126,7 +168,8 @@ def mesh_metrics(df_surf,df_bl,u_tau,y1,gr,N):
         ("Max streamwise spacing at MAC",f"{ds_max_m*1e3:.3f}","mm"),
         ("LE clustering ratio",f"{ds_max_c/ds_min_c:.1f}","-"),
         ("BL grid outer extent",f"{df_bl['y_mm'].max():.2f}","mm"),
-        ("Friction velocity u_tau (TE)",f"{u_tau:.3f}","m/s"),
+        ("Peak turbulent C_f (cruise, both surfaces)",f"{Cf_ref:.5f}","-"),
+        ("Friction velocity u_tau at that peak",f"{u_tau:.3f}","m/s"),
         ("Max cell aspect ratio (at MAC)",f"{(ds_max_m/y1):.0f}","-"),
         ("Discretisation type",
          "surface panel distribution + wall-normal reconstruction stack "
@@ -140,7 +183,7 @@ def mesh_metrics(df_surf,df_bl,u_tau,y1,gr,N):
 # ======================================================================
 def plot_surface_mesh(df_surf,df_bl):
     fig,ax=new_fig(10,4.2)
-    co=C.nlf16_coords(n=160)
+    co=C.nlf16_coords(n=N_PANEL_HALF)
     ax.plot(co["xu"],co["yu"],color=INK,lw=1.0)
     ax.plot(co["xl"],co["yl"],color=INK,lw=1.0)
     ax.scatter(df_surf["x_c"],df_surf["y_c"],s=7,color=PALETTE[0],
@@ -247,7 +290,12 @@ def setup_tables():
          "across the dead-air region"),
         ("  cross-flow","C1 on Re_theta2, closed by an amplification integral"),
         ("Intermittency closure","Narasimha universal (gamma)"),
-        ("Transition length","Dhawan & Narasimha, Re_lambda = 9 Re_x_t^0.75"),
+        ("Transition length",
+         "Dhawan & Narasimha at constant spot formation rate, stated in "
+         "Re_theta: Re_lambda = (9/0.664^1.5) Re_theta_t^1.5, which is their "
+         "published Re_lambda = 9 Re_x_t^0.75 wherever Re_theta = 0.664 "
+         "sqrt(Re_x) and is the form that stays exact in a pressure gradient "
+         "(cal['len_re_x'] = True recovers the published form)"),
         ("Turbulent BL closure","Head entrainment + Ludwieg-Tillmann Cf"),
         ("Laminar separation criterion","Thwaites lambda <= -0.09"),
         ("Turbulent separation flag","H > 2.6"),
@@ -276,7 +324,8 @@ def setup_tables():
         ("A_CF",CAL["A_CF"],"crossflow weight","unity; Arnal C1 criterion"),
         ("N_crit","from Tu","e^N amplification factor",
          "Mack N=-8.43-2.4 ln(Tu), clamped to 0.0008<=Tu<=0.0298, anchored "
-         "-%.2f (FITTED jointly on S&S and 86 aerofoil pts); %.2f for Tu<0.08%%"
+         "-%.2f (set on the Schubauer-Skramstad plate ALONE; see N_anchor "
+         "below); %.2f for Tu<0.08%%"
          % (N_anchor, _n_crit(0.05))),
         ("N_floor",CAL["N_floor"],"lower clamp on N_crit at high Tu","clamp; bypass governs there"),
         ("Tu_BP_lo",CAL["Tu_BP_lo"],"Tu [%] below which the bypass correlation carries no weight",
@@ -343,9 +392,9 @@ def setup_tables():
 
 if __name__=="__main__":
     df_surf=surface_mesh()
-    df_bl,u_tau,y1,gr,N=bl_normal_grid()
+    df_bl,u_tau,y1,gr,N,Cf_ref=bl_normal_grid()
     df_ind=mesh_independence()
-    mesh_metrics(df_surf,df_bl,u_tau,y1,gr,N)
+    mesh_metrics(df_surf,df_bl,u_tau,y1,gr,N,Cf_ref)
     plot_surface_mesh(df_surf,df_bl)
     plot_bl_grid(df_bl)
     plot_independence(df_ind)

@@ -31,6 +31,28 @@ Re_λ = 9 Re_x,t^0.75 → Head + Ludwieg–Tillmann turbulent BL evaluated at
 Eckert's reference temperature → Squire–Young drag, swept across the span
 (strip + cross-flow) for the full 3-D wing.
 
+On a swept strip the profile drag is **not** the section lift's cos²Λ applied to
+Squire–Young.  Two forces act — the chordwise wake deficit, which is what
+Squire–Young returns, and the span-wise wall shear, which is not in that
+deficit at all — and the span-wise momentum integral supplies the second in
+closed form, so
+
+    C_d = 2 (θ_TE,n/c_n) cosΛ [ cos²Λ (U_e,TE,n/U_n)^((H+5)/2)
+                                + sin²Λ (U_e,TE,n/U_n) ]
+
+with the two velocity-ratio powers differing because no Squire–Young
+extrapolation applies to the span-wise deficit: downstream of the trailing edge
+there is no wall, so it is frozen.  The **yawed flat plate** settles the form,
+because its answer is known independently — a plate at yaw is a plate in the
+free stream, so its drag is the unyawed value at the streamwise run length — and
+at zero pressure gradient the expression returns exactly cosΛ for every sweep
+and every shape factor, which is that answer.  The cos²Λ this replaced is short
+by a further cosΛ: 2 % at the 12° of this wing, 29 % at 45°.  It is asserted in
+`tools/smoke.py`, not described.  The correction raises the section profile drag
+from 45.0 to 47.3 counts and leaves it within half a count of the same section
+unswept, which is what 12° of sweep should do to a viscous drag; the drag
+*reduction* is unchanged, both configurations scaling together.
+
 The transition-length correlation is validated on the flat plates below, which
 span Re_x,t = 6×10⁴ to 1.4×10⁶, and extrapolated on the wing, which transitions
 at 3.7×10⁶.  The extrapolation is not damped — that would add an undeclared
@@ -47,8 +69,12 @@ Two elements are not correlations:
   reverse-flow branch so that a separated profile has a computed rate too. The
   march carries one amplification factor per physical frequency. The stability
   solver puts the Blasius neutral point at Re_θ = 201 against the accepted
-  200.5; the tabulated database resolves it to the nearest node of its
-  Reynolds-number grid, Re_θ = 210.  Regenerate with
+  200.5; what the march reads is the interpolated table, which first amplifies
+  at Re_θ = 209 — between Reynolds-number nodes at 204 and 234, so the offset is
+  the resolution of that grid rather than an error in the eigenvalue solver.
+  (`stability.tabulated_neutral_Re_theta()` computes it; this used to say
+  "the nearest node of its Reynolds-number grid, Re_θ = 210", which is neither
+  the value nor a node.)  Regenerate with
   `python3 -c "import sys; sys.path.insert(0,'solver'); import stability;
   stability.build_database()"` (~4 min on 4 cores); the build is checkpointed
   per shape factor, so an interrupted run resumes rather than restarting.
@@ -57,8 +83,13 @@ Two elements are not correlations:
   shear set to zero, so the shape factor keeps growing through the plateau
   (on T3C4 the shape factor rises through the plateau); reattachment is placed where the
   disturbance has amplified by the same N_crit used elsewhere, so the bubble
-  length scales with the disturbance environment (≈42 θ_s at Tu = 2.1 %,
-  ≈226 θ_s at Tu = 0.03 %). The amplification rate is **not fitted**: it is read
+  length scales with the disturbance environment — measured, not asserted, into
+  `06_validation/bubble_length_scaling.csv`: 26 θ_s on the separating plate at
+  Tu = 2.11 % against a median of 206 over the 50 aerofoil bubbles at 0.03 %, a
+  spread of 7.8.  (This line said ≈42 and ≈226, the report said "a spread of
+  five and a half" and the solver's own comment said ≈40, ≈180 and "four and a
+  half"; the claim is true and none of the three numbers was.)
+  The amplification rate is **not fitted**: it is read
   from the reverse-flow branch of the tabulated family, which returns 0.0435 at
   Re_θ = 400 (0.042–0.045 over the range these bubbles span). The shape factor
   itself is marched on the *attached* branch and bounded by its separation value
@@ -74,9 +105,9 @@ checked against the compiled report, so this table cannot drift from the solver:
 | quantity | value |
 |---|---|
 | Section lift coefficient c_l | 0.517 |
-| Section profile drag | 45.0 counts |
-| Fully-turbulent reference (LE trip) | 90.6 counts |
-| Viscous drag reduction | 50.3 % |
+| Section profile drag | 47.3 counts |
+| Fully-turbulent reference (LE trip) | 95.4 counts |
+| Viscous drag reduction | 50.4 % |
 | Mean laminar extent | 55.4 % chord |
 | Transition, cruise upper / lower | x/c = 0.542 / 0.566 (both natural-TS) |
 | Wing C_L (lifting line, taper + washout + sweep) | 0.2548 |
@@ -157,9 +188,12 @@ aerofoil predictions inside the experimental bracket, which made the largest
 body of evidence in this work a calibration set while three places in the
 project described it as one on which nothing is calibrated. It is now set on
 the Schubauer & Skramstad plate alone, which it reproduces to 0.07 %. The cost
-is reported rather than buried: on the conditions the method accepts the mean
-absolute error goes from 0.0314c to 0.0313c and the bracket count from 51 to 50 — which is what happens
-when a constant stops being fitted to the set it is scored on.
+is reported rather than buried: the bracket count fell from 51 to 50 — which is
+what happens when a constant stops being fitted to the set it is scored on.
+The error figures are the table below, read from
+`06_validation/aerofoil_nlf0416_summary.csv`; a before-and-after pair frozen in
+prose stops describing the model the moment anything else moves, so only the
+current values are quoted.
 
 Flat plates — onset momentum-thickness Reynolds number:
 
@@ -201,8 +235,9 @@ Regenerated by `gen_validation.py` into `06_validation/aerofoil_nlf0416_summary.
 The method now declares where it does not apply, rather than returning the last
 station its march reached: a bubble that has not reattached by the trailing edge
 has **burst**, and a layer separating within 2 % of chord has a **leading-edge
-bubble**.  Three of the 86 are declared on those grounds and are kept in the
-all-points row.
+bubble**.  Two of the 86 are declared on those grounds and are kept in the
+all-points row - the same two the paragraph above counts, which this line used
+to give as three.
 
 Ablations, everything else held fixed (all 86 aerofoil points):
 
@@ -236,7 +271,7 @@ is evaluated there.
 
 | set | critical Re_θ2 | coeff. of variation | points |
 |---|---|---|---|
-| Dagenhart & Saric | 153 | 18.0 % | 6 |
+| Dagenhart & Saric | 153 | 17.8 % | 6 |
 | Boltz et al. | 234 | 4.0 % | 4 |
 | pooled | 185 | 24.4 % | 10 |
 
@@ -245,20 +280,30 @@ and a factor of three in chord Reynolds number — and the two differ by 53 %.
 That is the shape of a receptivity difference, not of a criterion with the
 wrong form.  Two attempts to close the gap fail and are recorded rather than
 dropped: the exact Falkner–Skan–Cooke factor K(λ) in place of the constant
-surrogate makes it worse (pooled variation 82 % against 21 %, and the ratio
+surrogate makes it worse (pooled variation 77 % against 24 %, and the ratio
 between the two sets inverts), and giving the cross-flow branch its own
 amplification threshold,
-separate from Mack's, moves the independent set only from 55 % to 51 % as that
-threshold goes from N = 2 to 12, because once Re_θ2 exceeds C1 the
-amplification builds fast enough that the threshold is nearly redundant with
-C1 itself.  The
+separate from Mack's, does not help either: swept from N = 2 to 12 with C1
+refitted on the calibration set at each value, the independent set goes from
+55.1 % to 61.9 % — away from agreement, not towards it
+(`06_validation/crossflow_threshold_sweep.csv`).  This used to say "only from
+55 % to 51 %", which had the size and the sign wrong.  The reason it cannot
+help is that once Re_θ2 exceeds C1 the amplification builds fast enough that
+the threshold is nearly redundant with C1 itself, which the barely-moving
+refitted C1 column shows directly.  The
 branch is closed by an **amplification integral** rather than a local threshold
 — a stationary cross-flow vortex must grow before it breaks down — using the
 computed rate 0.0435 and the same N_crit as every other branch, so it adds no
 constant.
-Seven formulations were tried against the two swept-wing experiments and none
-reconciles them; every one that helps the independent set costs more on the
-calibration set.  The two require critical values differing by about half, and
+Seven formulations of the branch are scored against both experiments in
+`06_validation/crossflow_formulations.csv`, and none reconciles them: every one
+that helps the independent set costs more on the calibration set, and the two
+that cost nothing there help nothing here.  That used to be a claim about what
+the author had tried, which nothing could check; it is now a generated table.
+Whether the branch needs its own amplification threshold, separate from the
+N_crit Mack's relation supplies for TS waves, is settled the same way in
+`06_validation/crossflow_threshold_sweep.csv`, which refits C1 on the
+calibration set at each threshold so the two constants are not confounded.  The two require critical values differing by about half, and
 that difference is in none of the mean-flow quantities the method computes —
 which the exact Falkner–Skan–Cooke similarity solution establishes.  It is a
 **receptivity** difference: stationary cross-flow vortices are seeded by
@@ -295,7 +340,7 @@ integrates is read off a separated *streamwise* profile and is nearly
 Reynolds-independent (0.0417 at Re_θ = 200 against 0.0461 at 8000), so N_cf
 scales as √Re_c. The two facilities differ 7× in Re_c, and the N they require is
 0.0–11.9 and 43.1–129.2 — not comparable — while the critical Re_θ2 is tight
-within each (18.0 % and 4.0 %). The receptivity attribution was reached by an
+within each (17.8 % and 4.0 %). The receptivity attribution was reached by an
 elimination that had not considered that the branch's own rate carries no
 cross-flow physics. **What would close it is named**: the Orr–Sommerfeld problem
 solved on the Falkner–Skan–Cooke *cross-flow* profile — which
@@ -340,7 +385,7 @@ Sources recorded in `06_validation/sources_and_references.csv`.
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
 solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld +
                   amplification database), case_config.py, uplot.py (style)
-tools/            smoke.py (16 checks over the whole solver in ~10 s),
+tools/            smoke.py (20 checks over the whole solver in ~45 s),
                   pipeline.py (staged regeneration), baseline.py (numeric diff
                   of every generated CSV against a snapshot)
 utss_paths.py     anchors every entry point to the repository root, so a
@@ -353,7 +398,7 @@ case.docx         the same report as .docx - a build product, not tracked
 
 ## Reproduce
 ```bash
-python3 tools/smoke.py         # 16 checks over the whole solver, ~10 s.
+python3 tools/smoke.py         # 20 checks over the whole solver, ~45 s.
                                #   Run this FIRST and after every edit: a full
                                #   regeneration is four minutes and the faults
                                #   that waste it are all visible here in the

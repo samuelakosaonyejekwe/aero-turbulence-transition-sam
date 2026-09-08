@@ -502,7 +502,8 @@ def build_3d_field():
         # solution the surface CSVs of section 9 tabulate and not a second,
         # incompressible one
         r=solve_airfoil(X,Y,aeff,cr["U_inf"],cr["nu_inf"],chord,cr["Tu_pct"],
-                        sweep_deg=W["le_sweep_deg"],mach=cr["mach"])
+                        sweep_deg=W["le_sweep_deg"],mach=cr["mach"],
+                        T_inf_K=cr["T_inf_K"])
         data[e]=r["surfaces"]
     return etas,data
 
@@ -512,8 +513,14 @@ def _wing_xyz(e,xc,surf):
     z_dih=e*W["span_b"]/2*np.tan(np.radians(W["dihedral_deg"]))
     twist=np.radians(-(e*W["twist_tip_deg"]))
     co=C.nlf16_coords(n=130)
+    # Both surfaces are tabulated LE -> TE, so both abscissae already increase.
+    # The lower one was reversed before being handed to np.interp, which
+    # requires an INCREASING xp and gives no warning when it does not get one:
+    # it returned 0.0 at every station, so the whole lower surface of every 3-D
+    # figure was drawn flat on the twisted chord line instead of on the
+    # section.  This is the same fault gen_geometry._surface documents fixing.
     if surf=="upper": ys=np.interp(xc,co["xu"],co["yu"])
-    else: ys=np.interp(xc,co["xl"][::-1],co["yl"][::-1])
+    else: ys=np.interp(xc,co["xl"],co["yl"])
     xq=xc-0.25; yq=ys
     xr=0.25+xq*np.cos(twist)-yq*np.sin(twist); yr=xq*np.sin(twist)+yq*np.cos(twist)
     Xp=xle+xr*chord; Yp=e*W["span_b"]/2; Zp=z_dih+yr*chord

@@ -417,6 +417,17 @@ def run_swept2():
             xp=1.0 if xp!=xp else float(xp)
             row[f"x_tr_c_pred_C1_{int(c1)}"]=round(xp,3)
             row[f"err_pct_C1_{int(c1)}"]=round((xp-xm)/xm*100,1)
+            # The EFFECTIVE critical value the branch ends up enforcing, which
+            # is not C1: C1 only starts the amplification integral, and the
+            # integral then decides the station, so Re_theta2 there is higher.
+            # Section 11.3 of the report reconciles that against the 234 this
+            # facility requires, and had the two figures typed in.
+            from utss_solver import _re_theta2 as _rt2
+            nf=bool(r.get("sweep_transform",False))
+            row[f"Re_theta2_at_onset_C1_{int(c1)}"]=(
+                round(float(_rt2(float(u["Re_theta"][u["i_tr"]]), sw,
+                                 CAL["CF_ratio"], nf)), 1)
+                if u["i_tr"] is not None else None)
             if c1==CAL["CF_C1"]:
                 row["mechanism"]=u["onset_mech"]
         rows.append(row)
@@ -463,13 +474,24 @@ def crossflow_criticals(write=True, quiet=False):
     """
     import stability as _st
     from utss_solver import _re_theta2
-    # every branch off, so the laminar march reaches the measured station
     # Every branch off, so the laminar march runs past the measured station
-    # instead of transitioning before it.  A_TS scales the amplification
-    # PROGRESS, so switching the natural branch off means a small weight, not
-    # a large one; the old value here was 1e6, which was inert only because
-    # the Tu_TS_max gate beside it was already holding the branch shut.
-    NOCF = dict(CF_C1=1e12, A_TS=1e-9, Tu_BP_lo=1e9, Tu_BP_hi=2e9,
+    # instead of transitioning before it.  The weights do NOT all point the
+    # same way, and each has to be set in its own direction:
+    #
+    #   A_TS  scales the amplification PROGRESS, so off is a SMALL weight.
+    #         (The old value here was 1e6, inert only because the Tu_TS_max
+    #         gate beside it was already holding the branch shut.)
+    #   A_SEP scales the onset REYNOLDS NUMBER on the bubble=False path, so
+    #         off is a LARGE weight.  This was missing: with only bubble=False
+    #         set, the separation branch was still live and fired on every one
+    #         of the ten conditions - at x/c = 0.73 on the Dagenhart sections
+    #         and 0.50 on the Boltz ones - so the Dagenhart point whose
+    #         transition is measured at x/c = 0.78 was being probed downstream
+    #         of a transition this diagnostic exists to prevent, and read a
+    #         blended Re_theta instead of the laminar one.
+    #   Tu_BP_lo/hi push the bypass blend weight to zero.
+    #   CF_C1 holds the branch under test off until it is evaluated by hand.
+    NOCF = dict(CF_C1=1e12, A_TS=1e-9, A_SEP=1e9, Tu_BP_lo=1e9, Tu_BP_hi=2e9,
                 bubble=False)
 
     def probe(X, Y, al, U, nu, c, tu, sw, x_meas):
@@ -553,6 +575,124 @@ def crossflow_criticals(write=True, quiet=False):
     return df, st_df
 
 
+def _swept_err_one(which, cal=None, transform=True):
+    """Per-point |error| in transition location on one swept-wing set."""
+    if which == "cal":
+        v = C.SWEPT; X, Y = _section_points(NLF415)
+        rows = [(v["sweep_deg"], v["alpha_deg"], xm, Rec)
+                for Rec, xm in zip(v["Re_c"], v["x_tr_c"])]
+    else:
+        v = C.SWEPT2; X, Y = _section_points(v["section"])
+        rows = list(zip(v["sweep_deg"], v["alpha_deg"], v["x_tr_c"], v["Re_c"]))
+    out = []
+    for sw, al, xm, Rec in rows:
+        r = solve_airfoil(X, Y, al, Rec*v["nu"]/v["chord_m"], v["nu"],
+                          v["chord_m"], v["Tu_pct"], sweep_deg=sw, cal=cal,
+                          sweep_transform=transform)
+        xp = r["surfaces"]["upper"]["x_tr_chord"]
+        out.append(abs((1.0 if xp != xp else float(xp)) - xm)/xm*100.0)
+    return out
+
+
+def _swept_errors(cal=None, transform=True):
+    """Mean |error| on each swept-wing set, and pooled over all ten points."""
+    e1 = _swept_err_one("cal", cal, transform)
+    e2 = _swept_err_one("ind", cal, transform)
+    return (float(np.mean(e1)), float(np.mean(e2)), float(np.mean(e1 + e2)))
+
+
+def crossflow_threshold_sweep(write=True, quiet=False,
+                              n_grid=(2.0, 5.0, 8.0, 12.0),
+                              c1_coarse=(100.0, 150.0, 200.0, 260.0, 330.0)):
+    """Does the cross-flow branch need its own amplification threshold?
+
+    Mack's relation correlates TS waves against free-stream turbulence, and a
+    stationary cross-flow vortex is seeded by leading-edge roughness instead,
+    so there is no reason the two thresholds should coincide.  cal["CF_N"]
+    exposes a separate one; this sweeps it, REFITTING C1 on the calibration set
+    at each value so that the two constants are not confounded, and reports
+    what the independent set does.
+
+    The report asserted the outcome ("moves the independent set only from 55 to
+    51 per cent as that threshold is taken from N = 2 to N = 12").  It is
+    generated here instead, because an assertion about a sweep that nothing
+    re-runs is exactly the kind of statement this project has been finding
+    wrong.
+    """
+    def cal_err(N, c1):
+        return float(np.mean(_swept_err_one(
+            "cal", dict(CF_N=float(N), CF_C1=float(c1)))))
+
+    rows = []
+    for N in n_grid:
+        # coarse scan, then one refinement pass around the best C1: the
+        # calibration error is smooth and unimodal in C1, and the full grid
+        # this replaces cost sixteen minutes a run
+        grid = list(c1_coarse)
+        scores = {c: cal_err(N, c) for c in grid}
+        c_best = min(scores, key=scores.get)
+        step = 0.5*min(abs(a - b) for a, b in zip(grid, grid[1:]))
+        for c in (c_best - step, c_best + step):
+            if c > 0 and c not in scores:
+                scores[c] = cal_err(N, c)
+        c_best = min(scores, key=scores.get)
+        e_ind = float(np.mean(_swept_err_one(
+            "ind", dict(CF_N=float(N), CF_C1=float(c_best)))))
+        rows.append(dict(CF_N=N, C1_refitted=round(c_best, 1),
+                         calibration_err_pct=round(scores[c_best], 1),
+                         independent_err_pct=round(e_ind, 1),
+                         n_C1_evaluated=len(scores)))
+    df = pd.DataFrame(rows)
+    if write:
+        df.to_csv(f"{VAL}/crossflow_threshold_sweep.csv", index=False)
+    if not quiet:
+        print(df.to_string(index=False))
+    return df
+
+
+def crossflow_formulations(write=True, quiet=False):
+    """Every cross-flow formulation this solver can be put into, scored.
+
+    The README said "seven formulations were tried against the two swept-wing
+    experiments and none reconciles them", which is a claim about the author's
+    history rather than about the code, and nothing could check it.  The
+    formulations the solver actually exposes are enumerated and scored here, so
+    the claim becomes a table a reader can reproduce.
+    """
+    variants = [
+        ("amplification integral, C1 = 150 (shipped)", None),
+        ("amplification integral, C1 = 200", dict(CF_C1=200.0)),
+        ("local C1 threshold, no amplification integral", dict(cf_amp=False)),
+        ("local C1 threshold, C1 = 200", dict(cf_amp=False, CF_C1=200.0)),
+        ("exact Falkner-Skan-Cooke K(lambda) for the thickness",
+         dict(cf_exact=True)),
+        ("exact K(lambda), local C1 threshold",
+         dict(cf_exact=True, cf_amp=False)),
+        ("streamwise frame (no normal-plane transformation)",
+         dict(_sweep_transform=False)),
+    ]
+    rows = []
+    for name, cal in variants:
+        tr = not (cal and cal.get("_sweep_transform") is False)
+        cal2 = ({k: v for k, v in cal.items() if k != "_sweep_transform"}
+                if cal else None)
+        e = _swept_errors(cal2 or None, transform=tr)
+        rows.append(dict(formulation=name,
+                         calibration_err_pct=round(e[0], 1),
+                         independent_err_pct=round(e[1], 1),
+                         pooled_err_pct=round(e[2], 1)))
+    df = pd.DataFrame(rows)
+    df["helps_independent_vs_shipped"] = (
+        df.independent_err_pct < df.independent_err_pct.iloc[0])
+    df["costs_calibration_vs_shipped"] = (
+        df.calibration_err_pct > df.calibration_err_pct.iloc[0])
+    if write:
+        df.to_csv(f"{VAL}/crossflow_formulations.csv", index=False)
+    if not quiet:
+        print(df.to_string(index=False))
+    return df
+
+
 def crossflow_receptivity(write=True, quiet=False):
     """Why the cross-flow gap cannot be quantified, and what it would take.
 
@@ -574,12 +714,16 @@ def crossflow_receptivity(write=True, quiet=False):
     which is a property of the chord Reynolds number and not of the cross-flow
     instability.  The two facilities differ by a factor of seven in Re_c, so the
     N they require is not comparable: measured at the transition station each
-    reports, it is 1.6 to 4.8 for Dagenhart & Saric and 3.1 to 121 for Boltz et
-    al., with scatter larger than the difference.
+    reports, it is 0.0 to 11.9 for Dagenhart & Saric and 43.1 to 129.2 for Boltz
+    et al., with scatter larger than the difference.  (Those ranges, and the
+    coefficients of variation below, are what this function writes into
+    crossflow_receptivity_summary.csv; the figures this paragraph carried -
+    1.6 to 4.8, 3.1 to 121, and 17.9 per cent - pre-date solving the swept
+    sections in the plane normal to the leading edge.)
 
     So the honest statement is narrower than the report's, and firmer.  The gap
     is a difference in the critical cross-flow REYNOLDS NUMBER, which is
-    internally consistent within each facility - 17.9 and 4.0 per cent - and
+    internally consistent within each facility - 19.5 and 4.6 per cent - and
     differs between them by 53 per cent.  It is consistent with a receptivity
     difference, and it cannot be converted into a roughness ratio by this
     method, because this method carries no cross-flow instability rate.  Doing
@@ -601,8 +745,13 @@ def crossflow_receptivity(write=True, quiet=False):
                 else [v["alpha_deg"]]*len(v["Re_c"]))
         for sw, al, Rec, xm in zip(swl, all_, v["Re_c"], v["x_tr_c"]):
             U = Rec*v["nu"]/v["chord_m"]
-            cal = dict(CF_N=1e9, A_TS=1e-9, Tu_BP_lo=1e9, Tu_BP_hi=2e9,
-                       bubble=False)
+            # see the note on NOCF in crossflow_criticals: A_SEP scales the
+            # onset Reynolds number on the bubble=False path, so the
+            # separation branch is switched off with a LARGE weight, and
+            # without it this march transitioned before it reached the
+            # measured station on all ten conditions
+            cal = dict(CF_N=1e9, A_TS=1e-9, A_SEP=1e9, Tu_BP_lo=1e9,
+                       Tu_BP_hi=2e9, bubble=False)
             r = solve_airfoil(X, Y, al, U, v["nu"], v["chord_m"], v["Tu_pct"],
                               sweep_deg=sw, cal=cal)
             u = r["surfaces"]["upper"]
@@ -715,6 +864,7 @@ def bubble_diagnostics(key="T3C4", write=True, quiet=False):
     by the attached Falkner-Skan branch; and the length follows from
     N_crit theta_s / sigma, all three computed rather than fitted.
     """
+    import stability as _st
     ex = EXP[key]; r = solve_case(key)
     x = np.asarray(ex["x_m"], float); ue = np.asarray(ex["Ue"], float)
     rt = np.asarray(ex["Re_theta"], float); cf = np.asarray(ex["Cf"], float)
@@ -741,9 +891,13 @@ def bubble_diagnostics(key="T3C4", write=True, quiet=False):
         ("dtheta/dx across the bubble [1/m]", f"{dth_mod:.3e}",
          f"{dth_meas:.3e}", "momentum integral is exact given U_e and H"),
         ("shape factor at reattachment", round(float(r["H"][i1]), 2), 5.17,
-         "model bounded by the attached Falkner-Skan branch, H <= 3.997"),
-        ("dU_e/dx over the bubble [1/s]", round(g_mod, 4), round(g_meas, 4),
-         "smoothing spline against the tabulated points"),
+         "solved on the combined attached + reverse-flow family (H to %.2f), "
+         "not capped: the march crosses the fold in H*(H) by taking the root "
+         "nearest the previous H" % _st._combined_Hstar()[0].max()),
+        ("dU_e/dx, x = 1.195-1.495 m [1/s]", round(g_mod, 4), round(g_meas, 4),
+         "smoothing spline against the tabulated points.  Over the shorter "
+         "C_f-floor interval alone the measured value is -0.20 /s, which is "
+         "the figure the report's shape-factor arithmetic uses"),
         ("max |U_e spline - tabulated| [m/s]", round(float(np.abs(du).max()), 3),
          0.01, "tabulated to 0.01 m/s, so the spline is within quotation"),
     ]
@@ -858,6 +1012,17 @@ def run_nlf0416(Tu_pct=None, quiet=False, write=True, cal=None):
                 # that simply never reached onset.
                 xsep = s.get("x_sep_chord", float("nan"))
                 burst = bool(s.get("bubble_burst", False))
+                # Bubble length in separation momentum thicknesses.  The claim
+                # that this closure predicts a LENGTH, and that the length
+                # scales with the disturbance environment, was supported by
+                # figures typed into three files that disagreed with each other
+                # and with the solver; it is measured here instead.
+                blen = float("nan")
+                _a, _b = s.get("i_sep"), s.get("i_tr")
+                if _a is not None and _b is not None and _b > _a:
+                    _t0 = float(s["theta"][_a])
+                    if _t0 > 0.0:
+                        blen = (float(s["s"][_b]) - float(s["s"][_a]))/_t0
                 le_sep = bool(xsep == xsep and xsep < 0.02)
                 xp = 1.0 if xp != xp else float(xp)
                 degenerate = bool(burst or le_sep or xp < 0.02 or xp > 0.93)
@@ -870,6 +1035,7 @@ def run_nlf0416(Tu_pct=None, quiet=False, write=True, cal=None):
                     within_bracket=bool(abs(xp-x_m) <= half),
                     degenerate=degenerate, burst=burst, le_sep=le_sep,
                     x_sep_c=(round(float(xsep), 3) if xsep == xsep else None),
+                    bubble_len_theta_s=(round(blen, 1) if blen == blen else None),
                     mechanism=s["onset_mech"]))
     df = pd.DataFrame(rows)
     # Only a run at the shipped settings may overwrite the committed results.
@@ -922,6 +1088,115 @@ def nlf0416_summary(df, write=True):
     if write:
         out.to_csv(f"{VAL}/aerofoil_nlf0416_summary.csv", index=False)
     return out
+
+
+def transition_length_forms(write=True, quiet=False):
+    """The two forms of Dhawan & Narasimha's transition length, measured.
+
+    Section 9.2a of the report argues that Re_lambda = 9 Re_x,t^0.75 and
+    Re_lambda = (9/0.664^1.5) Re_theta,t^1.5 are the SAME law - Narasimha's spot
+    model at a constant dimensionless spot formation rate - identical wherever
+    Re_theta = 0.664 sqrt(Re_x), and different only where that fails, which is
+    any pressure gradient.  It supported that with figures typed into the
+    narrative; they are computed here, on every flat plate and on the cruise
+    section, so the claim is evidence rather than assertion.
+
+    cal["len_re_x"] selects the published Re_x form; the default is the
+    Re_theta one, which is the form the constant-spot-rate assumption is exact
+    in.
+    """
+    rows = []
+    for key in CASES:
+        v = C.VALIDATION[key]; ex = EXP[key]
+        a = solve_case(key)
+        ue = ((ex["x_m"], ex["Ue"]) if ex.get("Ue") is not None else None)
+        dec = ((ex["Re_x"], ex["Tu_local"]) if v.get("L_turb") is None
+               and ex.get("Tu_local") is not None else None)
+        b = solve_flat_plate(v["L"], v["U"], v["nu"], v["Tu_pct"], npts=900,
+                             dUe=v["dUe"], L_turb=v.get("L_turb"),
+                             Ue_dist=ue, Tu_decay=dec, cal=dict(len_re_x=True))
+        rows.append(dict(case=v["name"],
+                         pressure_gradient=bool(ex.get("Ue") is not None
+                                                or v["dUe"] != 0.0),
+                         lam_len_Re_theta_form_m=float(a["lam_len"]),
+                         lam_len_Re_x_form_m=float(b["lam_len"]),
+                         diff_pct=round(100.0*(b["lam_len"] - a["lam_len"])
+                                        / a["lam_len"], 2)))
+    W, cr = C.WING, C.CRUISE
+    X, Y = C.nlf16_panel_points(130)
+    kw = dict(sweep_deg=W["le_sweep_deg"], mach=cr["mach"],
+              T_inf_K=cr["T_inf_K"])
+    w1 = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                       W["MAC"], cr["Tu_pct"], **kw)
+    w2 = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                       W["MAC"], cr["Tu_pct"], cal=dict(len_re_x=True), **kw)
+    u1, u2 = w1["surfaces"]["upper"], w2["surfaces"]["upper"]
+    rows.append(dict(case="AETHER-NLF 25 cruise section (upper surface)",
+                     pressure_gradient=True,
+                     lam_len_Re_theta_form_m=float(u1["lam_len"]),
+                     lam_len_Re_x_form_m=float(u2["lam_len"]),
+                     diff_pct=round(100.0*(u2["lam_len"] - u1["lam_len"])
+                                    / u1["lam_len"], 2)))
+    df = pd.DataFrame(rows)
+    for c in ("lam_len_Re_theta_form_m", "lam_len_Re_x_form_m"):
+        df[c] = df[c].map(lambda x: f"{x:.5e}")
+    df["Cd_counts_Re_theta_form"] = [None]*(len(df)-1) + [round(w1["Cd"]*1e4, 2)]
+    df["Cd_counts_Re_x_form"] = [None]*(len(df)-1) + [round(w2["Cd"]*1e4, 2)]
+    if write:
+        df.to_csv(f"{VAL}/transition_length_forms.csv", index=False)
+    if not quiet:
+        print(df.to_string(index=False))
+    return df
+
+
+def bubble_length_scaling(df_nlf, write=True, quiet=False):
+    """Does the bubble length actually scale with the disturbance environment?
+
+    The separation closure's claim is that it predicts a LENGTH rather than a
+    point, and that the length is N_crit theta_s / sigma_sep, so it collapses in
+    a turbulent stream and stretches in a quiet one.  That claim was supported
+    by three figures typed into three files, and all three disagreed: the report
+    and the README said 42 momentum thicknesses at Tu = 2.1 per cent and 226 at
+    0.03, "a spread of five and a half"; the solver's own comment said about 40
+    and about 180, "a spread of four and a half"; and the solver returns 26 and
+    a median of 206, a spread of nearly eight.  The claim is true and it is
+    stronger than any of the three said.  It is measured here.
+
+    T3C4 is the separating flat plate at Tu = 2.11 per cent; the aerofoil set is
+    every NLF(1)-0416 condition at Tu = 0.03 per cent on which a bubble forms
+    and closes.  The aerofoil column is a median with its range, because a
+    bubble on a real section also carries the local pressure gradient and the
+    spread over 86 conditions is not measurement scatter.
+    """
+    import utss_solver as _U
+    rows = []
+    r = solve_case("T3C4")
+    a, b = r["i_sep"], r["i_tr"]
+    th_s = float(r["theta"][a])
+    L = (float(r["s"][b]) - float(r["s"][a]))/th_s
+    tu_t3 = C.VALIDATION["T3C4"]["Tu_pct"]
+    rows.append(dict(dataset="ERCOFTAC T3C4 flat plate", Tu_pct=tu_t3,
+                     N_crit=round(_U._n_crit(tu_t3), 2), n_bubbles=1,
+                     median_len_theta_s=round(L, 1),
+                     min_len_theta_s=round(L, 1), max_len_theta_s=round(L, 1)))
+    bl = df_nlf["bubble_len_theta_s"].dropna().to_numpy(float)
+    tu_af = C.NLF0416["Tu_pct"]
+    rows.append(dict(dataset="Somers NLF(1)-0416 aerofoil", Tu_pct=tu_af,
+                     N_crit=round(_U._n_crit(tu_af), 2), n_bubbles=int(bl.size),
+                     median_len_theta_s=round(float(np.median(bl)), 1),
+                     min_len_theta_s=round(float(bl.min()), 1),
+                     max_len_theta_s=round(float(bl.max()), 1)))
+    df = pd.DataFrame(rows)
+    # the spread the claim is about: the ratio of the two medians, beside the
+    # ratio of the critical amplification factors that is supposed to explain it
+    df["ratio_to_T3C4"] = (df.median_len_theta_s
+                           / df.median_len_theta_s.iloc[0]).round(2)
+    df["N_crit_ratio_to_T3C4"] = (df.N_crit/df.N_crit.iloc[0]).round(2)
+    if write:
+        df.to_csv(f"{VAL}/bubble_length_scaling.csv", index=False)
+    if not quiet:
+        print(df.to_string(index=False))
+    return df
 
 
 # ----------------------------------------------------------------------
@@ -1173,10 +1448,14 @@ if __name__=="__main__":
     print(df_sw2.to_string(index=False))
     crossflow_criticals()
     crossflow_receptivity()
+    crossflow_formulations()
+    crossflow_threshold_sweep()
     residual_diagnostics()
     bubble_diagnostics()
     df_nlf=run_nlf0416()
     print(nlf0416_summary(df_nlf).to_string(index=False))
+    bubble_length_scaling(df_nlf)
+    transition_length_forms()
     plot_nlf0416(df_nlf)
     if do_abl:
         run_ablations()

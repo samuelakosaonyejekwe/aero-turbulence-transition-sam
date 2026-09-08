@@ -16,9 +16,12 @@ Architecture
                                carries its own history.  Thwaites'
                                one-equation method is retained behind
                                cal["two_eq"] = False for comparison.
- 3. UNIFIED TRANSITION KERNEL : the novel contribution. A single
-       onset is taken as the minimum effective transition-Re across
-       FOUR co-resident mechanisms, each with a calibration weight:
+ 3. UNIFIED TRANSITION KERNEL : the novel contribution. FOUR
+       co-resident mechanisms each report how far through their own
+       onset criterion the layer has got, as a progress that reaches
+       one at onset, and the kernel fires at the first station where
+       any of them does - see the selection block of march_bl.  Each
+       progress carries a calibration weight:
          (a) Tollmien-Schlichting / natural   (e^N per frequency, from
              the tabulated Orr-Sommerfeld rates of stability.py; the
              Drela-Giles envelope fit is retained behind
@@ -60,8 +63,11 @@ CAL = dict(
                         # only: no branch reads it.  The value actually used at
                         # every station is obtained from the local Tu by Mack's
                         # relation (see _n_crit), which is clamped to its stated
-                        # validity range and so returns 8.18 for any stream
-                        # quieter than 0.08 %.
+                        # validity range and so returns 7.58 for any stream
+                        # quieter than 0.08 %.  That figure moved when the
+                        # anchor was set on the Schubauer-Skramstad plate alone;
+                        # this comment still quoted the 8.18 of the anchor it
+                        # replaced.
     N_floor   = 0.5,    # lower clamp on N_crit at high Tu
     C_mu      = 0.09,   # k-epsilon constants, used only for the decay of
     C_eps2    = 1.92,   # free-stream turbulence (see _tu_decay)
@@ -283,10 +289,15 @@ def _n_crit(Tu_pct, floor=0.5, anchor=1.10):
     all 86 aerofoil conditions genuinely out of sample.
 
     The cost of that is real and is reported rather than buried: on the
-    aerofoil set the mean absolute error goes from 0.0319c to 0.0334c and the
-    count inside the +/-0.025c bracket from 51 to 50, which is what happens
-    when a constant stops being fitted to the set it is scored on.  The flat
-    plate goes from +5.6 per cent to +0.07 per cent.
+    aerofoil set the count inside the +/-0.025c bracket went from 51 to 50 and
+    the mean absolute error rose, which is what happens when a constant stops
+    being fitted to the set it is scored on.  The flat plate goes from +5.6 per
+    cent to +0.07 per cent.  The error figures are NOT quoted here: this said
+    "0.0319c to 0.0334c", and the set's mean has since moved to 0.0384c with
+    corrections that have nothing to do with the anchor, so a before-and-after
+    pair frozen in a docstring stops describing the model as soon as anything
+    else changes.  06_validation/aerofoil_nlf0416_summary.csv carries the
+    current value and is regenerated with the rest.
 
     Note that the quoted 1100 is itself approximate - the literature gives
     Re_x,tr ~ 2.8e6 and Re_theta = 0.664 sqrt(Re_x) - so the anchor is quoted
@@ -340,6 +351,94 @@ def _dn_dReth(H):
     H = float(np.clip(H, 1.05, 20.0))
     a = 2.4*H - 3.7 + 2.5*np.tanh(1.5*H - 4.65)
     return 0.01*np.sqrt(a*a + 0.25)
+
+
+def _swept_drag_factor(ue_ratio, H_te, sweep_deg, swept=True):
+    """Streamwise profile drag per unit 2 theta_n/c_n on an infinite swept wing.
+
+    C_d = 2 (theta_n/c_n) * cos(L) [ cos^2(L) (U_e,n/U_n)^((H+5)/2)
+                                     + sin^2(L) (U_e,n/U_n) ]
+
+    WHY IT IS NOT cos^2(L) TIMES SQUIRE-YOUNG, WHICH IS WHAT THIS WAS.
+
+    The section lift converts as c_l = c_l,n cos^2(L), and the drag was given
+    the same factor with the justification that it is "2 theta/c times a
+    velocity ratio that is frame-independent".  That reasoning does not produce
+    cos^2(L) - referring 2 theta_n to the STREAMWISE chord c = c_n/cos(L) gives
+    one power of cos(L), not two - and the factor it does produce is not right
+    either, because two separate forces act on a swept strip and only one of
+    them is what Squire-Young returns.
+
+    Resolve the free stream as Q = U_n e_n + W e_z, with e_n normal to the
+    leading edge in the wing plane and e_z along it, so U_n = Q cos(L),
+    W = Q sin(L), e_n . Qhat = cos(L) and e_z . Qhat = sin(L).  Per unit length
+    along the leading edge the strip carries
+
+      * the chordwise profile drag D_n = q_n c_n c_d,n, along e_n, which is
+        exactly what the normal-plane Squire-Young evaluation gives; and
+      * the span-wise skin friction F_z = integral of tau_wz along the chord,
+        along e_z, which the strip formulation does not integrate but which the
+        span-wise momentum integral supplies in closed form.  With no span-wise
+        pressure gradient that equation is
+            d/dx_n [rho U_e,n W theta_12] = tau_wz ,
+        theta_12 = integral (u/U_e,n)(1 - w/W) dy, so integrating leading edge
+        to trailing edge, where theta_12 starts at zero,
+            F_z = rho W (U_e,n theta_12)_TE .
+        No Squire-Young extrapolation applies to it: downstream of the trailing
+        edge there is no wall, so the span-wise deficit is frozen and the
+        trailing-edge value IS the wake value.  That is why the second term
+        carries the velocity ratio to the FIRST power while the first carries
+        it to (H+5)/2.
+
+    Per unit y (y perpendicular to the free stream in the wing plane; one unit
+    of y is 1/cos(L) of leading edge) the streamwise force is
+
+        D'_y = D_n + F_z tan(L) ,
+
+    and dividing by q c with c = c_n/cos(L) gives the expression at the top,
+    with theta_12 taken as theta_n.
+
+    THETA_12 = THETA_N is the small-cross-flow closure, w/W = u/U_e,n.  It is
+    exact at zero pressure gradient - the Falkner-Skan-Cooke span-wise equation
+    g'' + f g' = 0 gives g = f' identically at beta = 0 - and the trailing-edge
+    layer here is turbulent, where both components follow the same power law.
+    On the laminar family the ratio spans 0.63 at separation to 3.18 at
+    beta = 3; at the mild trailing-edge gradients of this study it is within
+    about 15 per cent of unity, and since the span-wise term is itself only
+    4 per cent of the total at 12 degrees of sweep, that is under half a per
+    cent of C_d.
+
+    THE CHECK THAT SETTLES IT is the yawed flat plate, for which the answer is
+    known exactly and independently: a flat plate at yaw is just a flat plate
+    in the free stream, so its drag is the unyawed value at the STREAMWISE run
+    length.  At zero pressure gradient U_e,n = U_n, so this returns cos(L) for
+    any L and any H, and 2 (theta_n/c_n) cos(L) = 2 theta_n/c = 2 theta_s/c,
+    which is that answer - the independence principle gives theta_n = theta_s.
+    The cos^2(L) this replaces is short by cos(L): 2 per cent at the 12 degrees
+    of the case-study wing, 29 per cent at 45.  Dropping the span-wise term and
+    keeping only the correct cos^3(L) on Squire-Young would be short by
+    cos^2(L), which is worse.
+
+    The factor is cos(L) times a cos^2/sin^2-weighted mean of r^(H+5)/2 and r,
+    and it is NOT monotone in the sweep.  With r < 1 < (H+5)/2 the span-wise
+    term is the LARGER of the two, so a little sweep raises the streamwise
+    profile drag - by a quarter of a per cent, peaking near 10 degrees - before
+    the cos(L) of the geometry takes over.  That is the span-wise friction being
+    added faster than the chordwise wake is being foreshortened, and it is why
+    the case-study wing at 12 degrees now sits within half a count of the same
+    section unswept, where the cos^2(L) put it four per cent below.
+
+    swept=False returns the unswept factor, so sweep_transform=False still
+    recovers the untransformed behaviour exactly.
+    """
+    p = (float(H_te) + 5.0)/2.0
+    r = float(ue_ratio)
+    if not swept:
+        return r**p
+    L = np.radians(float(sweep_deg))
+    c2 = np.cos(L)**2
+    s2 = np.sin(L)**2
+    return float(np.cos(L)*(c2*r**p + s2*r))
 
 
 def _re_theta2(Re_theta, sweep_deg, ratio, normal_frame=False):
@@ -524,6 +623,14 @@ def _ags_re_theta_t(Tu_pct, lam_t):
 
 
 def _head_H1(H):
+    # The first branch has a pole at H = 1.1 and returns a COMPLEX number below
+    # it, which propagates into max(H1, 3.35) as a TypeError rather than as a
+    # number.  H is unreachable there in this march - the inverse
+    # _head_H_from_H1 is 1.1 + 0.86 (H1-3.3)^-0.777, which approaches 1.1 from
+    # above and never crosses it, so the H_turb clip's 1.05 lower bound never
+    # fires - but a correlation that returns a complex number for a plausible
+    # argument is a trap, and the clamp costs nothing that is reachable.
+    H = max(float(H), 1.1 + 1e-9)
     if H <= 1.6:
         return 3.3 + 0.8234*(H - 1.1)**(-1.287)
     return 3.3 + 1.5501*(H - 0.6778)**(-3.064)
@@ -591,6 +698,8 @@ def _edge_from_cp(Cp, mach, gamma=1.4):
         T_e/T_inf = (1 + (gamma-1)/2 M_inf^2)/(1 + (gamma-1)/2 M_e^2),
         U_e/U_inf = (M_e/M_inf) sqrt(T_e/T_inf).
 
+    Returns (U_e/U_inf, M_e, T_e/T_inf).
+
     M_e formed this way also fixes a second error: the reference-temperature
     closures used to be given M_e = U_e/a_inf, the FREE-STREAM speed of sound,
     when the edge gas is at T_e and the correct divisor is a_e.  Here M_e comes
@@ -601,17 +710,33 @@ def _edge_from_cp(Cp, mach, gamma=1.4):
     """
     Cp = np.asarray(Cp, float)
     if mach <= 1e-6:
-        return np.sqrt(np.maximum(1.0 - Cp, 1e-12)), np.zeros_like(Cp)
+        return (np.sqrt(np.maximum(1.0 - Cp, 1e-12)), np.zeros_like(Cp),
+                np.ones_like(Cp))
     g = gamma
     p_ratio = np.maximum(1.0 + 0.5*g*mach*mach*Cp, 1e-6)
     t0 = 1.0 + 0.5*(g - 1.0)*mach*mach
     Me2 = np.maximum((2.0/(g - 1.0))*(t0*p_ratio**(-(g - 1.0)/g) - 1.0), 0.0)
     Me = np.sqrt(Me2)
     T_ratio = t0/(1.0 + 0.5*(g - 1.0)*Me2)
-    return (Me/mach)*np.sqrt(np.maximum(T_ratio, 1e-12)), Me
+    # T_e/T_inf rides along: the reference-temperature closure needs an ABSOLUTE
+    # edge temperature to evaluate Sutherland, and this is where it is known.
+    return ((Me/mach)*np.sqrt(np.maximum(T_ratio, 1e-12)), Me,
+            np.maximum(T_ratio, 1e-12))
 
 
-def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True):
+# Sutherland's law, at the constants 03_model_setup/material_properties.csv
+# declares for this study.  They were tabulated there and used nowhere: the
+# reference-temperature factor carried a fixed power-law exponent instead.
+_SUTH_MU0, _SUTH_T0, _SUTH_S = 1.716e-5, 273.15, 110.4
+
+
+def _sutherland_mu(T):
+    """Dynamic viscosity [Pa.s] at absolute temperature T [K]."""
+    T = np.asarray(T, float)
+    return _SUTH_MU0*(T/_SUTH_T0)**1.5*(_SUTH_T0 + _SUTH_S)/(T + _SUTH_S)
+
+
+def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True, Te_K=None):
     """Eckert reference-temperature factor for the kinematic viscosity.
 
     The integral closures used here - Thwaites, Head's entrainment method,
@@ -632,16 +757,38 @@ def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True):
     The factor is 1 at M_e = 0 and reaches 1.09 at M_e = 0.42, so it changes
     nothing in the low-speed validation cases and becomes significant only in
     the cruise case for which it was added.
+
+    THE VISCOSITY LAW.  mu ~ T^omega is a power-law fit to Sutherland, and
+    omega is not a constant: it is d ln mu / d ln T = 1.5 - T/(T+S), which
+    Sutherland gives as 0.769 at 300 K, 0.777 at 288 K and 0.838 at the 216.65 K
+    of this cruise condition.  The 0.76 default is the room-temperature value
+    and it is wrong by ten per cent of itself at the temperature this study
+    actually flies at.  Where the caller knows the edge temperature - which
+    solve_airfoil does, because _edge_from_cp forms it on the way to M_e - the
+    power law is dispensed with entirely and Sutherland is evaluated directly
+    at T* and at T_e, using the constants 03_model_setup/material_properties.csv
+    already declares and that nothing else in this project read.  No new
+    constant enters, and one typed one leaves.
+
+    Both forms are exactly 1 at M_e = 0, so every incompressible case is
+    untouched either way; on the cruise section they differ by 0.3 per cent in
+    nu*, which is 0.08 per cent in C_f.  Te_K = None keeps the power law, for
+    callers that carry no temperature.
     """
     Me = np.asarray(Me, float)
     r = Pr**0.5 if laminar else Pr**(1.0/3.0)
     Tw_Te = 1.0 + r*(gamma - 1.0)/2.0*Me**2
     Tstar_Te = 1.0 + 0.032*Me**2 + 0.58*(Tw_Te - 1.0)
-    return Tstar_Te**(1.0 + omega)
+    if Te_K is None:
+        return Tstar_Te**(1.0 + omega)
+    # nu = mu/rho and rho ~ 1/T at constant static pressure, so
+    # nu*/nu_e = (T*/T_e) * (mu*/mu_e), the second factor from Sutherland.
+    Te = np.asarray(Te_K, float)
+    return Tstar_Te*(_sutherland_mu(Tstar_Te*Te)/_sutherland_mu(Te))
 
 
 def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
-             Me=None, normal_frame=False):
+             Me=None, normal_frame=False, Te_K=None):
     """
     March the boundary layer along one surface.
       s    : arc length from stagnation/leading edge [m]  (increasing)
@@ -686,8 +833,14 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         Me = np.asarray(Me, float)
         if Me.shape != (n,):
             raise ValueError("Me must be one value per station")
-    nu_l = nu*_ref_temp_nu(Me, laminar=True)      # laminar recovery factor
-    nu_t = nu*_ref_temp_nu(Me, laminar=False)     # turbulent recovery factor
+    # Te_K, where the caller knows it, replaces the power-law viscosity exponent
+    # with Sutherland evaluated at the reference temperature; see _ref_temp_nu.
+    if Te_K is not None:
+        Te_K = np.asarray(Te_K, float)
+        if Te_K.shape != (n,):
+            raise ValueError("Te_K must be one value per station")
+    nu_l = nu*_ref_temp_nu(Me, laminar=True, Te_K=Te_K)   # laminar recovery
+    nu_t = nu*_ref_temp_nu(Me, laminar=False, Te_K=Te_K)  # turbulent recovery
 
     theta = np.zeros(n); H = np.zeros(n); Cf = np.zeros(n)
     Reth = np.zeros(n); lam = np.zeros(n); gamma = np.zeros(n)
@@ -860,8 +1013,6 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     n_reatt = 0
     n_cf = 0.0
     H_b = 0.0; Hst_b = 0.0
-    _Hs_tab = _stab.twoeq_closure()[1]
-    _HS_LO, _HS_HI = float(_Hs_tab.min()), float(_Hs_tab.max())
     _H_MAXTAB = float(_stab.twoeq_closure()[0].max())
     # The dead-air march runs on the COMBINED family, attached plus reverse
     # flow, so its bounds are wider than the attached ones the wall-bounded
@@ -956,10 +1107,15 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # separation momentum thickness is what lets one closure span both
         # regimes.  The length is N_crit*theta_sep/sigma_sep, so it collapses
         # in a turbulent stream, where N_crit is small, and stretches in a
-        # quiet one: the measured bubbles here run to about 40 momentum
-        # thicknesses on T3C4 at Tu = 2.1 % and about 180 on the NLF(1)-0416
-        # lower surface at Tu = 0.03 %, a spread of four and a half that no
-        # fixed multiple reproduces.
+        # quiet one.  The sizes are MEASURED, by
+        # gen_validation.bubble_length_scaling into
+        # 06_validation/bubble_length_scaling.csv, rather than quoted here.
+        # This comment used to say about 40 momentum thicknesses on T3C4 at
+        # Tu = 2.1 % and about 180 on the aerofoil at 0.03 %, "a spread of four
+        # and a half", while the report and the README said 42 and 226, "a
+        # spread of five and a half"; the solver returns 26 and a median of
+        # 206, a spread of nearly eight.  The claim was true and all three
+        # statements of it were wrong, in both directions.
         # Separation is detected on the Thwaites parameter rather than on the
         # shape factor.  Testing H >= 3.95, the value at which the exact family
         # loses its wall shear, is the more principled statement and it does
@@ -1030,8 +1186,9 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                 # more principled - no constant - and it was tried: the T3C4
                 # bubble lengthens from 0.052 to 0.087 m, towards the measured
                 # 0.10, but the 86 NLF(1)-0416 conditions collapse from 50 to
-                # 21 inside the bracket and the mean error rises from 0.0334c
-                # to 0.0577c.  The reason is physical rather than numerical.
+                # 21 inside the bracket and the mean error rises from 0.0384c
+                # to 0.0577c (both re-measured; the first stood at
+                # 0.0334c here).  The reason is physical rather than numerical.
                 # The marched H is the INTEGRAL shape factor of the whole
                 # dead-air region, which is still near 3.4 while the detached
                 # shear layer riding on it is already inflectional; the local
@@ -1187,7 +1344,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         #     predicts some.  Replacing
         #     the surrogate by K was tried and is not adopted: it does not make
         #     the two swept-wing experiments agree on a critical value, and it
-        #     degrades the calibration set from 13.2 to 23.8 per cent.  The
+        #     degrades the calibration set from 22.0 to 44.3 per cent in mean
+        #     transition location.  (Those figures stood at 13.2 and 23.8 here,
+        #     both from before the swept sections were solved in the plane
+        #     normal to the leading edge: the direction of the result held, the
+        #     numbers did not.)  The
         #     limiting approximation is therefore the C1 criterion itself,
         #     which reduces the stability of an inflectional three-dimensional
         #     profile to a single Reynolds number, and not the surrogate for
@@ -1246,9 +1407,29 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # integrals and were carried past the minimum as a 1e9 "cannot fire"
         # sentinel, so the minimum ranged over one live term and the equation
         # in the report described a calculation the solver was not doing.
-        # Expressed as progress the four are commensurable, the weights a_TS,
-        # a_BP, a_SEP, a_CF all act the same way on all four, and the kernel is
+        # Expressed as progress the four are commensurable and the kernel is
         # one line.
+        #
+        # The four weights are NOT all in the same sense, and it is worth
+        # writing down which, because a caller switching a branch off has to
+        # know: a weight that multiplies a PROGRESS turns its branch off when
+        # it is small, and one that multiplies a THRESHOLD turns it off when it
+        # is large.
+        #
+        #   A_TS   multiplies the progress   (p = A_TS N / N_crit)     -> small
+        #   A_SEP  multiplies the progress   when bubble = True        -> small
+        #          multiplies the threshold  when bubble = False       -> LARGE
+        #   A_BP   multiplies the threshold  (Re_theta_t = A_BP AGS)   -> LARGE
+        #   A_CF   multiplies the progress   when cf_amp = True, and also scales
+        #          the C1 at which the integral starts                 -> small
+        #          multiplies the threshold  when cf_amp = False       -> LARGE
+        #
+        # run_solution.nlf_vs_turbulent uses A_BP = 0.02 to trip the layer at
+        # the leading edge, which is the threshold sense; gen_validation's
+        # cross-flow probes use A_TS = 1e-9 and A_SEP = 1e9 in the same dict,
+        # which is both senses at once.  An earlier version of this comment
+        # asserted that all four "act the same way on all four", and the probe
+        # that trusted it left the separation branch live.
         in_bubble = bubble_on and i_bub is not None
 
         p_ts = (n_amp/N_target) if N_target > 0.0 else 0.0
@@ -1347,7 +1528,6 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         return out
 
     s_tr = s[i_tr]; onset_mech = mechanism[i_tr]
-    Re_tr = Reth[i_tr]
     # Dhawan & Narasimha transition length:  Re_lambda = C_len * Re_x_t^0.75.
     # Re_x_t is formed on the distance the layer has run - arc length from the
     # stagnation point, which on a flat plate is x - and on the local edge
@@ -1516,7 +1696,7 @@ def solve_flat_plate(L, U, nu, Tu_pct, npts=400, cal=None, dUe=0.0,
 
 def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
                   sweep_deg=0.0, cal=None, mach=0.0, compressible=True,
-                  sweep_transform=True):
+                  sweep_transform=True, T_inf_K=None):
     """
     Full aerofoil: panel method -> split at stagnation -> march upper
     and lower surfaces.  Returns inviscid + viscous results.
@@ -1545,6 +1725,10 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
 
     Set sweep_transform=False to recover the untransformed behaviour, so that
     what the transformation is worth can be measured rather than asserted.
+
+    T_inf_K is the free-stream STATIC temperature.  Given it, the compressible
+    closures evaluate Sutherland's law at the reference temperature instead of
+    a power law in it; omitted, the power law is used, which is exact at M = 0.
     """
     L_rad = np.radians(sweep_deg)
     cosL = float(np.cos(L_rad))
@@ -1559,13 +1743,27 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     else:
         alpha_solve, U_solve, chord_solve, mach_solve = (
             alpha_deg, U, chord, mach)
+    # The incidence the caller asked for, kept before the normal-plane
+    # transformation overwrites it.  The returned dict advertised both "alpha"
+    # and "alpha_normal_deg", and after the reassignment below they were the
+    # same number: a caller reading "alpha" back off a swept solve got the
+    # normal-plane incidence under a key that names the streamwise one, which
+    # on the 45 deg calibration wing differs by 1.4 deg.
+    alpha_stream_deg = float(alpha_deg)
     alpha_deg, U, chord, mach = alpha_solve, U_solve, chord_solve, mach_solve
     xc, yc, Cp, V, th, S = panel_solve(xb, yb, alpha_deg, mach=mach)
     # Edge velocity and edge Mach number from the CORRECTED pressure, so the
     # boundary layer runs on the same flow the loads are computed from; see
     # _edge_from_cp for what taking the uncorrected panel velocity cost.
     m_eff = (mach if compressible else 0.0)
-    Ue_ratio, Me_all = _edge_from_cp(Cp, m_eff)
+    Ue_ratio, Me_all, T_ratio = _edge_from_cp(Cp, m_eff)
+    # Absolute edge temperature, where the caller supplied a free-stream one.
+    # It lets the reference-temperature closure use Sutherland's law directly
+    # instead of a power law whose exponent is a room-temperature value; see
+    # _ref_temp_nu.  Without it the power law is kept, which is exact at M = 0
+    # and within 0.01 per cent of Sutherland at the M = 0.10 of the aerofoil
+    # validation set.
+    Te_all = (None if T_inf_K is None else T_ratio*float(T_inf_K))
     # arc length along surface (control points), find stagnation (Cp max)
     # NB: panel coords are unit-chord -> scale arc length to physical chord
     ds = S
@@ -1591,8 +1789,15 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     for name, ss, idx in [("upper", s_up, idx_up), ("lower", s_low, idx_low)]:
         Ue_s = np.maximum(Ue_mag[idx], 1e-4)
         r = march_bl(ss, Ue_s, nu, Tu_pct=Tu_pct, sweep_deg=sweep_deg,
-                     cal=cal, Me=Me_all[idx], normal_frame=swept)
+                     cal=cal, Me=Me_all[idx], normal_frame=swept,
+                     Te_K=(None if Te_all is None else Te_all[idx]))
         r["x"]  = xc[idx]; r["y"] = yc[idx]; r["Cp"] = Cp[idx]
+        # The edge Mach number the march was actually closed at, formed from the
+        # corrected pressure by _edge_from_cp.  It is an output because the
+        # consumers that reconstruct a compressible profile need it: forming it
+        # as U_e/a_inf, which run_solution.bl_profiles did, divides the edge
+        # speed by the FREE-STREAM speed of sound for gas that is at T_e.
+        r["Me"] = Me_all[idx]
         r["Re_x"] = U*ss/nu
         r["x_tr_chord"] = (float(xc[idx][r["i_tr"]])
                            if r["i_tr"] is not None else np.nan)
@@ -1638,7 +1843,7 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     Cl = Cn*np.cos(al) - Ca*np.sin(al)
     # profile drag via Squire-Young on each surface
     def squire_young(r, x_ref=0.98):
-        """Squire-Young profile drag.
+        """Squire-Young profile drag, already referred to the streamwise frame.
 
         The formula is evaluated at 98% chord rather than at the last panel
         control point.  A panel method drives the edge velocity towards the
@@ -1647,6 +1852,15 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         power (H+5)/2, taking the last point makes the drag hypersensitive to
         the panel distribution.  At 98% chord the boundary-layer solution is
         still meaningful and the result is insensitive to the discretisation.
+
+        On a swept strip the conversion out of the normal plane is NOT the
+        cos^2(L) the lift takes, and it is not a scaling of Squire-Young at all
+        - the span-wise wall shear contributes streamwise drag that the
+        chordwise wake deficit does not contain.  _swept_drag_factor derives
+        the combination and is checked against the yawed flat plate, for which
+        the answer is known exactly.  It is applied here, per surface, because
+        it depends on that surface's own trailing-edge shape factor and edge
+        velocity ratio.
         """
         xs = np.asarray(r["x"], float)
         cand = np.where(xs > 0.5)[0]
@@ -1654,13 +1868,19 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
              else len(xs) - 1)
         H_te = r["H"][i]; th_te = r["theta"][i]; Ue_te = r["Ue"][i]
         r["theta_te_c"] = float(th_te/chord)
-        return 2.0*th_te/chord*(Ue_te/U)**((H_te+5.0)/2.0)
+        r["Ue_te_ratio"] = float(Ue_te/U)
+        r["H_te_squire_young"] = float(H_te)
+        return 2.0*th_te/chord*_swept_drag_factor(Ue_te/U, H_te, sweep_deg,
+                                                  swept=swept)
     Cd = squire_young(res["upper"]) + squire_young(res["lower"])
     # Squire-Young presumes a thin trailing-edge layer, and outside the
     # attached-flow envelope this formulation stops providing one: at 16 deg
-    # and Re_c = 2e5 the march returns a momentum thickness of 1.34 chords and
-    # the formula duly returns C_d = 1.22, which is bluff-body drag from an
-    # aerofoil method.  A layer thicker than the body is long is not a marginal
+    # and Re_c = 2e5 the march returns a trailing-edge momentum thickness of
+    # TENS OF CHORDS - 22 at 160 panels, 31 at the shipped 260, 38 at 360, so
+    # not even grid-converged - and the formula duly returns a C_d of order 20,
+    # which is bluff-body drag from an aerofoil method.  (This comment quoted
+    # 1.34 chords and C_d = 1.22, which is neither what the solver returns nor
+    # a number a reader could reproduce.)  A layer thicker than the body is long is not a marginal
     # case to be reported with a caveat, it is arithmetic that has stopped
     # meaning anything, so no number is offered.  This is not a tuned
     # threshold: within the envelope and Reynolds range of this study the
@@ -1672,18 +1892,31 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     # Back to the streamwise frame.  In the normal plane the section carries
     # c_l,n on a dynamic pressure formed with U_n = Q cos(L) and a chord
     # c cos(L); referred to the streamwise dynamic pressure and the streamwise
-    # chord that is c_l = c_l,n cos^2(L).  The profile drag scales the same
-    # way, being 2 theta/c times a velocity ratio that is frame-independent.
+    # chord that is c_l = c_l,n cos^2(L).  Lift is perpendicular to the wing
+    # plane, so the span-wise wall shear adds nothing to it and cos^2(L) is the
+    # whole conversion.
+    #
+    # The DRAG is not converted here.  It used to be given the same cos^2(L),
+    # which is neither the conversion the same reasoning produces nor the right
+    # answer; squire_young above now returns a streamwise C_d already, because
+    # the correct combination mixes two velocity-ratio powers and so cannot be
+    # a single factor on the total.  See _swept_drag_factor.
+    #
     # Transition LOCATIONS need no conversion: x/c is the same fraction of the
     # same chord line in either frame.
     if swept:
         Cl = Cl*cosL*cosL
-        Cd = Cd*cosL*cosL
     return dict(panel=dict(xc=xc, yc=yc, Cp=Cp, V=V, th=th, S=S,
                            i_stag=i_stag),
-                surfaces=res, Cl=Cl, Cd=Cd, alpha=alpha_deg,
+                surfaces=res, Cl=Cl, Cd=Cd, alpha=alpha_stream_deg,
                 sweep_deg=sweep_deg, sweep_transform=swept,
                 alpha_normal_deg=alpha_deg, cos_sweep=cosL,
+                # the free-stream Mach number the panel solve and the
+                # compressibility correction actually ran at: M cos(L) in the
+                # normal plane, M otherwise.  A consumer forming an isentropic
+                # temperature ratio against the surface Me needs this one, not
+                # the streamwise M.
+                mach_solve=mach,
                 theta_te_c=max(res["upper"]["theta_te_c"],
                                res["lower"]["theta_te_c"]))
 

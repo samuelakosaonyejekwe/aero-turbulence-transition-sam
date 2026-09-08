@@ -1,0 +1,8 @@
+formulation,calibration_err_pct,independent_err_pct,pooled_err_pct,helps_independent_vs_shipped,costs_calibration_vs_shipped
+"amplification integral, C1 = 150 (shipped)",22.0,51.1,33.6,False,False
+"amplification integral, C1 = 200",67.3,17.6,47.5,True,True
+"local C1 threshold, no amplification integral",17.2,55.1,32.4,False,False
+"local C1 threshold, C1 = 200",62.5,22.6,46.5,True,True
+exact Falkner-Skan-Cooke K(lambda) for the thickness,44.3,50.4,46.7,True,True
+"exact K(lambda), local C1 threshold",51.2,44.3,48.4,True,True
+streamwise frame (no normal-plane transformation),14.5,52.3,29.6,False,False

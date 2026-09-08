@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 .DS_Store
 case.docx
+# tools/docx2pdf.py writes <name>.pdf beside its source; the tracked
+# deliverable is aero_turbulence_transition_report.pdf, which that render is
+# copied to, so the intermediate is a build product like the .docx it came from.
+case.pdf
 model.equations.docx
 solver/falkner_skan_family.npz
 solver/falkner_skan_reverse.npz

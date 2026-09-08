@@ -1,0 +1,7 @@
+case,pressure_gradient,lam_len_Re_theta_form_m,lam_len_Re_x_form_m,diff_pct,Cd_counts_Re_theta_form,Cd_counts_Re_x_form
+ERCOFTAC T3A flat plate (bypass transition),False,2.18908e-01,2.18859e-01,-0.02,,
+ERCOFTAC T3A- flat plate (low-Tu bypass),False,2.28688e-01,2.28640e-01,-0.02,,
+ERCOFTAC T3B flat plate (high-Tu bypass),False,5.78118e-02,5.78223e-02,0.02,,
+ERCOFTAC T3C4 flat plate (laminar separation bubble),True,5.57862e-01,5.74208e-01,2.93,,
+Schubauer & Skramstad flat plate (natural transition),False,3.37479e-01,3.37391e-01,-0.03,,
+AETHER-NLF 25 cruise section (upper surface),True,2.22578e-01,2.21678e-01,-0.4,47.31,47.28
