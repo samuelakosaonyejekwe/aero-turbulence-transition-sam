@@ -474,7 +474,7 @@ The smoke set also holds the solver to results published outside this work:
 the Falkner-Skan wall shear f''(0) at five values of beta (to 5e-5); the
 standard Blasius Orr-Sommerfeld benchmark, c = 0.36412 + 0.00796i at
 Re_delta* = 998 and alpha delta* = 0.308, which it reproduces to 1e-5 in phase
-speed and 1.3 % in growth rate; a symmetric section carrying exactly zero lift
+speed and 1.2 % in growth rate; a symmetric section carrying exactly zero lift
 at zero incidence and lift exactly odd in incidence; and Kutta-Joukowski, the
 lift from the pressure integral against the lift from the circulation.
 

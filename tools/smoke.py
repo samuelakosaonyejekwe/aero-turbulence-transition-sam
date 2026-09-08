@@ -290,7 +290,7 @@ def stability_against_published_eigenvalues():
     assert c is not None, "no unstable mode found at the Blasius benchmark point"
     assert abs(c.real - 0.36412) < 2e-4, \
         "phase speed %.5f against the published 0.36412" % c.real
-    # the growth rate carries a systematic deficit of about 1.3 per cent, which
+    # the growth rate carries a systematic deficit of 1.2 per cent, which
     # is what "reproduces published amplification rates to within a few per
     # cent" in _n_crit's docstring is claiming; hold it to that
     assert abs(c.imag - 0.00796)/0.00796 < 0.03, \
