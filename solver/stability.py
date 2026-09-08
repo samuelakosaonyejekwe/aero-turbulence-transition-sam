@@ -1742,7 +1742,43 @@ if __name__ == "__main__":
           % (_worst, _zero, _rows[-1][3],
              "OK" if _worst < 2.0 and _zero < 0.02*_rows[-1][3] else "FAIL"))
 
-    # 5. what building the table with Gaster's transformation costs
+
+    # 5. the stationary cross-flow branch, against its two exact limits and
+    #    against its own tabulation.
+    print("stationary cross-flow: the two cases where the answer is exactly zero")
+    _z1 = stationary_crossflow(0.5, 0.0, 400.0)[0]
+    _z2 = stationary_crossflow(0.0, 45.0, 400.0)[0]
+    _w0 = float(np.abs(fsc_profile(0.0, 45.0)[3]).max())
+    print("   zero sweep, beta = 0.5      sigma = %.6f" % _z1)
+    print("   zero gradient, 45 deg       sigma = %.6f   (max |w| in the "
+          "profile itself %.2e: beta = 0 gives g = f' identically)  %s"
+          % (_z2, _w0, "OK" if _z1 == 0.0 and _z2 == 0.0 and _w0 < 1e-5
+             else "FAIL"))
+    _pa = fsc_parts(0.6)
+    _rt = [(R, stationary_crossflow(0.6, 45.0, R, parts=_pa,
+                                    ks=np.geomspace(0.11, 0.30, 5))[0])
+           for R in (100.0, 400.0, 3000.0)]
+    print("   an inflectional instability saturates with Reynolds number:")
+    for _R, _s in _rt:
+        print("      Re_theta = %6.0f   sigma*theta = %.6f" % (_R, _s))
+    _rise = all(b > a for (_, a), (_, b) in zip(_rt, _rt[1:]))
+    print("      rising %s, last decade %.0f %% of the first  %s"
+          % (_rise, 100.0*(_rt[2][1]-_rt[1][1])/max(_rt[1][1]-_rt[0][1], 1e-12),
+             "OK" if _rise and (_rt[2][1]-_rt[1][1]) < 0.60*(_rt[1][1]-_rt[0][1])
+             else "FAIL"))
+    if os.path.exists(CF_DB_PATH):
+        _b, _sw, _re = 0.45, 47.0, 420.0
+        _lam = _b*falkner_skan(_b)[4]**2
+        _tab = crossflow_sigma(_lam, _sw, _re)
+        _dir = stationary_crossflow(_b, _sw, _re)[0]
+        print("   tabulated rate vs a direct sweep at lambda = %+.4f, %g deg, "
+              "Re_theta = %g:\n      table %.6f   direct %.6f   %+.1f %%  %s"
+              % (_lam, _sw, _re, _tab, _dir, 100.0*(_tab-_dir)/_dir,
+                 "OK" if abs(_tab-_dir) < 0.22*_dir else "FAIL"))
+    else:
+        print("   (no cross-flow table built; crossflow_sigma would build it)")
+
+    # 6. what building the table with Gaster's transformation costs
     _g = gaster_residual()
     if _g:
         print("Gaster vs exact spatial rate at the peak-amplified frequency:")

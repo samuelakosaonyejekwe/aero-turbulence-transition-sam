@@ -79,8 +79,23 @@ def _cmp_frame(a, b, rtol, atol):
     return moved, None
 
 
+def _snapshot_csvs(snap):
+    """Relative paths of every CSV in a snapshot directory."""
+    out = []
+    for root, _, names in os.walk(snap):
+        for n in names:
+            if n.endswith(".csv"):
+                out.append(os.path.relpath(os.path.join(root, n), snap))
+    return sorted(out)
+
+
 def diff(snap, rtol=1e-9, atol=1e-12, quiet_same=False):
-    files = tracked_csvs()
+    # The union, not the tracked list.  Iterating over `git ls-files` alone
+    # cannot see a CSV that was in the snapshot and is not generated any more:
+    # it is simply not visited, and a tool whose whole job is to say which
+    # numbers moved reported "unchanged" for a file that had vanished.  The
+    # DELETED branch below existed and was unreachable.
+    files = sorted(set(tracked_csvs()) | set(_snapshot_csvs(snap)))
     changed = 0
     same = 0
     for rel in files:

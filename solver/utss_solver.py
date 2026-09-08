@@ -115,9 +115,15 @@ CAL = dict(
     CF_ratio  = 0.47,   # theta2/theta surrogate; see _re_theta2().
                         # Calibrated on the 45 deg swept NLF(2)-0415
                         # transition measurements of Dagenhart & Saric
-                        # (NASA TP-1999-209344, Table 2): 13.5% mean error
-                        # in transition location over six chord Reynolds
-                        # numbers from 1.92e6 to 3.73e6.
+                        # (NASA TP-1999-209344, Table 2), six chord Reynolds
+                        # numbers from 1.92e6 to 3.73e6.  The mean error it
+                        # achieves there is NOT restated here: this comment
+                        # said 13.5 per cent against the 21.8 the calibration
+                        # set now returns, having stayed put through the change
+                        # to the normal-plane transformation and the swept-drag
+                        # formulation.  06_validation/swept_wing_crossflow.csv
+                        # carries it per condition and
+                        # crossflow_formulations.csv the mean.
     sep_floor = 120.0,  # min Re_theta for separation-induced onset
     use_os_db = True,   # integrate the amplification factor from the tabulated
                         # Orr-Sommerfeld growth rates (solver/stability.py)
@@ -1067,8 +1073,10 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     # free-stream normal component.  The span-wise edge velocity is constant on
     # an infinite swept wing while the chordwise one grows through the
     # favourable run, so the local angle falls along the chord: on the
-    # Dagenhart sections it is 64 deg at 2 per cent chord and 39 deg at 70,
-    # against a leading-edge value of 45.
+    # Dagenhart sections it is 59 deg at 3 per cent chord and 40 deg at 60,
+    # against a leading-edge value of 45 - the two stations
+    # 06_validation/crossflow_amplification.csv reports it at, so the figures
+    # here and there cannot drift apart.
     #
     # The span-wise edge velocity is W_e = Q sin(L) with Q the TOTAL free-stream
     # speed, and which combination of U_ref recovers it depends on the frame the
@@ -1824,7 +1832,8 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     # and "alpha_normal_deg", and after the reassignment below they were the
     # same number: a caller reading "alpha" back off a swept solve got the
     # normal-plane incidence under a key that names the streamwise one, which
-    # on the 45 deg calibration wing differs by 1.4 deg.
+    # on the 45 deg calibration wing differs by 1.6 deg: atan(tan(-4)/cos 45)
+    # is -5.65, not -4.  (This said 1.4.)
     alpha_stream_deg = float(alpha_deg)
     alpha_deg, U, chord, mach = alpha_solve, U_solve, chord_solve, mach_solve
     xc, yc, Cp, V, th, S = panel_solve(xb, yb, alpha_deg, mach=mach)
@@ -1933,18 +1942,22 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         WHAT THAT CHOICE COSTS - AND IT IS NOT WHAT THIS PROJECT FIRST SAID.
         The drag runs from about 42.5 counts at 0.88c to 47.3 at 0.98c, and
         that was reported as a five-count uncertainty band on the headline
-        number.  It is not a band.  It is friction being correctly INCLUDED:
-        between those two stations the layer accumulates 3.94 counts of real
-        skin friction, measured by integrating C_f directly, and the formula
-        moves 3.65.  A forward station is not a worse estimate of the same
-        drag; it is the drag of a shorter aerofoil.
+        number.  It is not a band.  It is friction being correctly INCLUDED: a
+        forward station is not a worse estimate of the same drag, it is the
+        drag of a shorter aerofoil.
 
-        The quantity that matters is therefore how much friction the chosen
-        station still OMITS, and that is 0.157 counts at cruise and 0.128 at
-        climb - under a fifth of a count.  The station is converged to that.
-        04_solution/squire_young_station_sensitivity.csv carries the omitted
-        friction beside the drag at every station, and their sum, which is the
-        same number wherever it is evaluated and is what makes the point.
+        The figures are not repeated here.  This comment, the README, the
+        report and run_solution's docstring all said "3.94 counts of friction
+        against 3.65 of drag, the same quantity to a third of a count"; none of
+        them moved when the swept-drag formulation changed the drag they are
+        differences of, and the pair is 3.05 and 4.84 now, agreeing to 1.8
+        counts rather than to a third of one.  What settles the point is their
+        SUM - the drag counted so far plus the friction still ahead - which
+        varies by about a count from 0.90c up while the drag alone moves nearly
+        five.  04_solution/squire_young_station_sensitivity.csv carries all
+        three columns at every station and ..._station_summary.csv computes the
+        differences, including the climb figure, which was quoted in four
+        places and generated in none.
 
         WHY IT IS STILL NOT MOVED TO THE TRAILING EDGE, which is where
         Squire-Young wants it, even though only a fifth of a count is left
@@ -2026,9 +2039,12 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
     # a number a reader could reproduce.)  A layer thicker than the body is long is not a marginal
     # case to be reported with a caveat, it is arithmetic that has stopped
     # meaning anything, so no number is offered.  This is not a tuned
-    # threshold: within the envelope and Reynolds range of this study the
-    # largest value reached is 0.028 chords, so the test never fires on any
-    # result reported here.
+    # threshold: across the incidence polar the largest trailing-edge momentum
+    # thickness reached is under two per cent of chord, some fifty times below
+    # the guard, so it never fires on any result reported here.  The margin is
+    # asserted in tools/smoke.py against 04_solution/aero_polar.csv rather than
+    # quoted as a number here, where the 0.028 chords it used to give had no
+    # generating source at all.
     if max(res["upper"]["theta_te_c"], res["lower"]["theta_te_c"]) > 1.0:
         Cd = float("nan")
 

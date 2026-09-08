@@ -62,16 +62,22 @@ across the range either side the drag runs 42.5 → 47.3 counts.
 
 That spread was reported here as a five-count uncertainty band. **It is not a
 band — it is friction being correctly included.** Between 0.88c and 0.98c the
-layer accumulates 3.94 counts of real skin friction, measured by integrating
-C_f over the surface directly, and the formula moves 3.65: the same quantity to
-a third of a count. A forward station is not a worse estimate of the same drag;
-it is the drag of a shorter aerofoil. What matters is the friction the chosen
-station still *omits*, and that is **0.157 counts at cruise, 0.128 at climb** —
-under a fifth of a count. `04_solution/squire_young_station_sensitivity.csv`
-carries the omitted friction beside the drag at every station and their sum,
-which is the same number wherever it is evaluated. The station is converged to
-a fifth of a count. Past 0.98c the formula turns over, which is the inviscid
-singularity taking hold rather than drag being lost.
+layer accumulates **3.05** counts of real skin friction, measured by integrating
+C_f over the surface directly, while the formula moves **4.84**: the same
+quantity to 1.8 counts, not the third of a count this paragraph used to claim —
+that pair was typed in four places and had been stale by more than a count since
+the swept-drag formulation changed the drag they are differences of. What
+settles it is their **sum**: the drag counted so far plus the friction still
+ahead varies by only **1.19** counts from 0.90c up, where the drag alone moves
+4.84. A forward station is not a worse estimate of the same drag; it is the drag
+of a shorter aerofoil. The friction the chosen station still *omits* is **0.157
+counts at cruise, 0.128 at climb** — under a fifth of a count.
+`04_solution/squire_young_station_summary.csv` computes all six of these
+figures, and `..._station_sensitivity.csv` carries the omitted friction beside
+the drag at every station; the climb figure had no generating source at all
+until that summary was added. The station is converged to a fifth of a count.
+Past 0.98c the formula turns over, which is the inviscid singularity taking hold
+rather than drag being lost.
 
 The shape-factor clamp is the same wedge. Head's method has no validity past
 separation, so H is clamped at 2.8; on the climb case and above about 3° of
@@ -94,7 +100,7 @@ constant — but what it costs is measured: sweeping the constant over a factor
 of four moves the section drag by a tenth of a count
 (`04_solution/transition_length_sensitivity.csv`).
 
-Two elements are not correlations:
+Three elements are not correlations:
 
 * **Amplification database.** The e^N integral is driven by spatial growth
   rates read from `solver/amplification_db.npz`, built from 61,600
@@ -114,6 +120,16 @@ Two elements are not correlations:
   `python3 -c "import sys; sys.path.insert(0,'solver'); import stability;
   stability.build_database()"` (minutes, on several cores); the build is checkpointed
   per shape factor, so an interrupted run resumes rather than restarting.
+* **Stationary cross-flow database.** `solver/crossflow_db.npz`, 1,824
+  wave-angle sweeps over Hartree parameter, sweep angle and Re_θ, each one a
+  bisection for the wave angle at which the mode is stationary plus the two
+  derivatives that give the chordwise group velocity. It is validated against
+  Dagenhart & Saric's own SALLY N-factors and is **not** wired into the shipped
+  kernel — see the cross-flow section below for what it produced and why it is
+  not adopted. Regenerate with
+  `python3 -c "import sys; sys.path.insert(0,'solver'); import stability;
+  stability.build_crossflow_database()"` (about an hour on four cores),
+  checkpointed per Hartree parameter.
 * **Separation-bubble closure.** The shear layer is carried across the dead-air
   region by the same two integral equations as the attached layer with the wall
   shear set to zero, so the shape factor keeps growing through the plateau
@@ -490,7 +506,7 @@ case.docx         the same report as .docx - a build product, not tracked
 
 ## Reproduce
 ```bash
-python3 tools/smoke.py         # 25 checks over the whole solver, under a minute.
+python3 tools/smoke.py         # every check over the whole solver, in under a minute.
                                #   Run this FIRST and after every edit: a full
                                #   regeneration is minutes and the faults
                                #   that waste it are all visible here in the
@@ -517,6 +533,11 @@ python3 gen_postprocessing.py  # all plots, contours, profiles, 3D
 python3 gen_equations.py       # build model.equations.docx (native equations)
 python3 build_docx.py          # assemble case.docx
 python3 verify_outputs.py      # check the compiled report against the CSVs
+python3 tools/docx2pdf.py case.docx   # render, and copy onto the tracked
+                                      #   deliverable.  Needs Word, so it is
+                                      #   NOT a pipeline stage: the pipeline
+                                      #   verifies the case.docx it just built
+                                      #   and leaves the PDF to this step.
 ```
 
 To see exactly what a change moved, snapshot before and diff after:
@@ -535,8 +556,10 @@ python3 solver/utss_solver.py  # off-body field vs the surface solution;
 python3 solver/stability.py    # Blasius H, f''(0) and neutral point; the
                                #   exact Thwaites closure; the tabulated
                                #   cross-flow factor against a direct
-                               #   Falkner-Skan-Cooke solve; and what
-                               #   Gaster's transformation costs
+                               #   Falkner-Skan-Cooke solve; the stationary
+                               #   cross-flow rate against its two limits and
+                               #   its table; and what Gaster's transformation
+                               #   costs
 python3 verify_outputs.py      # every headline number in the rendered PDF
                                #   (or case.docx) read back and compared with
                                #   the CSV it came from

@@ -247,6 +247,23 @@ def checks():
         ("swept, independent C1=150", f"{sw2.err_pct_C1_150.abs().mean():.1f}", T_SW),
         ("swept, independent C1=200", f"{sw2.err_pct_C1_200.abs().mean():.1f}", T_SW),
     ]
+    # The Squire-Young station claim.  Two of its figures were typed into the
+    # report, the README and two docstrings and stayed there through a change
+    # to the swept-drag formulation that moved the drag they are differences
+    # of; they are computed now, and the report is held to them.
+    _syp = "04_solution/squire_young_station_summary.csv"
+    if os.path.exists(_syp):
+        sy = pd.read_csv(_syp).iloc[0]
+        want += [
+            ("SY friction accumulated",
+             f"{sy.friction_accumulated_counts:.2f}", None),
+            ("SY formula moves", f"{sy.squire_young_moves_counts:.2f}", None),
+            ("SY omitted at cruise",
+             f"{sy.friction_omitted_cruise_counts:.3f}", None),
+            ("SY omitted at climb",
+             f"{sy.friction_omitted_climb_counts:.3f}", None),
+        ]
+
     # and the T3C4 bracket error, which is the headline for that plate now
     t3 = vsum[vsum.case.str.contains("T3C4")]
     if len(t3) and t3.Re_theta_t_err_bracket_pct.notna().all():

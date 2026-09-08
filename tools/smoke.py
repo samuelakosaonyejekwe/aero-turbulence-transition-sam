@@ -1074,6 +1074,27 @@ def crossflow_local_sweep_is_used():
         "against %.1f deg" % (at_free_stream, v["sweep_deg"])
 
 
+@check
+def thin_layer_guard_never_fires_inside_the_envelope():
+    """the C_d thin-layer guard is nowhere near firing on a reported result"""
+    import pandas as pd
+    p = "04_solution/aero_polar.csv"
+    if not os.path.exists(p):
+        return                       # nothing generated yet
+    th = pd.read_csv(p)["theta_te_c"].astype(float)
+    worst = float(th.max())
+    # solve_airfoil suppresses C_d when the trailing-edge momentum thickness
+    # exceeds one chord, which is the point at which the Squire-Young
+    # arithmetic has stopped meaning anything rather than a tuned threshold.
+    # The claim that goes with it - that it never fires on anything this study
+    # reports - was a typed 0.028 chords with no generating source.  It is the
+    # margin that matters, so the margin is what is asserted.
+    assert worst < 0.05, \
+        "the trailing-edge momentum thickness reaches %.4f chords across the " \
+        "polar; the thin-layer guard fires at 1.0, and a margin this small " \
+        "means the guard is no longer merely a sanity check" % worst
+
+
 def main():
     only = None
     if "-k" in sys.argv:

@@ -15,8 +15,17 @@ application ONLY if it created it.
 
     python3 tools/docx2pdf.py case.docx
     python3 tools/docx2pdf.py --write-back case.docx   # persist refreshed fields
+    python3 tools/docx2pdf.py --no-deliverable case.docx
 
-Each output is written next to its source as <name>.pdf.
+Each output is written next to its source as <name>.pdf.  A source whose
+DELIVERABLES entry names it is also copied onto the tracked deliverable, which
+is the file the repository publishes and the one verify_outputs.py checks when
+run with no argument.  Without that copy the rendered PDF sat beside a tracked
+report that nothing updated: .gitignore has always described this step - "the
+tracked deliverable is aero_turbulence_transition_report.pdf, which that render
+is copied to" - and nothing performed it, so the published report went stale
+after every regeneration and the local gate, which checks case.docx, passed
+anyway.
 
 Shared with the slug-analysis project, where it was first written
 (case/scripts/docx2pdf_safe.py); kept here so this repository can render its own
@@ -28,7 +37,10 @@ import sys
 import shutil
 
 
-WRITE_BACK = False
+# source basename -> tracked deliverable, relative to the repository root.
+# Rendering is not a pipeline stage (it needs Word), so this is the one place
+# that closes the loop between case.docx and the file a reader downloads.
+DELIVERABLES = {"case.docx": "aero_turbulence_transition_report.pdf"}
 
 
 def _win_temp():
@@ -112,20 +124,33 @@ def convert(docx_path, pdf_path=None, timeout=900, write_back=False):
 
 
 def main(argv):
-    global WRITE_BACK
-    if argv and argv[0] == "--write-back":
-        WRITE_BACK = True
+    write_back = False
+    deliverable = True
+    while argv and argv[0].startswith("--"):
+        if argv[0] == "--write-back":
+            write_back = True
+        elif argv[0] == "--no-deliverable":
+            deliverable = False
+        else:
+            print(f"unknown option {argv[0]}")
+            return 2
         argv = argv[1:]
     if not argv:
         print(__doc__)
         return 2
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     rc = 0
     for src in argv:
         try:
-            out, pages = convert(src, write_back=WRITE_BACK)
+            out, pages = convert(src, write_back=write_back)
             size = os.path.getsize(out)
             print(f"OK   {os.path.basename(src)} -> {out}  "
                   f"({size/1e6:.2f} MB{', ' + pages + ' pages' if pages else ''})")
+            tgt = DELIVERABLES.get(os.path.basename(src))
+            if deliverable and tgt:
+                dst = os.path.join(root, tgt)
+                shutil.copyfile(out, dst)
+                print(f"     -> {tgt}  (tracked deliverable)")
         except Exception as e:
             print(f"FAIL {src}: {e}")
             rc = 1

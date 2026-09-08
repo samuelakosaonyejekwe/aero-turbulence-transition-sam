@@ -128,9 +128,13 @@ def image(path, width=6.3, cap=None, key=None):
     p.add_run().add_picture(path, width=Inches(width))
     if cap: caption("Fig. %d. %s" % (_fignum(key), cap))
 
+_EQ_PLACED = set()
+
+
 def equation(key, show_title=True):
     if key not in eq_index.index:
         para(f"[missing eq {key}]"); return
+    _EQ_PLACED.add(key)
     row=eq_index.loc[key]
     # caption line first: (key) descriptive title
     if show_title:
@@ -443,7 +447,7 @@ para("Each branch reports the same quantity — how far through its own criterio
  "term and three placeholders. Earlier versions of this report stated the kernel that way, and "
  "the output showed it: the onset-Reynolds-number column of every cruise surface file was "
  "entirely empty, because the branch that governs there does not produce one.")
-for k in ["E08","E09","E10","E10b","E10c","E11","E11b","E12","E12b","E13","E13b","E14"]: equation(k)
+for k in ["E08","E09","E10","E10b","E10c","E11","E11b","E11c","E11d","E12","E12b","E13","E13b","E14"]: equation(k)
 para("The natural and bypass routes are the same transition seen through two closures with "
  "different ranges of validity, so Eq. E14 blends them over a declared window rather than "
  "switching between them. A single threshold made the predicted transition location a STEP "
@@ -773,25 +777,42 @@ _sy_ship = _sys[_sys.x_ref == 0.98].iloc[0]
 _sy_lo = _sys.iloc[0]
 _pol_clip = int(pd.read_csv("04_solution/aero_polar.csv").H_sy_at_clip.sum())
 _ts_clip = pd.read_csv("04_solution/transition_summary.csv")
+# The trailing-edge wedge angle decides Squire-Young's premise, and was typed
+# here, in the README, in the solver and in run_solution as "26.8 degrees,
+# measured off the section".  gen_geometry measures it off the section now.
+_geo = pd.read_csv("01_geometry/geometry_definition.csv").set_index("parameter")
 para("Where Squire-Young is evaluated matters, and this report first said why in the wrong "
- "terms. The formula wants the trailing edge and this section has a 26.8° wedge one, so the "
+ "terms. The formula wants the trailing edge and this section has a %.1f° wedge one, so the "
  "trailing edge is a stagnation point of the inviscid flow, U_e goes to zero there physically "
  "and (U_e/U_∞)^((H+5)/2) degenerates — at the last control point it returns 18 counts against "
  "%.1f. The evaluation is therefore pulled forward to %.2f c, and the drag over the range "
  "either side runs from %.1f counts to %.1f. That spread was reported here as a five-count "
  "uncertainty band on the headline number. It is not a band."
- % (_sy_ship.Cd_counts, _sy_ship.x_ref, _sy_lo.Cd_counts, _sy_ship.Cd_counts),
+ % (float(_geo.loc["Trailing-edge included angle", "value"]),
+    _sy_ship.Cd_counts, _sy_ship.x_ref, _sy_lo.Cd_counts, _sy_ship.Cd_counts),
  italic=True, size=10)
-para("It is friction being correctly INCLUDED. Between 0.88c and 0.98c the layer accumulates "
- "3.94 counts of real skin friction, measured by integrating C_f over the surface directly, "
- "and the formula moves 3.65 — the same quantity to a third of a count. A forward station is "
- "not a worse estimate of the same drag; it is the drag of a shorter aerofoil. What matters is "
- "how much friction the chosen station still omits, and @@TAB:sy_station@@ measures it: "
- "%.3f counts at cruise. Their sum, the last column, is the same number wherever it is "
- "evaluated, which is what makes the point. The station is converged to under a fifth of a "
- "count, not uncertain by five. Past %.2f c the formula turns over and falls — that is the "
- "inviscid singularity taking hold, not drag being lost."
- % (_sy_ship.friction_omitted_counts, _sy_ship.x_ref), italic=True, size=10)
+# Every figure in this paragraph is read from the summary the sweep writes.
+# Two of them - the friction accumulated between the two stations and the
+# distance the formula moves - were typed here, in the README and in two
+# docstrings as 3.94 and 3.65, "the same quantity to a third of a count", and
+# all four had been stale by more than a count since the swept-drag
+# formulation changed the drag they are differences of.
+_sy_sm = pd.read_csv("04_solution/squire_young_station_summary.csv").iloc[0]
+para("It is friction being correctly INCLUDED. Between %.2f c and %.2f c the layer accumulates "
+ "%.2f counts of real skin friction, measured by integrating C_f over the surface directly, "
+ "while the formula moves %.2f — the same quantity to %.1f counts, not the third of a count "
+ "this paragraph used to claim. A forward station is not a worse estimate of the same drag; it "
+ "is the drag of a shorter aerofoil. What settles it is their SUM, the last column of "
+ "@@TAB:sy_station@@: the drag counted so far plus the friction still ahead varies by only "
+ "%.2f counts from %.2f c up, where the drag alone moves %.2f. The friction the chosen station "
+ "still omits is %.3f counts at cruise and %.3f at climb, so the station is converged to under "
+ "a fifth of a count and is not uncertain by five. Past %.2f c the formula turns over and "
+ "falls — that is the inviscid singularity taking hold, not drag being lost."
+ % (_sy_sm.x_lo, _sy_sm.x_shipped, _sy_sm.friction_accumulated_counts,
+    _sy_sm.squire_young_moves_counts, _sy_sm.difference_counts,
+    _sy_sm.invariant_spread_from_0p90_counts, 0.90,
+    _sy_sm.squire_young_moves_counts, _sy_sm.friction_omitted_cruise_counts,
+    _sy_sm.friction_omitted_climb_counts, _sy_ship.x_ref), italic=True, size=10)
 para("And whether the shape factor at that station is solved. Head's entrainment method has no "
  "validity past separation, so H is clamped at 2.8, and on the climb case and at every "
  "incidence above about 3° the upper surface is ON that clamp at the evaluation station — "
@@ -1438,6 +1459,16 @@ for f,c in [("table_geometry_definition","geometry_definition.csv, rendered as a
             ("table_solver_settings","solver_settings.csv, rendered as a figure."),
             ("table_integrated_forces","integrated_forces.csv, rendered as a figure.")]:
     image(f"05_postprocessing/csv_plots/{f}.png", width=5.9, cap=c)
+
+# Every governing equation gen_equations.py writes must actually appear in the
+# report.  Two were added to the index and placed nowhere, which no check
+# noticed: the report is assembled from explicit key lists, so an equation can
+# be defined, written to the CSV, rendered into model.equations.docx and still
+# be absent from the document that claims to contain all of them.
+_eq_unplaced = sorted(set(eq_index.index) - _EQ_PLACED)
+if _eq_unplaced:
+    raise SystemExit("equations defined in %s/equations_index.csv but never "
+                     "placed in the report: %s" % (EQD, ", ".join(_eq_unplaced)))
 
 resolve_refs(doc)
 doc.save("case.docx")

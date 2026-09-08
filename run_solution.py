@@ -167,7 +167,13 @@ def pressure_field(cond,name):
                      "Vx_ms":Vx.ravel().round(4),"Vy_ms":Vy.ravel().round(4),
                      "speed_ms":spd.ravel().round(4)})
     df.to_csv(f"{SOL}/field_pressure_{name}.csv",index=False)
-    np.savez(f"{SOL}/field_pressure_{name}.npz",Xg=Xg,Yg=Yg,Cp=Cp,Vx=Vx,Vy=Vy,spd=spd)
+    # No .npz beside it.  One was written here for years, 1.8 MB per case, and
+    # NOTHING read it: gen_postprocessing._solution_field reads the CSV, which
+    # is the tracked, human-readable form.  It was not even the same numbers -
+    # the CSV is rounded to the precision these quantities are meaningful to
+    # and the .npz was not - so the project carried two copies of one field at
+    # two precisions, with no check that they agreed and no reader for the
+    # second.  The comment above it called it "a convenience for re-loading".
     return df
 
 def bl_profiles(rc, write=True):
@@ -501,18 +507,25 @@ def squire_young_station_sensitivity():
     against 47.  The evaluation is therefore pulled forward to cal["sy_x_ref"].
 
     THE SPREAD ACROSS STATIONS IS NOT AN UNCERTAINTY BAND, which is how this
-    project first reported it.  It is friction being correctly included.
-    Between 0.88c and 0.98c the layer accumulates 3.94 counts of real skin
-    friction and the formula moves 3.65 - the same quantity, to a third of a
-    count.  A forward station is not a different estimate of the same drag; it
-    is the drag of a shorter aerofoil.
+    project first reported it.  It is friction being correctly included.  A
+    forward station is not a different estimate of the same drag; it is the
+    drag of a shorter aerofoil.
 
-    What matters is therefore how much friction 0.98c still omits, and that is
-    measured directly here by integrating C_f over the remaining surface:
-    0.157 counts at cruise and 0.128 at climb, under a fifth of a count either
-    way.  The station is converged to that, not uncertain by five counts.  Past
-    0.98c the formula turns over and falls, which is the inviscid singularity
-    taking hold rather than drag being lost.
+    No figure for that is quoted here.  This docstring, the README and the
+    report all carried "3.94 counts of friction against 3.65 of drag, the same
+    quantity to a third of a count", and all three stayed put when the
+    swept-drag formulation moved the drag they are differences of; the pair is
+    3.05 and 4.84 now.  The six numbers the claim rests on are computed into
+    04_solution/squire_young_station_summary.csv instead, so the next such
+    change moves them.
+
+    What settles the point is the SUM: the drag counted so far plus the
+    friction still ahead, which varies by about a count from 0.90c up while the
+    drag alone moves nearly five.  The friction 0.98c still omits is measured
+    directly by integrating C_f over the remaining surface, for the climb
+    condition as well as cruise - it was quoted for both and computed for
+    neither.  Past 0.98c the formula turns over and falls, which is the
+    inviscid singularity taking hold rather than drag being lost.
 
     The sweep also reports whether the shape factor at each station is still
     solved or has reached Head's H = 2.8 clamp, and carries an INDEPENDENT
@@ -520,22 +533,26 @@ def squire_young_station_sensitivity():
     compared without going through Squire-Young at all.
     """
     X,Y=C.nlf16_panel_points(130); rows=[]
+
+    def _omitted(r, xr, cond):
+        """Skin friction still ahead of the station, integrated directly."""
+        _tz=getattr(np,"trapezoid",None) or np.trapz
+        cosL=r["cos_sweep"]; chord=W["MAC"]*cosL; Un=cond["U_inf"]*cosL
+        omit=0.0
+        for _s in (r["surfaces"]["upper"], r["surfaces"]["lower"]):
+            _x=np.asarray(_s["x"],float); _cf=np.asarray(_s["Cf"],float)
+            _ue=np.asarray(_s["Ue"],float)/Un; _a=np.asarray(_s["s"],float)/chord
+            _m=_x>=xr
+            if _m.sum()>1: omit+=_tz(_cf[_m]*_ue[_m]**2,_a[_m])
+        return float(omit)
+
     for xr in (0.88,0.90,0.92,0.94,0.96,0.98,0.99,1.00):
         r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
                         cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
                         mach=cr["mach"],T_inf_K=cr["T_inf_K"],
                         cal=dict(sy_x_ref=xr))
         u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
-        # the friction still ahead of this station, integrated directly: this
-        # is what evaluating here instead of at the trailing edge omits
-        _tz=getattr(np,"trapezoid",None) or np.trapz
-        cosL=r["cos_sweep"]; chord=W["MAC"]*cosL; Un=cr["U_inf"]*cosL
-        omit=0.0
-        for _s in (u,l):
-            _x=np.asarray(_s["x"],float); _cf=np.asarray(_s["Cf"],float)
-            _ue=np.asarray(_s["Ue"],float)/Un; _a=np.asarray(_s["s"],float)/chord
-            _m=_x>=xr
-            if _m.sum()>1: omit+=_tz(_cf[_m]*_ue[_m]**2,_a[_m])
+        omit=_omitted(r, xr, cr)
         rows.append(dict(x_ref=xr,
             x_evaluated_upper=round(float(u["x_squire_young"]),4),
             Cd_counts=round(r["Cd"]*1e4,2),
@@ -554,7 +571,34 @@ def squire_young_station_sensitivity():
     # to the station where the inviscid singularity takes the formula over.
     df["Cd_plus_omitted_counts"]=(df.Cd_counts+df.friction_omitted_counts).round(2)
     df.to_csv(f"{SOL}/squire_young_station_sensitivity.csv",index=False)
-    return df
+
+    # The three statements this sweep is quoted for, computed rather than read
+    # off the table by eye.  All three were typed into the README, the report
+    # and two docstrings as 3.94, 3.65 and "the same quantity to a third of a
+    # count", and all three had gone stale by more than a count the moment the
+    # swept-drag formulation changed the drag they are differences of.  The
+    # climb figure had no generating source at all - the sweep runs the cruise
+    # condition - so it is computed here too.
+    x_lo = float(df.x_ref.min()); x_hi = float(CAL["sy_x_ref"])
+    lo = df[df.x_ref == x_lo].iloc[0]; hi = df[df.x_ref == x_hi].iloc[0]
+    inv = df[(df.x_ref >= 0.90) & (df.x_ref <= x_hi)].Cd_plus_omitted_counts
+    r_cl = solve_airfoil(X, Y, cl["alpha_deg"], cl["U_inf"], cl["nu_inf"],
+                         W["MAC"], cl["Tu_pct"], sweep_deg=W["le_sweep_deg"],
+                         mach=cl["mach"], T_inf_K=cl["T_inf_K"],
+                         cal=dict(sy_x_ref=x_hi))
+    sm = pd.DataFrame([dict(
+        x_lo=x_lo, x_shipped=x_hi,
+        friction_accumulated_counts=round(float(lo.friction_omitted_counts
+                                                - hi.friction_omitted_counts), 3),
+        squire_young_moves_counts=round(float(hi.Cd_counts - lo.Cd_counts), 3),
+        difference_counts=round(float((hi.Cd_counts - lo.Cd_counts)
+                                      - (lo.friction_omitted_counts
+                                         - hi.friction_omitted_counts)), 3),
+        invariant_spread_from_0p90_counts=round(float(inv.max() - inv.min()), 3),
+        friction_omitted_cruise_counts=round(float(hi.friction_omitted_counts), 3),
+        friction_omitted_climb_counts=round(_omitted(r_cl, x_hi, cl)*1e4, 3))])
+    sm.to_csv(f"{SOL}/squire_young_station_summary.csv", index=False)
+    return df, sm
 
 
 def integrated_forces(rc):
@@ -604,11 +648,12 @@ if __name__=="__main__":
     nvt,cdn,cdt=nlf_vs_turbulent(rc)
     integrated_forces(rc)
     tls=transition_length_sensitivity()
-    sys_=squire_young_station_sensitivity()
+    sys_,sys_sm=squire_young_station_sensitivity()
     print("=== TRANSITION SUMMARY ==="); print(ts.to_string(index=False))
     print("\n=== NLF vs TURBULENT ==="); print(nvt.to_string(index=False))
     print("\n=== TRANSITION-LENGTH SENSITIVITY ==="); print(tls.to_string(index=False))
     print("\n=== SQUIRE-YOUNG STATION SENSITIVITY ==="); print(sys_.to_string(index=False))
+    print(sys_sm.to_string(index=False))
     print(f"\nCruise: Cl={rc['Cl']:.3f} Cd={rc['Cd']*1e4:.1f}cts  "
           f"Drag saving={ (cdt-cdn)/cdt*100:.1f}%")
     print("solution files:", sorted([f for f in os.listdir(SOL) if f.endswith('.csv')]))

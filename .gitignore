@@ -2,9 +2,12 @@ __pycache__/
 *.pyc
 .DS_Store
 case.docx
-# tools/docx2pdf.py writes <name>.pdf beside its source; the tracked
-# deliverable is aero_turbulence_transition_report.pdf, which that render is
-# copied to, so the intermediate is a build product like the .docx it came from.
+# tools/docx2pdf.py writes <name>.pdf beside its source and then copies it onto
+# the tracked deliverable, aero_turbulence_transition_report.pdf, so the
+# intermediate is a build product like the .docx it came from.  That copy is
+# performed by DELIVERABLES in that script; for a long time this comment
+# described it and nothing did it, and the published report went stale after
+# every regeneration.
 case.pdf
 model.equations.docx
 solver/falkner_skan_family.npz
@@ -12,4 +15,5 @@ solver/falkner_skan_reverse.npz
 solver/_amp_slabs/
 solver/_cf_slabs/
 .pipeline/
-04_solution/field_pressure_*.npz
+# (run_solution.py used to write 04_solution/field_pressure_*.npz here.
+# It is not written any more - nothing read it.)

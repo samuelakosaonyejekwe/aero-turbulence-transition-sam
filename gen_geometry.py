@@ -48,6 +48,20 @@ def section_cl():
     al = np.radians(a)
     return float(Cn*np.cos(al) - Ca*np.sin(al))
 
+def te_wedge_deg(co):
+    """Included angle between the two surfaces at the trailing edge, degrees.
+
+    Taken from the last panel of each surface, which is the angle the panel
+    method itself sees and therefore the one that makes the trailing edge a
+    stagnation point of the inviscid solution.
+    """
+    xu = np.asarray(co["xu"], float); yu = np.asarray(co["yu"], float)
+    xl = np.asarray(co["xl"], float); yl = np.asarray(co["yl"], float)
+    su = (yu[-1] - yu[-2])/(xu[-1] - xu[-2])
+    sl = (yl[-1] - yl[-2])/(xl[-1] - xl[-2])
+    return float(abs(np.degrees(np.arctan(su) - np.arctan(sl))))
+
+
 # ----------------------------------------------------------------------
 # Drafting primitives  (ISO/ASME dimensioning style)
 # ----------------------------------------------------------------------
@@ -215,6 +229,13 @@ def build_geometry():
         ("Section", W["section"], "-"),
         ("Section max thickness", f"{tmax*100:.1f}", "% chord"),
         ("Max-thickness location", f"{xtmax*100:.1f}", "% chord"),
+        # The trailing-edge wedge angle.  It is quoted in the README, the
+        # report, the solver and run_solution as "26.8 degrees included,
+        # measured off the section" and was measured off the section exactly
+        # once, by hand; it is a property of the shape function and belongs
+        # with the rest of them.  Squire-Young's premise is what it decides:
+        # a wedge trailing edge is an inviscid stagnation point.
+        ("Trailing-edge included angle", f"{te_wedge_deg(co):.1f}", "deg"),
         (f"Section c_l at cruise design incidence "
          f"(alpha = {C.CRUISE['alpha_deg']:.1f} deg, M = {C.CRUISE['mach']:.2f})",
          f"{section_cl():.3f}", "-"),

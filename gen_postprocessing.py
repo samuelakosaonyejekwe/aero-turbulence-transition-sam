@@ -366,18 +366,17 @@ def _solution_field(case):
     An earlier version of this module built its own field here by weighting the
     surface pressure with exp(-d/L) away from the wall.  That is a picture of a
     field, not a solution: it is not the potential flow, it does not satisfy
-    continuity, and it disagreed with 04_solution/field_pressure_*.npz - which
+    continuity, and it disagreed with 04_solution/field_pressure_*.csv - which
     the same project computes from the exact constant-strength vortex-panel
     induced velocity - by more than the quantity being plotted.  The stored
     field is used instead, so the contours in the report are the solution the
     report tabulates.
     """
-    # Read from the CSV, which is the tracked, human-readable form of this
-    # field.  The .npz beside it holds the same numbers a second time; it is a
-    # convenience for re-loading and is no longer tracked, because np.savez
-    # stamps the zip entries with the current time, so an identical field
-    # produced a different 1.8 MB blob on every regeneration.  Between the two
-    # field files that was 8 MB of new objects per run that changed nothing.
+    # Read from the CSV, which is the only form of this field there is.  A
+    # .npz was written beside it for years - untracked, because np.savez stamps
+    # its zip entries with the current time and an identical field therefore
+    # produced a different 1.8 MB blob on every regeneration - and nothing ever
+    # read it.  It is no longer written either.
     df=pd.read_csv(f"{SOL}/field_pressure_{case}.csv")
     ny=int(df["y_c"].nunique()); nx=len(df)//ny
     if ny*nx != len(df):

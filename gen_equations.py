@@ -11,6 +11,7 @@ import os, glob
 import pandas as pd
 import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
                    # sys.path, so this script works from any directory
+from utss_solver import CAL
 import latex2mathml.converter as L
 import mathml2omml
 from docx import Document
@@ -63,6 +64,22 @@ EQS = [
    r"Re_{\theta 2} = k_{cf}\,Re_\theta\,\sin\Lambda\,\cos\Lambda \ \ge\ C_1"),
  ("E11b","4.3  Unified transition kernel (novel)","Cross-flow amplification integral (the closure actually used)",
    r"N_{cf} = \int_{x_{c1}}^{x} \frac{\sigma(H_{rev})}{\theta}\,dx' \ \ge\ N_{crit}"),
+ # The stationary cross-flow eigenvalue problem.  It is not the shipped
+ # closure - E11b is - but it is solved by this solver (stability.py), is
+ # validated against Dagenhart & Saric's SALLY N-factors, and is scored in
+ # 06_validation/crossflow_formulations.csv, so a document that claims to hold
+ # every governing equation has to carry it.
+ ("E11c","4.3  Unified transition kernel (novel)",
+   "Cross-flow: velocity resolved along the wave-vector direction (Falkner-Skan-Cooke)",
+   r"\frac{U_\psi(\eta)}{Q_e} = \cos\Lambda\, f'(\eta)\cos\psi "
+   r"+ \sin\Lambda\, g(\eta)\sin\psi, \quad "
+   r"U_\psi(\infty)/Q_e = \cos(\psi-\Lambda)"),
+ ("E11d","4.3  Unified transition kernel (novel)",
+   "Stationary cross-flow wave and the amplification it accumulates",
+   r"\omega_r(k,\psi^{*}) = 0, \quad "
+   r"\frac{dN_{cf}}{dx} = \frac{\omega_i}{c_{g,x}}\frac{1}{\theta}, \quad "
+   r"c_{g,x} = \cos\psi\,\frac{\partial\omega}{\partial k} "
+   r"- \frac{\sin\psi}{k}\frac{\partial\omega}{\partial\psi}"),
  ("E12","4.3  Unified transition kernel (novel)","Separation bubble: dead-air march (momentum and kinetic energy, no wall shear)",
    r"\frac{d\theta}{dx} = -(2+H)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad "
    r"\theta\frac{dH^{*}}{dx} = 2C_D - H^{*}(1-H)\frac{\theta}{U_e}\frac{dU_e}{dx}, \quad C_f = 0"),
@@ -85,7 +102,8 @@ EQS = [
    "Transition-length scale (Dhawan & Narasimha, in the two equivalent variables)",
    r"\lambda_{tr} = \frac{\nu}{U_e}\,\frac{C_{len}}{0.664^{3/2}}\,"
    r"Re_{\theta,t}^{3/2} \;=\; \frac{\nu}{U_e} C_{len}\, Re_{x,t}^{0.75}"
-   r"\Big|_{Re_\theta = 0.664\sqrt{Re_x}}, \quad C_{len} = 9"),
+   r"\Big|_{Re_\theta = 0.664\sqrt{Re_x}}, \quad C_{len} = %g"
+   % CAL["C_len"]),
  ("E17","4.4  Transitional & turbulent boundary layer","Intermittency-weighted property blend",
    r"\phi = (1-\gamma)\phi_{lam} + \gamma\,\phi_{turb}"),
  ("E18","4.4  Transitional & turbulent boundary layer","Head entrainment (turbulent)",
