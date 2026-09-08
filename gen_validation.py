@@ -1091,7 +1091,15 @@ def _cl_curve(X, Y, mach, alphas=(-4.0, 2.0, 8.0)):
 
 
 def _alpha_for_cl(coef, cl_target):
-    """Invert the quadratic c_l(alpha) fit, taking the root nearest zero lift."""
+    """Invert the quadratic c_l(alpha) fit, taking the root nearest zero
+    INCIDENCE - which is not the same thing as the root nearest zero lift, as
+    this said: on a cambered section zero lift is at negative incidence.  The
+    quadratic has two roots and only one is on the branch with a positive
+    lift-curve slope; that branch contains the whole measured range here, which
+    runs from -12.9 to +8.7 degrees, so the root nearer the origin is the
+    physical one.  _trim then checks the choice against a panel solve and
+    refines it, and all 86 conditions come back within 8e-4 in c_l.
+    """
     a, b, c = coef
     r = np.roots([a, b, c - cl_target])
     r = np.array([z.real for z in r if abs(z.imag) < 1e-9])

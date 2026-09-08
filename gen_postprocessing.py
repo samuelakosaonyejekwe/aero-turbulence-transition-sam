@@ -433,15 +433,19 @@ def plot_contours(case):
         # region of exactly zero velocity that streamlines run into and stop
         # against, leaving a spurious straight line below the section.  A
         # masked array makes it skip those cells instead.
-        # A masked array rather than nan_to_num, which turned the body into a
-        # region of exactly zero velocity for the integrator to run into.
         # (The column of arrowheads below the section is not a streamline:
         # matplotlib places one arrow at each trajectory's mid-arc-length, and
         # on a near-uniform field those midpoints line up.)
         body=np.isnan(spd)
         ax.streamplot(Xg,Yg,np.ma.array(Vx,mask=body),np.ma.array(Vy,mask=body),
                       density=1.1,color=INK_SOFT,linewidth=0.6,arrowsize=0.7)
-    except Exception: pass
+    except Exception as e:                       # noqa: BLE001
+        # It used to be `pass`.  streamplot is the only thing on this figure
+        # that can fail, and a silent failure produces a figure captioned
+        # "streamlines" with no streamlines on it, which is worse than no
+        # figure: nothing downstream can tell the difference.
+        print("  WARNING: streamplot failed on the %s field (%s); the "
+              "velocity-magnitude figure has no streamlines" % (case, e))
     _body(ax,polyx,polyy)
     cb=fig.colorbar(cf,ax=ax,shrink=0.85,pad=0.02); cb.set_label("speed [m/s]")
     ax.set_aspect("equal"); ax.set_xlim(-0.35,1.4); ax.set_ylim(-0.55,0.55)

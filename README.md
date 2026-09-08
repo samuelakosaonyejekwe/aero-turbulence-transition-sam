@@ -73,7 +73,7 @@ ahead varies by only **1.19** counts from 0.90c up, where the drag alone moves
 of a shorter aerofoil. The friction the chosen station still *omits* is **0.157
 counts at cruise, 0.128 at climb** — under a fifth of a count.
 `04_solution/squire_young_station_summary.csv` computes all six of these
-figures, and `..._station_sensitivity.csv` carries the omitted friction beside
+figures, and `04_solution/squire_young_station_sensitivity.csv` carries the omitted friction beside
 the drag at every station; the climb figure had no generating source at all
 until that summary was added. The station is converged to a fifth of a count.
 Past 0.98c the formula turns over, which is the inviscid singularity taking hold
@@ -349,7 +349,7 @@ ranges respectively, which looks like the two datasets marking two different
 events. It does not hold. The surrogate Re_θ2 = 0.47 Re_θ sin Λ is a
 *momentum-thickness* quantity; what a 1960 report means by a crossflow Reynolds
 number is w_max·δ₁₀/ν, the displacement-type one. This work computes that too —
-the "exact Falkner–Skan–Cooke" rows of `crossflow_criticals_summary.csv` — and
+the "exact Falkner–Skan–Cooke" rows of `06_validation/crossflow_criticals_summary.csv` — and
 it gives **429 and 118**: the first far above their transition range, the second
 below their vortex-formation range, and the two *inverted* against the
 surrogate. Two quantities on different scales landing in the right intervals is
