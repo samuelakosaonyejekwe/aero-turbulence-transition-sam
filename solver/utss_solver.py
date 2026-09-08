@@ -103,6 +103,14 @@ CAL = dict(
                         # unaffected - onset is where the kernel fires, not
                         # where the blend ends - but everything downstream of
                         # onset was.
+    cf_stability = False,  # advance the cross-flow amplification factor from
+                        # the solved stationary cross-flow eigenvalue problem
+                        # instead of the C1 threshold plus a stand-in rate.
+                        # Off by default: the formulation is checked against
+                        # Dagenhart & Saric's own SALLY N-factors and scored
+                        # against the shipped criterion in
+                        # 06_validation/crossflow_formulations.csv, and it does
+                        # not transfer between the two facilities any better.
     CF_C1     = 150.0,  # cross-flow C1 critical Re_theta2 (Arnal)
     CF_ratio  = 0.47,   # theta2/theta surrogate; see _re_theta2().
                         # Calibrated on the 45 deg swept NLF(2)-0415
@@ -807,7 +815,7 @@ def _ref_temp_nu(Me, gamma=1.4, Pr=0.72, omega=0.76, laminar=True, Te_K=None):
 
 
 def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
-             Me=None, normal_frame=False, Te_K=None):
+             Me=None, normal_frame=False, Te_K=None, U_ref=None):
     """
     March the boundary layer along one surface.
       s    : arc length from stagnation/leading edge [m]  (increasing)
@@ -822,6 +830,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
               ambient level does not decay over a chord and a scalar is
               appropriate.
       sweep_deg: surface sweep angle (cross-flow mechanism)
+      U_ref: free-stream speed [m/s] in the STREAMWISE frame.  Only the
+              cross-flow branch uses it, to form the span-wise edge velocity
+              W_e = U_ref sin(L), which on an infinite swept wing is constant
+              along the chord.  Without it the local sweep cannot be formed and
+              the leading-edge value is used at every station.
       a_sound: speed of sound [m/s].  If given, the local edge Mach number is
               formed at every station and the closures are evaluated at
               Eckert's reference temperature; if zero the march is
@@ -1046,6 +1059,32 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     # and it is what limits this branch; see crossflow_receptivity.
     def _sig_cf(Re):
         return float(_stab.sigma_curve(_stab.H_REVERSE, Re).max())
+
+    # LOCAL sweep angle, for the stability-based cross-flow branch.  The angle
+    # the Falkner-Skan-Cooke solution needs is the one between the external
+    # streamline and the chord line, and that is not the leading-edge sweep
+    # except at the one station where the edge velocity happens to equal the
+    # free-stream normal component.  The span-wise edge velocity is constant on
+    # an infinite swept wing while the chordwise one grows through the
+    # favourable run, so the local angle falls along the chord: on the
+    # Dagenhart sections it is 64 deg at 2 per cent chord and 39 deg at 70,
+    # against a leading-edge value of 45.
+    #
+    # The span-wise edge velocity is W_e = Q sin(L) with Q the TOTAL free-stream
+    # speed, and which combination of U_ref recovers it depends on the frame the
+    # march is running in.  In the plane normal to the leading edge U_ref is
+    # Q cos(L), so W_e = U_ref tan(L); in the streamwise frame U_ref is Q itself
+    # and W_e = U_ref sin(L).  Writing sin(L) in both places is wrong by cos(L)
+    # in the normal plane - which is the frame every swept case actually uses -
+    # and it does not announce itself, because at the one station where the
+    # chordwise edge velocity equals the free-stream normal component the local
+    # angle must come back as L exactly, and that is what the check asserts.
+    if sweep_deg > 1.0 and U_ref:
+        _L = np.radians(float(sweep_deg))
+        _We = float(U_ref)*(np.tan(_L) if normal_frame else np.sin(_L))
+        sweep_loc = np.degrees(np.arctan2(_We, np.maximum(Ue, 1e-9)))
+    else:
+        sweep_loc = np.full(n, float(sweep_deg))
     omegas = np.array([]); amp = np.array([])
     if use_db:
         om_lo, om_hi = _stab.omega_grid_bounds()
@@ -1375,7 +1414,20 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         #     which reduces the stability of an inflectional three-dimensional
         #     profile to a single Reynolds number, and not the surrogate for
         #     the cross-flow thickness.  See Sec. VI.
-        if sweep_deg > 1.0 and cal.get("cf_amp", True):
+        if sweep_deg > 1.0 and cal.get("cf_stability", False):
+            # Amplification of the STATIONARY cross-flow wave, integrated from
+            # the Orr-Sommerfeld problem solved on the velocity resolved along
+            # each wave-angle direction (stability.stationary_crossflow).  This
+            # is the quantity the C1 branch below approximates: the rate it
+            # integrates is the streamwise growth rate of a reverse-flow
+            # profile, a stand-in chosen for being flat in Reynolds number, and
+            # it carries no dependence on the cross-flow profile at all.
+            if i > 0:
+                n_cf += (_stab.crossflow_sigma(lam[i], sweep_loc[i], Reth[i])
+                         / max(theta[i], 1e-12))*(s[i] - s[i-1])
+            n_cf_arr[i] = n_cf
+            Rcf = 1e9
+        elif sweep_deg > 1.0 and cal.get("cf_amp", True):
             L_r = np.radians(sweep_deg)
             if cal.get("cf_exact", False):
                 _sf = (np.sin(L_r) if normal_frame
@@ -1535,6 +1587,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         out = dict(s=s, Ue=Ue, theta=theta, H=H, Cf=Cf, Re_theta=Reth,
                    lam=lam, gamma=gamma, state=state, Re_theta_t=Re_th_t,
                    n_factor=n_fac, n_crit=n_crit_all, n_cf=n_cf_arr,
+               sweep_local=sweep_loc,
                    mechanism=mechanism, i_tr=None,
                    i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
                    bubble_burst=bool(i_bub is not None),
@@ -1641,6 +1694,7 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
     out = dict(s=s, Ue=Ue, theta=theta, H=H, Cf=Cf, Re_theta=Reth,
                lam=lam, gamma=gamma, state=state, Re_theta_t=Re_th_t,
                n_factor=n_fac, n_crit=n_crit_all, n_cf=n_cf_arr,
+               sweep_local=sweep_loc,
                mechanism=mechanism, i_tr=i_tr, x_tr=s_tr,
                lam_len=lam_len, onset_mech=onset_mech,
                i_sep=i_sep, s_sep=(s_sep if i_sep is not None else np.nan),
@@ -1812,7 +1866,8 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         Ue_s = np.maximum(Ue_mag[idx], 1e-4)
         r = march_bl(ss, Ue_s, nu, Tu_pct=Tu_pct, sweep_deg=sweep_deg,
                      cal=cal, Me=Me_all[idx], normal_frame=swept,
-                     Te_K=(None if Te_all is None else Te_all[idx]))
+                     Te_K=(None if Te_all is None else Te_all[idx]),
+                     U_ref=U)
         r["x"]  = xc[idx]; r["y"] = yc[idx]; r["Cp"] = Cp[idx]
         # The edge Mach number the march was actually closed at, formed from the
         # corrected pressure by _edge_from_cp.  It is an output because the

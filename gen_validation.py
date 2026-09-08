@@ -663,7 +663,7 @@ def crossflow_threshold_sweep(write=True, quiet=False,
     return df
 
 
-def crossflow_formulations(write=True, quiet=False):
+def crossflow_formulations(write=True, quiet=False, cf_n=None):
     """Every cross-flow formulation this solver can be put into, scored.
 
     The README said "seven formulations were tried against the two swept-wing
@@ -684,6 +684,17 @@ def crossflow_formulations(write=True, quiet=False):
         ("streamwise frame (no normal-plane transformation)",
          dict(_sweep_transform=False)),
     ]
+    # The solved stationary cross-flow eigenvalue problem, with its threshold
+    # set the same way CF_C1 was: on the calibration set alone, as that set's
+    # mean amplification factor at the measured transition.  Anything else
+    # would be scoring a formulation against a constant tuned on the set it is
+    # then judged by.
+    if cf_n is None:
+        cf_n = float(crossflow_amplification(write=False, quiet=True)[1]
+                     ["mean_N_cf"].iloc[0])
+    variants.append(("solved stationary cross-flow eigenvalue problem, "
+                     "N_cf = %.1f" % cf_n,
+                     dict(cf_stability=True, CF_N=float(cf_n))))
     rows = []
     for name, cal in variants:
         tr = not (cal and cal.get("_sweep_transform") is False)
@@ -704,6 +715,132 @@ def crossflow_formulations(write=True, quiet=False):
     if not quiet:
         print(df.to_string(index=False))
     return df
+
+
+def crossflow_amplification(write=True, quiet=False):
+    """The stationary cross-flow amplification factor at measured transition.
+
+    The C1 branch the solver ships reduces the stability of a three-dimensional
+    inflectional profile to a single Reynolds number and a threshold.  This
+    evaluates the quantity that criterion stands in for: the Orr-Sommerfeld
+    problem solved on the velocity resolved along each wave-angle direction,
+    swept over wave angle to find the angle at which the wave is stationary,
+    and integrated along the chord as
+
+        N_cf = int omega_i / c_gx  dx / theta
+
+    with every branch of the transition kernel held off, so the march reaches
+    the measured transition location laminar and the amplification factor
+    there is a property of the boundary layer and not of the model's own
+    prediction.
+
+    Three of the six Dagenhart & Saric conditions carry an N-factor computed
+    by the authors with the SALLY code, which is what makes this a check and
+    not just a calculation.
+    """
+    # Every branch off: the amplification factor has to be read at the MEASURED
+    # station on a layer that is still laminar there, which it is not if any
+    # branch has already fired upstream.  Same dictionary as crossflow_criticals,
+    # with the stability-based cross-flow rate switched on so n_cf accumulates.
+    OFF = dict(CF_C1=1e12, A_TS=1e-9, A_SEP=1e9, Tu_BP_lo=1e9, Tu_BP_hi=2e9,
+               bubble=False, cf_stability=True, CF_N=1e12)
+
+    def probe(X, Y, al, U, nu, c, tu, sw, x_meas):
+        r = solve_airfoil(X, Y, al, U, nu, c, tu, sweep_deg=sw, cal=OFF)
+        u = r["surfaces"]["upper"]
+        x = np.asarray(u["x"], float); k = np.argsort(x)
+        g = lambda key: float(np.interp(x_meas, x[k],
+                                        np.asarray(u[key], float)[k]))
+        # the local sweep the similarity solution is given, at two stations, so
+        # that the statement "it is not the leading-edge value" is reported
+        # from the march rather than typed
+        We = U*np.sin(np.radians(sw))
+        Ll = np.degrees(np.arctan2(We, np.maximum(np.asarray(u["Ue"], float),
+                                                  1e-9)))
+        loc = [float(np.interp(xx, x[k], Ll[k])) for xx in (0.03, 0.60)]
+        return (g("n_cf"), g("n_factor"), g("n_crit"), g("Re_theta"),
+                loc[0], loc[1])
+
+    rows = []
+    v1 = C.SWEPT; X1, Y1 = _section_points(NLF415)
+    for Rec, xm, ns in zip(v1["Re_c"], v1["x_tr_c"], v1["N_sally"]):
+        n, nts, nc, rt, lf, la = probe(X1, Y1, v1["alpha_deg"],
+                                       Rec*v1["nu"]/v1["chord_m"], v1["nu"],
+                                       v1["chord_m"], v1["Tu_pct"],
+                                       v1["sweep_deg"], xm)
+        rows.append(dict(dataset="Dagenhart & Saric (calibration)",
+                         sweep_deg=v1["sweep_deg"], Re_c=f"{Rec:.3e}",
+                         x_tr_c_measured=xm, N_cf=round(n, 2),
+                         N_cf_SALLY=ns,
+                         N_cf_minus_SALLY=(None if ns is None
+                                           else round(n - ns, 2)),
+                         N_TS=round(nts, 2), N_crit_TS=round(nc, 2),
+                         Re_theta=round(rt, 1),
+                         sweep_local_deg_at_x003=round(lf, 1),
+                         sweep_local_deg_at_x060=round(la, 1)))
+    v2 = C.SWEPT2; X2, Y2 = _section_points(v2["section"])
+    for sw, al, xm, Rec in zip(v2["sweep_deg"], v2["alpha_deg"],
+                               v2["x_tr_c"], v2["Re_c"]):
+        n, nts, nc, rt, lf, la = probe(X2, Y2, al,
+                                       Rec*v2["nu"]/v2["chord_m"], v2["nu"],
+                                       v2["chord_m"], v2["Tu_pct"], sw, xm)
+        rows.append(dict(dataset="Boltz et al. (independent)", sweep_deg=sw,
+                         Re_c=f"{Rec:.3e}", x_tr_c_measured=xm,
+                         N_cf=round(n, 2), N_cf_SALLY=None,
+                         N_cf_minus_SALLY=None,
+                         N_TS=round(nts, 2), N_crit_TS=round(nc, 2),
+                         Re_theta=round(rt, 1),
+                         sweep_local_deg_at_x003=round(lf, 1),
+                         sweep_local_deg_at_x060=round(la, 1)))
+    df = pd.DataFrame(rows)
+
+    sub = []
+    for name, g in df.groupby("dataset", sort=False):
+        a = g["N_cf"].to_numpy(float)
+        sub.append(dict(dataset=name, n_points=len(a),
+                        mean_N_cf=round(float(a.mean()), 2),
+                        sd_N_cf=round(float(a.std(ddof=1)), 2),
+                        coeff_of_variation_pct=round(
+                            100.0*float(a.std(ddof=1)/a.mean()), 1)))
+    d = df.dropna(subset=["N_cf_minus_SALLY"])["N_cf_minus_SALLY"].to_numpy(float)
+    sub.append(dict(dataset="vs SALLY (three conditions)", n_points=len(d),
+                    mean_N_cf=round(float(np.mean(np.abs(d))), 2),
+                    sd_N_cf=round(float(np.sqrt(np.mean(d*d))), 2),
+                    coeff_of_variation_pct=None))
+    sm = pd.DataFrame(sub)
+    ratio = sub[0]["mean_N_cf"]/sub[1]["mean_N_cf"]
+    sm["note"] = ["mean |N - N_SALLY| and RMS in the last two columns"
+                  if r["dataset"].startswith("vs SALLY") else
+                  "critical N this facility requires" for r in sub]
+    if write:
+        df.to_csv(f"{VAL}/crossflow_amplification.csv", index=False)
+        sm.to_csv(f"{VAL}/crossflow_amplification_summary.csv", index=False)
+    if not quiet:
+        print(df.to_string(index=False))
+        print(sm.to_string(index=False))
+        print("facility ratio in N: %.2f" % ratio)
+
+    fig, ax = new_fig(8.4, 5.4)
+    for nm, cc, mk in (("Dagenhart & Saric (calibration)", PALETTE[0], "o"),
+                       ("Boltz et al. (independent)", PALETTE[1], "s")):
+        g = df[df.dataset == nm]
+        ax.plot(g["x_tr_c_measured"], g["N_cf"], mk, ms=9, lw=0, color=cc,
+                mec=INK_SOFT, label=nm.split(" (")[0])
+        ax.axhline(g["N_cf"].mean(), color=cc, lw=1.4, ls="--", alpha=0.7)
+    g = df.dropna(subset=["N_cf_SALLY"])
+    ax.plot(g["x_tr_c_measured"], g["N_cf_SALLY"], "*", ms=15, lw=0,
+            color=PALETTE[4], mec=INK_SOFT,
+            label="SALLY code (Dagenhart & Saric, f = 0)")
+    ax.set_xlabel("measured transition location  x/c")
+    ax.set_ylabel("stationary cross-flow amplification factor  $N_{cf}$")
+    ax.set_ylim(0, 10)
+    ax.set_title("Cross-flow $N$-factor at the measured transition")
+    ax.legend(loc="lower right", fontsize=9)
+    finish(fig, f"{VP}/val_crossflow_amplification.png",
+           caption="Solved stationary cross-flow eigenvalue problem, every "
+                   "transition branch held off.  The dashed lines are each "
+                   "facility's mean.")
+    return df, sm
 
 
 def crossflow_receptivity(write=True, quiet=False):
@@ -1464,7 +1601,8 @@ if __name__=="__main__":
     print(df_sw2.to_string(index=False))
     crossflow_criticals()
     crossflow_receptivity()
-    crossflow_formulations()
+    _amp_df, _amp_sm = crossflow_amplification()
+    crossflow_formulations(cf_n=float(_amp_sm["mean_N_cf"].iloc[0]))
     crossflow_threshold_sweep()
     residual_diagnostics()
     bubble_diagnostics()

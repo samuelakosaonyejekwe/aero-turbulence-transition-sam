@@ -916,6 +916,164 @@ def verify_outputs_contract():
         assert got is want, "%s: numbering check returned %s" % (lab, got)
 
 
+@check
+def crossflow_vanishes_where_there_is_no_crossflow():
+    """the stationary cross-flow rate is exactly zero at zero sweep and at
+    zero pressure gradient"""
+    import stability as st
+    assert st.stationary_crossflow(0.5, 0.0, 400.0)[0] == 0.0, \
+        "an unswept layer has no cross-flow, so no stationary wave can grow"
+    # beta = 0 is the sharper case: the chordwise equation f''' + f f'' = 0
+    # makes f'' proportional to exp(-int f), which is g' exactly, so g = f'
+    # and the cross-flow profile w = sin(L)cos(L)(g - f') vanishes identically
+    # at EVERY sweep angle.  A flat plate at 45 degrees of yaw has none.
+    eta, fp, g, w = st.fsc_profile(0.0, 45.0)
+    assert float(np.abs(w).max()) < 1e-5, \
+        "beta = 0 must give g = f' identically; max |w| = %.3e" % np.abs(w).max()
+    for L in (20.0, 45.0, 70.0):
+        assert st.stationary_crossflow(0.0, L, 400.0)[0] == 0.0, \
+            "zero pressure gradient must give no cross-flow at %g deg" % L
+
+
+@check
+def crossflow_eigenvalue_against_its_reference():
+    """the resolved-profile eigenvalue is what it was when the table was built"""
+    import stability as st
+    pa = st.fsc_parts(0.6)
+    Re = 300.0/np.cos(np.radians(45.0))
+    y, D1, U, Upp = st._cf_grid(pa, 45.0, 130.8, 60, 100.0, 5.0)
+    m = st.cf_modes(y, D1, U, Upp, 0.12, Re)
+    assert m, "no boundary-layer-confined mode found at the reference point"
+    c = max(m, key=lambda t: t[0].imag)[0]
+    ref = complex(-0.0068334, 0.0190787)
+    assert abs(c - ref) < 2e-6, \
+        "reference cross-flow eigenvalue moved: %.7f%+.7fj against %.7f%+.7fj" \
+        % (c.real, c.imag, ref.real, ref.imag)
+    # grid independence: this mode is converged, so doubling the resolution and
+    # doubling the domain must both leave it alone
+    for N, ym in ((100, 100.0), (60, 200.0)):
+        y2, D2, U2, P2 = st._cf_grid(pa, 45.0, 130.8, N, ym, 5.0)
+        m2 = st.cf_modes(y2, D2, U2, P2, 0.12, Re)
+        c2 = max(m2, key=lambda t: t[0].imag)[0]
+        assert abs(c2 - c) < 5e-6, \
+            "not grid-converged at N=%d y_max=%.0f: %.7f%+.7fj" % (N, ym,
+                                                                   c2.real, c2.imag)
+
+
+@check
+def crossflow_rate_saturates_with_reynolds_number():
+    """an inflectional instability tends to an inviscid limit, and this one does"""
+    import stability as st
+    pa = st.fsc_parts(0.6)
+    # a narrow band of wavenumbers around the envelope peak: the saturation
+    # this asserts is a property of the branch, not of where its maximum sits,
+    # and the full sweep costs a minute and a half in a gate meant to run in
+    # seconds
+    ks = np.geomspace(0.11, 0.30, 5)
+    s = [st.stationary_crossflow(0.6, 45.0, R, parts=pa, ks=ks)[0]
+         for R in (100.0, 400.0, 3000.0)]
+    assert all(b > a for a, b in zip(s, s[1:])), \
+        "the rate must rise with Reynolds number: %s" % np.round(s, 6).tolist()
+    # rising but flattening: the last decade must add less than the first
+    assert (s[2] - s[1]) < 0.60*(s[1] - s[0]), \
+        "the rate is not saturating: %s" % np.round(s, 6).tolist()
+    # and it must not be a viscous instability's magnitude - these are per
+    # momentum thickness on the total edge speed and are an order below the
+    # streamwise rates
+    assert 1e-4 < s[-1] < 0.05, "implausible growth rate %.5f" % s[-1]
+
+
+@check
+def crossflow_table_against_a_direct_solve():
+    """the tabulated cross-flow rate reproduces the eigenvalue sweep"""
+    import stability as st
+    if not os.path.exists(st.CF_DB_PATH):
+        return                       # nothing to check until it is built
+    # nodes of the table must come back exactly
+    LAM, SW, RE, S = st.load_crossflow_database()
+    # Below the floor the rate is taken as zero, and that is only defensible
+    # while the floor sits at or below the neutral point over the part of the
+    # table a march actually traverses.  The mode is damped at the floor
+    # everywhere except the plane-stagnation corner; if growth ever appears
+    # outside that corner the floor has to come down.
+    d = np.load(st.CF_DB_PATH)
+    beta = d["beta"]
+    grow = np.argwhere(S[:, :, 0] > 0.0)
+    if grow.size:
+        assert float(beta[grow[:, 0]].min()) >= 2.0 - 1e-9, \
+            "the stationary mode grows at Re_theta = %.0f below the " \
+            "plane-stagnation corner, at beta = %.2f" \
+            % (RE[0], beta[grow[:, 0]].min())
+        assert float(SW[grow[:, 1]].min()) >= 60.0 - 1e-9, \
+            "the stationary mode grows at Re_theta = %.0f at only %.0f deg " \
+            "of sweep" % (RE[0], SW[grow[:, 1]].min())
+    assert st.crossflow_sigma(0.10, 60.0, 0.5*RE[0]) == 0.0, \
+        "below the floor the rate must be zero, not held at the floor value"
+    for i in (4, 9, 14):
+        for j in (1, 4):
+            for m in (2, 7):
+                got = st.crossflow_sigma(float(LAM[i]), float(SW[j]),
+                                         float(RE[m]))
+                assert abs(got - S[i, j, m]) < 1e-12, \
+                    "interpolation does not reproduce its own node"
+    # and an off-node point must agree with a direct solve
+    beta, sweep, reth = 0.45, 47.0, 420.0
+    lam = beta*st.falkner_skan(beta)[4]**2
+    tab = st.crossflow_sigma(lam, sweep, reth)
+    direct = st.stationary_crossflow(beta, sweep, reth)[0]
+    assert abs(tab - direct) < 0.22*max(direct, 1e-9), \
+        "table %.6f against a direct solve %.6f at lambda=%.4f, %g deg, " \
+        "Re_theta=%g" % (tab, direct, lam, sweep, reth)
+
+
+@check
+def crossflow_local_sweep_is_used():
+    """the march forms the local sweep angle, not the leading-edge one"""
+    import stability as st
+    if not os.path.exists(st.CF_DB_PATH):
+        return
+    import case_config as C
+    from utss_solver import solve_airfoil
+    import gen_validation as GV
+    v = C.SWEPT; X, Y = GV._section_points(GV.NLF415)
+    OFF = dict(CF_C1=1e12, A_TS=1e-9, A_SEP=1e9, Tu_BP_lo=1e9, Tu_BP_hi=2e9,
+               bubble=False, cf_stability=True, CF_N=1e12)
+    U = 2.37e6*v["nu"]/v["chord_m"]
+    r = solve_airfoil(X, Y, v["alpha_deg"], U, v["nu"], v["chord_m"],
+                      v["Tu_pct"], sweep_deg=v["sweep_deg"], cal=OFF)
+    u = r["surfaces"]["upper"]
+    n = np.asarray(u["n_cf"], float)
+    assert np.all(np.diff(n) >= -1e-12), "the amplification factor went down"
+    assert n[-1] > 1.0, "no cross-flow amplification accumulated at all"
+    # the span-wise edge velocity is constant, so the local sweep must fall
+    # along the chord and differ from the leading-edge value by tens of degrees
+    x = np.asarray(u["x"], float); Ue = np.asarray(u["Ue"], float)
+    L = np.asarray(u["sweep_local"], float)
+    k = np.argsort(x)
+    fwd = float(np.interp(0.03, x[k], L[k]))
+    aft = float(np.interp(0.60, x[k], L[k]))
+    assert fwd - aft > 8.0, \
+        "local sweep barely varies (%.1f deg at x/c=0.03, %.1f at 0.60); the " \
+        "leading-edge value would then be an adequate stand-in" % (fwd, aft)
+    # The limiting case that settles the frame.  The march runs in the plane
+    # normal to the leading edge, where the free-stream chordwise speed is
+    # Q cos(L); at the station where the edge velocity equals it, the angle
+    # between the external streamline and the chord line IS the leading-edge
+    # sweep, exactly.  Forming the span-wise velocity as U_ref sin(L) instead
+    # of U_ref tan(L) in that frame is wrong by cos(L) - 10 degrees of local
+    # sweep near the leading edge here - and passes every smoothness test.
+    j = np.argsort(Ue)
+    Un = U*np.cos(np.radians(v["sweep_deg"]))
+    at_free_stream = float(np.interp(Un, Ue[j], L[j]))
+    # The bound is loose against the interpolation and tight against the
+    # defect: the angle is recovered by interpolating on the station grid, so
+    # it lands within a thousandth of a degree, while forming W_e with sin
+    # instead of tan in this frame misses by ten.
+    assert abs(at_free_stream - v["sweep_deg"]) < 1e-3, \
+        "where U_e = Q cos(L) the local sweep must be L: got %.6f " \
+        "against %.1f deg" % (at_free_stream, v["sweep_deg"])
+
+
 def main():
     only = None
     if "-k" in sys.argv:

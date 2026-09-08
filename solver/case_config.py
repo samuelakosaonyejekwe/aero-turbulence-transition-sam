@@ -170,6 +170,20 @@ SWEPT = dict(
     source    = "Dagenhart J.R. & Saric W.S. (1999), 'Crossflow Stability and "
                 "Transition Experiments in Swept-Wing Flow', NASA/TP-1999-209344, "
                 "Table 2.",
+    # Stationary (f = 0) N-factors at transition, computed by Dagenhart & Saric
+    # themselves with the SALLY code and reported in their Tables 3, 4 and 5,
+    # taken as the maximum over the tabulated wavelengths.  Only three of the
+    # six conditions were analysed, so the other three are None.  These are an
+    # INDEPENDENT stability code's answer to the same question this solver's
+    # cross-flow branch asks, and are what stationary_crossflow is checked
+    # against; nothing is calibrated on them.
+    #
+    # Table 4's caption reads Rc = 2.37e6 for (x/c)tr = 0.45, which Table 2
+    # assigns to Rc = 2.73e6 - the caption's Reynolds number is carried over
+    # from Table 3 in error, and the transition location identifies the run.
+    N_sally   = [None,   None,   6.8,    6.5,    6.4,    None],
+    N_sally_source = "NASA/TP-1999-209344, Tables 3, 4 and 5, frequency f = 0, "
+                     "maximum over wavelength.",
 )
 
 # ---- Second, independent swept-wing dataset -------------------------------

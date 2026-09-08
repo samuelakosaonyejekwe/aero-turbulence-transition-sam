@@ -990,14 +990,109 @@ table_from_csv("06_validation/crossflow_threshold_sweep.csv", key="cf_thresh",
                cap="A separate amplification threshold for the cross-flow "
                    "branch, with C1 refitted on the calibration set at each "
                    "value (crossflow_threshold_sweep.csv).")
-para("The formulations of the branch that this solver can be put into are scored against both "
+# The counts are read off the table rather than typed: it grew a row when the
+# solved eigenvalue problem was added, and "the two that cost nothing" was
+# already stale by one the moment it did.
+_cfv = pd.read_csv("06_validation/crossflow_formulations.csv")
+_n_free = int(((~_cfv.costs_calibration_vs_shipped)
+               & (~_cfv.helps_independent_vs_shipped)).sum()) - 1
+_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+          7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+para("The %s formulations of the branch that this solver can be put into are scored against both "
  "experiments in @@TAB:cf_forms@@, and not one of them reconciles the two. The pattern is the "
  "same throughout: every variant that helps the independent set costs more on the calibration "
- "set, and the two that cost nothing there help nothing here. That was a claim about what had "
- "been tried; it is a table now.")
+ "set, and the %s that cost nothing there help nothing here. That was a claim about what had "
+ "been tried; it is a table now."
+ % (_WORDS.get(len(_cfv), str(len(_cfv))), _WORDS.get(_n_free, str(_n_free))))
 table_from_csv("06_validation/crossflow_formulations.csv", key="cf_forms",
                cap="Every cross-flow formulation the solver exposes, scored on "
                    "both swept wings (crossflow_formulations.csv).")
+# ---- the fourth attempt: solve the problem the criterion stands in for ----
+# Every number below is read from the generated CSVs.  The paragraph this
+# replaces did not exist; the limitation it describes was stated in the
+# conclusions as something that "would need" the stability problem solved, and
+# it has now been solved, so what it produced belongs here.
+_amp = pd.read_csv("06_validation/crossflow_amplification.csv")
+_ampd = _amp[_amp.dataset.str.startswith("Dagenhart")].iloc[2]
+_amps = pd.read_csv("06_validation/crossflow_amplification_summary.csv").set_index("dataset")
+_ad = _amps.loc["Dagenhart & Saric (calibration)"]
+_ab = _amps.loc["Boltz et al. (independent)"]
+_asal = _amps.loc["vs SALLY (three conditions)"]
+_cff = pd.read_csv("06_validation/crossflow_formulations.csv")
+_cfen = _cff[_cff.formulation.str.startswith("solved stationary")].iloc[0]
+para("A fourth attempt goes after the criterion's form directly, by solving the problem C1 "
+ "stands in for. The Orr-Sommerfeld equation is solved on the velocity resolved along each "
+ "wave-angle direction, U_ψ = cos Λ f′ cos ψ + sin Λ g sin ψ in units of the total edge speed; "
+ "the wave angle at which the mode is stationary — ω_r = 0, which is what a naphthalene "
+ "visualisation can see — is found by bisection on the sign change, and the amplification a "
+ "stationary packet accumulates over dx is ω_i dx/c_gx with the chordwise group velocity taken "
+ "from the two derivatives the (k, ψ) parameterisation already provides. The sweep angle the "
+ "similarity solution is given is the LOCAL one, between the external streamline and the chord "
+ "line: the span-wise edge velocity is constant on an infinite swept wing while the chordwise "
+ "one grows through the favourable run, so that angle falls from %.0f° at 3 %% chord to %.0f° at "
+ "60 %% on these sections, against a leading-edge value of %.0f°."
+ % (_ampd.sweep_local_deg_at_x003, _ampd.sweep_local_deg_at_x060,
+    _ampd.sweep_deg))
+para("Two things make this harder than the two-dimensional problem and both decide the answer. "
+ "The mode cannot be found by asking for the eigenvalue nearest c = 0: the resolved profile's "
+ "edge velocity is near zero at exactly the wave angles of interest, so the discretised "
+ "continuous spectrum crowds onto the physical mode rather than onto c_r = 1, and a nearest-root "
+ "search returns growth rates three orders above anything physical. What separates them is the "
+ "eigenfunction, not the eigenvalue. And the outer boundary must be far enough out for that "
+ "test to mean anything: a wave of wavenumber k decays as exp(−k y), so at k = 0.1 and "
+ "y_max = 40 θ it is still at five per cent of its peak where the decay is measured and a strict "
+ "filter discards it, leaving only short waves and putting the envelope maximum on the edge of "
+ "the surviving band. At y_max = 100 θ the same mode is at 0.3 per cent while the spurious ones "
+ "stay above 25 per cent.")
+_abz = _amp[_amp.dataset.str.startswith("Boltz")].sort_values("sweep_deg")
+para("The result is checked against an independent stability code before it is used for anything. "
+ "Dagenhart & Saric computed stationary N-factors with SALLY for three of their six conditions "
+ "and tabulated them; against those three the present solve differs by %.2f on average and "
+ "%.2f root-mean-square (@@TAB:cf_amp@@), which is agreement, not calibration — nothing here is "
+ "fitted to them. On the levels the two facilities require it does better than the surrogate and "
+ "still not well enough. Dagenhart & Saric's transitions occur at N_cf = %.2f ± %.2f and Boltz "
+ "et al.'s at %.2f ± %.2f, a ratio of %.2f where the algebraic surrogate's critical Reynolds "
+ "numbers differ by %.2f. The levels move together; the scatter does not. Within Boltz's four "
+ "conditions the coefficient of variation rises from %.1f %% on the surrogate to %.1f %% here, "
+ "and the reason is visible rather than statistical: N_cf at the measured transition falls "
+ "monotonically with sweep angle, %.2f at %.0f° down to %.2f at %.0f°, so no single threshold "
+ "can pass through all four."
+ % (_asal.mean_N_cf, _asal.sd_N_cf, _ad.mean_N_cf, _ad.sd_N_cf,
+    _ab.mean_N_cf, _ab.sd_N_cf, _ad.mean_N_cf/_ab.mean_N_cf,
+    _bol.mean_critical_value/_dag.mean_critical_value,
+    _bol.coeff_of_variation_pct, _ab.coeff_of_variation_pct,
+    _abz.N_cf.iloc[0], _abz.sweep_deg.iloc[0],
+    _abz.N_cf.iloc[-1], _abz.sweep_deg.iloc[-1]))
+table_from_csv("06_validation/crossflow_amplification.csv", key="cf_amp",
+               cap="Stationary cross-flow amplification factor at the measured "
+                   "transition, every branch of the kernel held off, against "
+                   "Dagenhart & Saric's own SALLY N-factors where they exist "
+                   "(crossflow_amplification.csv).")
+table_from_csv("06_validation/crossflow_amplification_summary.csv",
+               cap="What each facility requires of the amplification factor "
+                   "(crossflow_amplification_summary.csv).")
+image("06_validation/plots/val_crossflow_amplification.png", width=5.9,
+      cap="Cross-flow N-factor at the measured transition. The two facilities "
+          "sit on different levels; the stars are SALLY.")
+para("Put through the kernel with its threshold set on the calibration set alone — the same way "
+ "C1 was — it follows the pattern every other variant follows, from the other side. It IMPROVES "
+ "the calibration set, from %.1f %% to %.1f %% in transition location, and it costs the "
+ "independent set %.1f %% against %.1f %%, for a pooled %.1f %% against %.1f %% "
+ "(@@TAB:cf_forms@@ carries it as a row like every other variant). It is therefore not adopted, "
+ "for the reason the shipped branch is: a formulation that is better only on the set its one "
+ "constant was fitted to has not been shown to be better. What fails is that a "
+ "stationary cross-flow vortex is forced by surface roughness, and the amplification factor "
+ "carries no information about how large the disturbance was when it started. Dagenhart & Saric "
+ "say so themselves: “the receptivity portion of the transition process is equally important in "
+ "the vortex development, growth, and eventual breakdown”, and they cite Radeztsky et al. for "
+ "the finding that micron-sized roughness near the attachment line strongly influences "
+ "crossflow-dominated transition. A polished natural-laminar-flow model of 1993 and an untapered "
+ "wing tested in 1960 are not the same surface, and neither report gives a roughness height. "
+ "Closing the gap needs an input the experiments do not contain, not a better stability "
+ "calculation — and that is now a measurement rather than a conjecture."
+ % (_cff.calibration_err_pct.iloc[0], _cfen.calibration_err_pct,
+    _cfen.independent_err_pct, _cff.independent_err_pct.iloc[0],
+    _cfen.pooled_err_pct, _cff.pooled_err_pct.iloc[0]))
 table_from_csv("06_validation/swept_wing_crossflow.csv",
                cap="Cross-flow validation, 45° swept NLF(2)-0415 "
                    "(Dagenhart & Saric — the calibration set).")
@@ -1281,7 +1376,14 @@ para("Two limitations bound that claim and are stated here rather than left to b
  "The cross-flow critical constant does not transfer between facilities: the two independent "
  "swept-wing experiments support the functional form of the criterion, and the measured data "
  "collapse on it, but reproducing the second requires a critical value %.0f %% larger than the "
- "first. And the method is an attached-flow formulation, so it has an incidence envelope — but "
+ "first. That is now known not to be a defect of the criterion's form: the stationary "
+ "cross-flow eigenvalue problem has been solved and checked against Dagenhart & Saric's own "
+ "SALLY N-factors, and it brings the two levels closer — N_cf = %.1f against %.1f, a ratio of "
+ "%.2f where the critical Reynolds numbers differ by %.2f — while scattering worse within each "
+ "facility, so it is not adopted. What the branch is missing is a receptivity input — the "
+ "roughness height that seeds a stationary cross-flow vortex — which neither report gives, so "
+ "no stability calculation performed here can supply it. And the method is an attached-flow "
+ "formulation, so it has an incidence envelope — but "
  "that envelope is asymmetric and is set by the section, not by a round number. On the "
  "NLF(1)-0416 it declares its first condition at %.1f° of incidence, where the upper-surface "
  "layer separates within two per cent of chord, and it handles the same section down to %.1f° "
@@ -1294,7 +1396,10 @@ para("Two limitations bound that claim and are stated here rather than left to b
  "alternating between a leading-edge bubble and a trailing-edge one. A single positive-"
  "incidence bound is therefore not a meaningful thing to quote for that section, and the "
  "evidence for the asymmetry is the aerofoil set, where it is measured."
- % (_gap_pct, _nlf_pts[_nlf_pts.degenerate].alpha_deg.max(),
+ % (_gap_pct, _ad.mean_N_cf, _ab.mean_N_cf,
+    _ad.mean_N_cf/_ab.mean_N_cf,
+    _bol.mean_critical_value/_dag.mean_critical_value,
+    _nlf_pts[_nlf_pts.degenerate].alpha_deg.max(),
     _nlf_pts[~_nlf_pts.degenerate].alpha_deg.min(),
     _nlf_pts.alpha_deg.max(), _n_declared))
 

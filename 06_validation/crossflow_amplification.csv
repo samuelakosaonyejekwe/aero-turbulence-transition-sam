@@ -1,0 +1,11 @@
+dataset,sweep_deg,Re_c,x_tr_c_measured,N_cf,N_cf_SALLY,N_cf_minus_SALLY,N_TS,N_crit_TS,Re_theta,sweep_local_deg_at_x003,sweep_local_deg_at_x060
+Dagenhart & Saric (calibration),45.0,1.920e+06,0.78,8.2,,,2.48,7.64,615.5,59.1,39.7
+Dagenhart & Saric (calibration),45.0,2.190e+06,0.73,8.85,,,0.03,7.64,513.4,59.1,39.7
+Dagenhart & Saric (calibration),45.0,2.370e+06,0.58,7.5,6.8,0.7,0.0,7.64,447.4,59.1,39.7
+Dagenhart & Saric (calibration),45.0,2.730e+06,0.45,6.37,6.5,-0.13,0.0,7.64,418.2,59.1,39.7
+Dagenhart & Saric (calibration),45.0,3.270e+06,0.33,5.47,6.4,-0.93,0.0,7.64,382.3,59.1,39.7
+Dagenhart & Saric (calibration),45.0,3.730e+06,0.3,5.74,,,0.0,7.64,385.6,59.1,39.7
+Boltz et al. (independent),20.0,2.700e+07,0.207,7.58,,,5.15,7.64,1476.1,18.8,18.0
+Boltz et al. (independent),30.0,1.500e+07,0.213,6.07,,,2.31,7.64,1029.7,28.4,27.3
+Boltz et al. (independent),40.0,1.200e+07,0.2,5.36,,,1.06,7.64,787.5,38.2,36.8
+Boltz et al. (independent),50.0,9.500e+06,0.211,3.66,,,0.34,7.64,605.1,48.2,46.8

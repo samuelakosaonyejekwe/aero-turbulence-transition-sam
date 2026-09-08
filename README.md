@@ -350,11 +350,14 @@ branch is closed by an **amplification integral** rather than a local threshold
 — a stationary cross-flow vortex must grow before it breaks down — using the
 computed rate 0.0435 and the same N_crit as every other branch, so it adds no
 constant.
-Seven formulations of the branch are scored against both experiments in
+Eight formulations of the branch are scored against both experiments in
 `06_validation/crossflow_formulations.csv`, and none reconciles them: every one
-that helps the independent set costs more on the calibration set, and the two
-that cost nothing there help nothing here.  That used to be a claim about what
-the author had tried, which nothing could check; it is now a generated table.
+that helps the independent set costs more on the calibration set, and the three
+that cost nothing there help nothing here — including the solved eigenvalue
+problem of the next section, which is the best of the eight on the calibration
+set and the worst of them on the independent one.  That used to be a claim
+about what the author had tried, which nothing could check; it is now a
+generated table.
 Whether the branch needs its own amplification threshold, separate from the
 N_crit Mack's relation supplies for TS waves, is settled the same way in
 `06_validation/crossflow_threshold_sweep.csv`, which refits C1 on the
@@ -387,21 +390,54 @@ physical profile family reproduces this bubble. Combined with the unresolved
 onset station (see † above), the residual is −14.2 % against the bracket, and
 what remains of it is a property of the data, not of the closure.
 
-**Cross-flow: the gap is a critical Reynolds number, and this method cannot
-convert it to a roughness ratio.** Expressing it in amplification units is the
-natural move — ΔN = ln(A₀,₁/A₀,₂) is the roughness ratio for a roughness-seeded
-vortex — and it fails, for a reason worth stating. The rate this branch
-integrates is read off a separated *streamwise* profile and is nearly
-Reynolds-independent (0.0417 at Re_θ = 200 against 0.0461 at 8000), so N_cf
-scales as √Re_c. The two facilities differ 7× in Re_c, and the N they require is
-0.0–11.9 and 43.1–129.2 — not comparable — while the critical Re_θ2 is tight
-within each (17.8 % and 4.0 %). The receptivity attribution was reached by an
-elimination that had not considered that the branch's own rate carries no
-cross-flow physics. **What would close it is named**: the Orr–Sommerfeld problem
-solved on the Falkner–Skan–Cooke *cross-flow* profile — which
-`stability.fsc_profile` already returns — tabulated as the streamwise rates are.
-That is work on the method, not a request for measurements on wings from 1960
-and 1999.
+**Cross-flow: the eigenvalue problem is solved now, and it does not close the
+gap.** The previous edition of this section named the work that would: *"the
+Orr–Sommerfeld problem solved on the Falkner–Skan–Cooke cross-flow profile …
+tabulated as the streamwise rates are. That is work on the method, not a
+request for measurements."* That work is done — `stability.stationary_crossflow`
+and the tabulated `solver/crossflow_db.npz` — and the claim was wrong.
+
+The eigenvalue problem is solved on the velocity resolved along each wave
+direction, U_ψ = cos Λ f′ cos ψ + sin Λ g sin ψ in units of the total edge
+speed. The wave angle at which the mode is *stationary* — ω_r = 0, the only
+kind naphthalene flow visualisation can see — is found by bisection on the sign
+change rather than by a Newton solve for c = 0, which lands on the discretised
+continuous spectrum: near c = 0 the resolved profile's edge velocity is itself
+near zero, so the two spectra overlap and only the eigenfunction's decay
+separates them. The outer boundary sits at 100 θ because at 40 θ a wave of
+k = 0.1 has not decayed enough to pass that test, and discarding it puts the
+envelope maximum on the edge of the surviving band. The sweep angle is the
+**local** one between the external streamline and the chord line, which falls
+from 59° at 3 % chord to 40° at 60 % on these sections against a leading-edge
+45°. Amplification is ∫ ω_i dx / c_gx, the growth a stationary packet gains as
+it is convected, with the chordwise group velocity taken from the two
+derivatives the (k, ψ) parameterisation already provides.
+
+It is checked before it is used. Dagenhart & Saric computed stationary
+N-factors with SALLY for three of their six conditions (their Tables 3–5, f = 0)
+and the present solve reproduces them to **0.59 mean and 0.68 RMS** —
+`06_validation/crossflow_amplification.csv`. On the facility gap it does better
+than the surrogate and still not well enough: the required levels come to
+N_cf = 7.02 and 5.67, a ratio of **1.24** where the critical Re_θ2 differ by
+1.53, but the scatter *within* Boltz's four conditions goes from 4.0 % to
+28.7 %, because N_cf at the measured transition falls monotonically with sweep
+(7.58 at 20° to 3.66 at 50°) and no single threshold passes through all four.
+Through the kernel, with its one constant fitted on the calibration set exactly
+as C1 was, it scores 16.7 % there against the shipped 21.8 % — and 83.7 % on
+the independent set against 51.1 %. Better only on the set it was fitted to is
+not better, so it is **not adopted**; it is carried as a row in
+`06_validation/crossflow_formulations.csv` like every other variant.
+
+What that settles is which explanation was right. The criterion's *form* is not
+what fails. A stationary cross-flow vortex is forced by surface roughness, and
+an amplification factor carries no information about how large the disturbance
+was when it started; Dagenhart & Saric say as much themselves — *"the
+receptivity portion of the transition process is equally important"* — citing
+Radeztsky et al. for micron-sized roughness near the attachment line strongly
+influencing crossflow-dominated transition. A polished 1993 NLF model and a
+1960 untapered wing are not the same surface, and neither report gives a
+roughness height. **This is a request for measurements that do not exist, not
+work on the method** — the opposite of what this section used to say.
 
 **Transition length: not an extrapolation.** Dhawan & Narasimha's
 Re_λ = 9 Re_x,t^0.75 *is* Narasimha's spot model at constant dimensionless spot

@@ -1110,6 +1110,440 @@ def crossflow_factor(lam):
 
 
 # ----------------------------------------------------------------------
+# Stationary cross-flow: the Orr-Sommerfeld problem on the resolved profile
+# ----------------------------------------------------------------------
+# Everything above treats the two-dimensional problem, where the disturbance
+# travels along the only direction the mean flow has.  On a swept wing the
+# mean velocity turns through the layer, and a disturbance whose wave vector
+# lies at an angle psi to the chord sees the component of that velocity
+# resolved along its own direction:
+#
+#     U_psi(eta) = cos(L) f'(eta) cos(psi) + sin(L) g(eta) sin(psi)
+#
+# in units of the TOTAL edge speed Q_e, where f' and g are the chordwise and
+# span-wise Falkner-Skan-Cooke similarity functions.  Writing psi = L + 90 + d
+# turns that into an exact rotation between two profiles,
+#
+#     U_psi = cos(d) W(eta) - sin(d) S(eta)
+#     W = sin(L)cos(L)(g - f')        the cross-flow profile
+#     S = cos^2(L) f' + sin^2(L) g    the profile along the external streamline
+#
+# so at d = 0 the wave sees the cross-flow profile alone.  W vanishes at the
+# wall and in the free stream and is therefore inflectional; that is the
+# instability this branch exists to model.
+#
+# A STATIONARY cross-flow wave is one with omega = 0.  Since omega = k c, that
+# is c = 0: the wave is fixed in the wing frame and the disturbance grows as it
+# is convected past.  Stationary waves are the ones that matter in a quiet
+# stream, because they are forced by surface roughness rather than by
+# free-stream unsteadiness; Dagenhart & Saric measure them by naphthalene
+# visualisation, which can only see something that does not move.
+#
+# Two things make this problem harder than the two-dimensional one and both
+# have to be handled or the answer is nonsense:
+#
+#   The mode cannot be found by asking for the eigenvalue nearest zero.  In the
+#   two-dimensional problem the discretised continuous spectrum crowds towards
+#   c_r = 1 and a phase-speed window separates it from the physical mode.  Here
+#   the resolved profile's edge value is near zero at exactly the wave angles
+#   of interest, so the continuous spectrum crowds onto c = 0 - onto the
+#   physical mode itself.  A Newton solve for c = 0 lands on it and returns
+#   growth rates of order 10 in units of 1/theta, three orders above anything
+#   physical.  What separates them is not the eigenvalue but the eigenfunction:
+#   the physical mode decays away from the wall and the spurious ones do not.
+#
+#   The outer boundary has to be far enough out for that test to mean anything.
+#   A wave of wavenumber k decays as exp(-k y), so at k = 0.1 and y_max = 40 it
+#   is still at five per cent of its peak where the decay is being measured and
+#   a strict filter throws the physical mode away - leaving only short waves and
+#   putting the envelope maximum on the edge of the surviving band.  At
+#   y_max = 100 the same mode is at 0.3 per cent while the spurious ones stay
+#   above 25 per cent, and the two separate cleanly.
+#
+# The stationary condition is then solved as a real equation in the wave angle
+# rather than as a complex Newton step.  omega_r passes once through zero as
+# psi sweeps across the direction normal to the external streamline, so
+# bisection on that sign change stays on the branch by construction.
+#
+# The amplification is unambiguous once the group velocity is known.  A
+# stationary wave packet is convected downstream at c_g and grows at omega_i
+# per unit time, so over a chordwise step dx it gains
+#
+#     dN = omega_i dx / c_gx ,     c_gx = d omega_r / d alpha
+#
+# and the group velocity comes from the two derivatives the (k, psi)
+# parameterisation already provides:
+#
+#     d omega/d alpha = cos(psi) d omega/dk - (sin(psi)/k) d omega/d psi
+#
+# References
+#   Cooke J.C. (1950), "The boundary layer of a class of infinite yawed
+#     cylinders", Proc. Camb. Phil. Soc. 46, 645.
+#   Mack L.M. (1984), "Boundary-layer linear stability theory", AGARD R-709.
+#   Dagenhart J.R. & Saric W.S. (1999), NASA/TP-1999-209344 - the measured
+#     N-factors this implementation is checked against.
+_CF_N, _CF_YMAX, _CF_YHALF = 60, 100.0, 5.0
+
+
+def fsc_parts(beta):
+    """f', f''', g, g'' and theta_eta of the Falkner-Skan-Cooke solution.
+
+    Every derivative is exact rather than differentiated from an interpolant:
+    f''' comes from the similarity equation through _fs_third, and g'' from the
+    span-wise equation g'' = -f g' directly.
+    """
+    eta, fam = _fs_family()
+    k = int(np.argmin([abs(m[0] - beta) for m in fam]))
+    u0, up0 = fam[k][3], fam[k][4]
+    f0 = np.concatenate([[0.0], np.cumsum(0.5*(u0[1:] + u0[:-1])*np.diff(eta))])
+    sol = _fs_solve(beta, eta, np.vstack([f0, u0, up0]))
+    if not sol.success:
+        raise RuntimeError("FSC chordwise solve failed at beta=%.5f" % beta)
+    f, fp, fpp = sol.sol(eta)
+    fppp = _fs_third(beta, f, fp, fpp)
+    F = np.concatenate([[0.0], np.cumsum(0.5*(f[1:] + f[:-1])*np.diff(eta))])
+    gp = np.exp(-F)
+    G = np.concatenate([[0.0], np.cumsum(0.5*(gp[1:] + gp[:-1])*np.diff(eta))])
+    g = G/G[-1]; gp = gp/G[-1]
+    return eta, fp, fppp, g, -f*gp, _trapz(fp*(1.0 - fp), eta)
+
+
+def fsc_wave_profile(parts, sweep_deg, psi_deg):
+    """U and U'' along the wave-vector direction, in units of Q_e and eta.
+
+    The normalisation does not depend on psi, which is what lets growth rates
+    at different wave angles be compared and what keeps the wave angle normal
+    to the external streamline - where the resolved edge velocity is zero -
+    an ordinary point rather than a singular one.
+    """
+    eta, fp, fppp, g, gpp, th_eta = parts
+    L = np.radians(float(sweep_deg)); p = np.radians(float(psi_deg))
+    cl, sl = np.cos(L), np.sin(L)
+    cp, sp = np.cos(p), np.sin(p)
+    return cl*fp*cp + sl*g*sp, cl*fppp*cp + sl*gpp*sp, np.cos(p - L)
+
+
+def _cf_grid(parts, sweep_deg, psi_deg, N, y_max, y_half):
+    eta, fp, fppp, g, gpp, th_eta = parts
+    Ue, Uppe, ue = fsc_wave_profile(parts, sweep_deg, psi_deg)
+    y, D1 = _grid(N, y_max, y_half)
+    ey = np.clip(y*th_eta, 0.0, eta[-1])
+    U = np.interp(ey, eta, Ue)
+    Upp = np.interp(ey, eta, Uppe)*th_eta*th_eta
+    out = y > eta[-1]/th_eta
+    U[out] = ue; Upp[out] = 0.0
+    return y, D1, U, Upp
+
+
+def cf_modes(y, D1, U, Upp, alpha, Re, decay=0.02):
+    """Boundary-layer-confined eigenvalues of the resolved-profile operator.
+
+    Two filters, and both are needed.  An unstable mode of an inflectional
+    instability has c_r between the minimum and maximum of the mean profile,
+    which the discretised continuous spectrum does not respect; and the
+    physical mode decays away from the wall, which the continuous spectrum
+    does not do either.  Phase speed alone is not enough here, unlike in
+    os_temporal: the resolved profile's edge value is near zero at the wave
+    angles of interest, so both spectra occupy the same part of the plane.
+    """
+    n = len(y); I = np.eye(n); D2 = D1 @ D1
+    L = D2 - alpha**2*I
+    A = np.diag(U) @ L - np.diag(Upp) - (L @ L)/(1j*alpha*Re)
+    B = L.astype(complex)
+    for row, con in ((0, I[0]), (1, D1[0]), (n - 2, D1[-1]), (n - 1, I[-1])):
+        A[row, :] = con; B[row, :] = 0.0
+    w, V = eig(A, B, right=True)
+    lo, hi = U.min(), U.max()
+    pad = 0.05*max(hi - lo, 1e-12)
+    ok = np.isfinite(w) & (w.real > lo - pad) & (w.real < hi + pad)
+    outer = y > 0.80*y.max()
+    out = []
+    for k in np.where(ok)[0]:
+        v = np.abs(V[:, k]); vm = v.max()
+        if vm > 0 and v[outer].max()/vm < decay:
+            out.append((w[k], V[:, k]))
+    return out
+
+
+def _cf_omega(parts, L, psi, k, Re, N, ym, yh, prev=None):
+    y, D1, U, Upp = _cf_grid(parts, L, psi, N, ym, yh)
+    m = cf_modes(y, D1, U, Upp, k, Re)
+    if not m:
+        return None
+    c = (max(m, key=lambda t: t[0].imag)[0] if prev is None
+         else min(m, key=lambda t: abs(t[0] - prev))[0])
+    return k*c, c
+
+
+def _cf_bracket(parts, L, k, Re, lo, hi, n, N, ym, yh):
+    prev_p, prev_f = None, None
+    for p in np.linspace(lo, hi, n):
+        r = _cf_omega(parts, L, float(p), k, Re, N, ym, yh)
+        if r is None:
+            continue
+        f = r[0].real
+        if prev_p is not None and prev_f*f <= 0.0:
+            return prev_p, prev_f, float(p)
+        prev_p, prev_f = float(p), f
+    return None
+
+
+def cf_stationary_at_k(parts, L, k, Re, window, N=_CF_N, ym=_CF_YMAX,
+                       yh=_CF_YHALF, itmax=24):
+    """(psi, omega, c_gx) of the stationary cross-flow wave at wavenumber k.
+
+    Returns None where no stationary wave exists on the branch, which is the
+    normal answer at zero sweep and at zero pressure gradient.
+    """
+    br = _cf_bracket(parts, L, k, Re, window[0], window[1], window[2],
+                     N, ym, yh)
+    if br is None:
+        return None
+    a, fa, b = br
+    p, r = None, None
+    for _ in range(itmax):
+        p = 0.5*(a + b)
+        r = _cf_omega(parts, L, p, k, Re, N, ym, yh)
+        if r is None:
+            return None
+        f = r[0].real
+        if abs(f) < 1e-12 or (b - a) < 1e-3:
+            break
+        if fa*f <= 0.0:
+            b = p
+        else:
+            a, fa = p, f
+    om, c = r
+    # a bracket produced by the branch jumping rather than by a root leaves
+    # omega_r finite; a converged one sits at 1e-6 or below
+    if abs(om.real) > 1e-5:
+        return None
+    dk, dp = 1e-4*max(k, 1e-3), 1e-3
+    rk = _cf_omega(parts, L, p, k + dk, Re, N, ym, yh, prev=c)
+    rp = _cf_omega(parts, L, p + dp, k, Re, N, ym, yh, prev=c)
+    if rk is None or rp is None:
+        return None
+    dwdk = (rk[0] - om)/dk
+    dwdp = (rp[0] - om)/np.radians(dp)
+    cp, sp = np.cos(np.radians(p)), np.sin(np.radians(p))
+    return p, om, float((cp*dwdk - sp/k*dwdp).real)
+
+
+def stationary_crossflow(beta, sweep_deg, Re_theta, parts=None, ks=None,
+                         half=14.0, N=_CF_N, ym=_CF_YMAX, yh=_CF_YHALF):
+    """Envelope amplification rate of the stationary cross-flow wave.
+
+    Returns (sigma, k, psi).  sigma is the growth of disturbance amplitude per
+    unit CHORDWISE distance in units of 1/theta, formed on the total edge
+    speed, maximised over wavenumber; the march integrates sigma/theta ds.
+
+    It is exactly zero where there is no cross-flow to be unstable: at zero
+    sweep, and at zero pressure gradient, where the chordwise and span-wise
+    similarity equations give f' = g identically.
+    """
+    L = float(sweep_deg)
+    if L <= 1e-9 or abs(float(beta)) < 1e-9:
+        return 0.0, 0.0, 0.0
+    parts = fsc_parts(float(beta)) if parts is None else parts
+    Re = float(Re_theta)/np.cos(np.radians(L))
+    ks = np.geomspace(0.03, 1.0, 22) if ks is None else np.asarray(ks, float)
+    mid = int(len(ks)//2)
+    wide = (L + 90.0 - half, L + 90.0 + half, 57)
+    seed = cf_stationary_at_k(parts, L, float(ks[mid]), Re, wide, N, ym, yh)
+    if seed is None:
+        return 0.0, 0.0, 0.0
+    best = (0.0, 0.0, 0.0)
+    # The stationary angle moves by well under a degree per wavenumber step, so
+    # each solve is seeded from its neighbour and only falls back to the wide
+    # window when that fails.  Two consecutive failures mean the branch has run
+    # off the end of the unstable band, and marching on out along it costs a
+    # wide scan per wavenumber for nothing.
+    for order in (range(mid, len(ks)), range(mid - 1, -1, -1)):
+        psi = seed[0]
+        miss = 0
+        for j in order:
+            r = cf_stationary_at_k(parts, L, float(ks[j]), Re,
+                                   (psi - 4.0, psi + 4.0, 9), N, ym, yh)
+            if r is None:
+                r = cf_stationary_at_k(parts, L, float(ks[j]), Re, wide,
+                                       N, ym, yh)
+            if r is None:
+                miss += 1
+                if miss >= 2:
+                    break
+                continue
+            miss = 0
+            psi, om, cgx = r
+            if cgx > 1e-9 and om.imag > 0.0:
+                s = om.imag/cgx
+                if s > best[0]:
+                    best = (float(s), float(ks[j]), float(psi))
+    return best
+
+
+# ----------------------------------------------------------------------
+# Tabulated stationary cross-flow amplification
+# ----------------------------------------------------------------------
+# The eigenvalue sweep above costs a few hundred Orr-Sommerfeld solves per
+# station, which a boundary-layer march cannot afford, so it is tabulated once
+# on the three parameters it depends on and interpolated thereafter.
+#
+# The three are not two.  For the cross-flow REYNOLDS NUMBER the sweep factors
+# out exactly - Re_cf = Re_theta sin(L)cos(L) K(lambda) - and a table in lambda
+# alone suffices.  For the growth RATE it does not: sigma/(sin L cos L) rises
+# monotonically with sweep, by a factor of nearly three between 20 and 55
+# degrees at fixed lambda and Re_theta, while sin(L)cos(L) itself turns over at
+# 45 degrees.  The stability problem sees the sweep twice, once in the
+# amplitude of the cross-flow profile and again in the mixture of chordwise and
+# span-wise flow the streamwise profile carries, and only the first of those is
+# what the algebraic surrogate models.
+CF_LAM_BETA = np.array([-0.10, -0.05, -0.02, 0.0, 0.03, 0.06, 0.10, 0.15,
+                        0.20, 0.30, 0.40, 0.55, 0.70, 0.90, 1.20, 1.60,
+                        2.00, 2.50, 3.00])
+CF_SWEEP = np.array([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0])
+# The lowest node is chosen so that clamping below it is exact rather than a
+# guess: the stationary mode is damped at every point of the table at
+# Re_theta = 20, including the strongly-accelerated, highly-swept corner the
+# leading edge of a swept wing runs through, where growth first appears between
+# Re_theta = 20 and 35.  An earlier grid stopped at 50 and held the rate at its
+# value there for everything below, which invents amplification in exactly the
+# region where the momentum thickness is smallest and sigma/theta is largest.
+CF_RETH = np.geomspace(20.0, 2000.0, 12)
+CF_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "crossflow_db.npz")
+
+
+# The wavenumber at which the envelope peaks is a property of the profile
+# shape and is very nearly independent of Reynolds number - 0.18 at every
+# Re_theta from 100 to 800 on the sections here - because the instability is
+# inflectional and its Reynolds-number dependence is a saturation, not a shift.
+# So the full wavenumber sweep is done once per (beta, sweep) and the other
+# Reynolds numbers search a band around the wavenumber it found.  A blind
+# sweep at all ten costs three and a half hours for this table; this costs one.
+_CF_SEED_RETH = 400.0
+_CF_BAND = np.geomspace(0.45, 2.2, 7)
+
+
+def _cf_slab(arg):
+    i, beta = arg
+    parts = fsc_parts(float(beta))
+    out = np.zeros((CF_SWEEP.size, CF_RETH.size))
+    for j, L in enumerate(CF_SWEEP):
+        _, kpk, _ = stationary_crossflow(float(beta), float(L), _CF_SEED_RETH,
+                                         parts=parts)
+        ks = None if kpk <= 0.0 else kpk*_CF_BAND
+        for m, R in enumerate(CF_RETH):
+            out[j, m] = stationary_crossflow(float(beta), float(L), float(R),
+                                             parts=parts, ks=ks)[0]
+    return i, out, float(parts[5])
+
+
+def build_crossflow_database(path=CF_DB_PATH, nproc=4, verbose=True,
+                             resume=True):
+    """Generate and store the stationary cross-flow amplification table.
+
+    Checkpointed per Hartree parameter, like build_database: this table is
+    hours rather than minutes, and an interrupted run resumes from the slabs
+    already on disk.
+    """
+    from multiprocessing import Pool
+    ck = os.path.join(os.path.dirname(os.path.abspath(path)), "_cf_slabs")
+    os.makedirs(ck, exist_ok=True)
+    todo = [(i, float(b)) for i, b in enumerate(CF_LAM_BETA)
+            if not (resume and os.path.exists(
+                os.path.join(ck, "cf_%03d.npz" % i)))]
+    if verbose:
+        print("cross-flow database: %d beta x %d sweep x %d Re_theta = %d "
+              "wave-angle sweeps; %d of %d slabs still to do"
+              % (CF_LAM_BETA.size, CF_SWEEP.size, CF_RETH.size,
+                 CF_LAM_BETA.size*CF_SWEEP.size*CF_RETH.size,
+                 len(todo), CF_LAM_BETA.size), flush=True)
+    if todo:
+        with Pool(nproc) as p:
+            for i, slab, th in p.imap_unordered(_cf_slab, todo):
+                np.savez(os.path.join(ck, "cf_%03d.npz" % i), sigma=slab,
+                         th_eta=th)
+                if verbose:
+                    done = len([f for f in os.listdir(ck)
+                                if f.endswith(".npz")])
+                    print("  beta = %+.2f done (%d/%d)"
+                          % (CF_LAM_BETA[i], done, CF_LAM_BETA.size),
+                          flush=True)
+    sig, th = [], []
+    for i in range(CF_LAM_BETA.size):
+        d = np.load(os.path.join(ck, "cf_%03d.npz" % i))
+        sig.append(d["sigma"]); th.append(float(d["th_eta"]))
+    sigma = np.array(sig); th = np.array(th)
+    lam = CF_LAM_BETA*th*th
+    k = np.argsort(lam)
+    np.savez_compressed(path, beta=CF_LAM_BETA[k], lam=lam[k], th_eta=th[k],
+                        sweep=CF_SWEEP, Re_theta=CF_RETH, sigma=sigma[k])
+    if verbose:
+        print("wrote %s   sigma range %.4g .. %.4g"
+              % (path, float(sigma.min()), float(sigma.max())))
+    return sigma
+
+
+_CF_DB = None
+
+
+def load_crossflow_database(path=CF_DB_PATH):
+    """Load the tabulated cross-flow rates, building them if absent."""
+    global _CF_DB
+    if _CF_DB is None:
+        if not os.path.exists(path):
+            build_crossflow_database(path)
+        d = np.load(path)
+        _CF_DB = (d["lam"], d["sweep"], d["Re_theta"], d["sigma"])
+    return _CF_DB
+
+
+def crossflow_sigma(lam, sweep_deg, Re_theta):
+    """Tabulated stationary cross-flow amplification rate, sigma*theta.
+
+    Trilinear in (lambda, sweep, log Re_theta).  Clamped at every edge: the
+    rate saturates with Reynolds number, as an inflectional instability must,
+    so holding it at the last node beyond the table is the right extrapolation
+    and not a fallback.
+    """
+    LAM, SW, RE, S = load_crossflow_database()
+    if float(sweep_deg) <= 1e-9:
+        return 0.0
+    # Below the lowest tabulated Reynolds number the rate is taken as zero, not
+    # held at the floor value.  The mode is damped there over all but six of
+    # the table's 152 (lambda, sweep) cells, and those six are the
+    # plane-stagnation corner - beta >= 2 with more than 60 degrees of local
+    # sweep - which a march passes through only in its first few stations, at
+    # the attachment line, where a local-similarity description is not the
+    # right one in any case.  Holding the rate at the floor instead invents
+    # amplification exactly where the momentum thickness is smallest and
+    # sigma/theta is therefore largest: on the ten swept conditions of
+    # 06_validation/crossflow_amplification.csv the two treatments differ by at
+    # most 6 per cent in N, against 40 per cent when the floor stood at
+    # Re_theta = 50.
+    if float(Re_theta) < RE[0]:
+        return 0.0
+    lam = float(np.clip(lam, LAM[0], LAM[-1]))
+    sw = float(np.clip(sweep_deg, SW[0], SW[-1]))
+    re = float(np.clip(Re_theta, RE[0], RE[-1]))
+
+    def _w(grid, v):
+        i = int(np.clip(np.searchsorted(grid, v) - 1, 0, len(grid) - 2))
+        t = (v - grid[i])/(grid[i + 1] - grid[i])
+        return i, float(np.clip(t, 0.0, 1.0))
+
+    i, a = _w(LAM, lam)
+    j, b = _w(SW, sw)
+    m, c = _w(np.log(RE), np.log(re))
+    v = 0.0
+    for di, wa in ((0, 1.0 - a), (1, a)):
+        for dj, wb in ((0, 1.0 - b), (1, b)):
+            for dm, wc in ((0, 1.0 - c), (1, c)):
+                v += wa*wb*wc*S[i + di, j + dj, m + dm]
+    return float(max(v, 0.0))
+
+
+# ----------------------------------------------------------------------
 # Two-equation laminar closure from the Falkner-Skan family
 # ----------------------------------------------------------------------
 # A one-parameter method slaves the shape factor to the local pressure

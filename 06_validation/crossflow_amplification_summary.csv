@@ -1,0 +1,4 @@
+dataset,n_points,mean_N_cf,sd_N_cf,coeff_of_variation_pct,note
+Dagenhart & Saric (calibration),6,7.02,1.37,19.6,critical N this facility requires
+Boltz et al. (independent),4,5.67,1.63,28.7,critical N this facility requires
+vs SALLY (three conditions),3,0.59,0.68,,mean |N - N_SALLY| and RMS in the last two columns

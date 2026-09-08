@@ -371,6 +371,8 @@ def setup_tables():
          "True is the model; False is the 'no bubble closure' ablation"),
         ("use_os_db",CAL["use_os_db"],"amplification rates read from the tabulated Orr-Sommerfeld solutions",
          "True is the model; False selects the Drela-Giles envelope fit, the third ablation"),
+        ("cf_stability",CAL["cf_stability"],"crossflow advanced from the solved stationary eigenvalue problem instead of the C1 threshold (diagnostic path only)",
+         "OFF; checked against Dagenhart & Saric's SALLY N-factors and scored in crossflow_formulations.csv, and it does not transfer between facilities any better"),
         ("cf_exact",CAL["cf_exact"],"exact Falkner-Skan-Cooke K(lambda) in place of the constant surrogate (ablation path only)",
          "False is the model; True was tried and is reported in Sec. IV.C, where it makes the two swept wings agree less, not more"),
         ("len_re_x",CAL["len_re_x"],

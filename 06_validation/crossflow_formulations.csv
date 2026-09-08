@@ -6,3 +6,4 @@ formulation,calibration_err_pct,independent_err_pct,pooled_err_pct,helps_indepen
 exact Falkner-Skan-Cooke K(lambda) for the thickness,44.3,50.4,46.7,True,True
 "exact K(lambda), local C1 threshold",51.2,44.3,48.4,True,True
 streamwise frame (no normal-plane transformation),14.5,52.3,29.6,False,False
+"solved stationary cross-flow eigenvalue problem, N_cf = 7.0",16.7,83.7,43.5,False,False
