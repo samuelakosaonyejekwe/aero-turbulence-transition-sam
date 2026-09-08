@@ -141,6 +141,23 @@ VALIDATION = dict(
 # NASA/TP-1999-209344.  This is the only case in which the cross-flow
 # criterion is the selected one, and the only measurement against which
 # it is calibrated.
+#
+# CHECKED AGAINST THE SOURCE.  All six (R_c, x/c_tr) pairs below reproduce
+# Table 2 of that report exactly - it is a printed TABLE, not a figure, so
+# unlike the two figure-digitised sets in this file it can be and now is
+# verified line by line, and tools/smoke.py holds it there.  The report also
+# gives the 45 deg sweep ("chosen because the crossflow instability had maximum
+# strength at this angle"), the 1.83 m STREAMWISE chord, and alpha = -4 deg.
+#
+# Tu_pct below is the EMPTY-TUNNEL level: the report says the honeycomb and
+# screens hold turbulence "to less than 0.02 percent (high pass at 2 Hz) over
+# the entire velocity range", but adds that with the large-chord model and its
+# end liners installed it "generally remains less than 0.09 percent U_inf".
+# The cross-flow branch reads Tu only through N_crit, and Mack's relation is
+# clamped below 0.08 per cent, so 0.02 and 0.09 give 7.58 and 7.36 - a
+# difference the branch cannot resolve.  The empty-tunnel figure is kept
+# because it is the one the report states as the facility's, and the spread is
+# noted here rather than hidden.
 SWEPT = dict(
     name      = "Dagenhart & Saric 45 deg swept NLF(2)-0415 (cross-flow)",
     sweep_deg = 45.0,

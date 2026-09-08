@@ -337,6 +337,24 @@ def section_coordinates_against_their_source():
     assert all(0.0 <= s_ <= 50.0 for s_ in C.SWEPT2["sweep_deg"]), \
         "a sweep angle outside the 0 to 50 deg TN D-338 tested"
 
+    # Dagenhart & Saric, Table 2 of NASA/TP-1999-209344, verbatim.  This one is
+    # a printed table rather than a figure, so it can be checked line by line -
+    # and the cross-flow constant is set on it, which makes it the single most
+    # load-bearing dataset in the project.
+    table_2 = [(1.92e6, 0.78), (2.19e6, 0.73), (2.37e6, 0.58),
+               (2.73e6, 0.45), (3.27e6, 0.33), (3.73e6, 0.30)]
+    got = list(zip(C.SWEPT["Re_c"], C.SWEPT["x_tr_c"]))
+    assert len(got) == len(table_2), \
+        "SWEPT has %d points; Table 2 has %d" % (len(got), len(table_2))
+    for (r_w, x_w), (r_g, x_g) in zip(table_2, got):
+        assert abs(r_g - r_w)/r_w < 1e-6 and abs(x_g - x_w) < 1e-9, \
+            ("SWEPT departs from TP-1999-209344 Table 2: file has "
+             "(%.3e, %.3f), the report has (%.3e, %.3f)" % (r_g, x_g, r_w, x_w))
+    assert abs(C.SWEPT["sweep_deg"] - 45.0) < 1e-9
+    assert abs(C.SWEPT["chord_m"] - 1.83) < 1e-9, \
+        "the report states a 1.83 m streamwise chord"
+    assert abs(C.SWEPT["alpha_deg"] + 4.0) < 1e-9
+
 
 @check
 def stability_against_published_eigenvalues():

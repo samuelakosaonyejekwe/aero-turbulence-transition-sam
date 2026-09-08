@@ -313,8 +313,19 @@ is evaluated there.
 
 Each facility is internally consistent — Boltz to 4 % across four sweep angles
 and a factor of three in chord Reynolds number — and the two differ by 53 %.
-That is the shape of a receptivity difference, not of a criterion with the
-wrong form.  Two attempts to close the gap fail and are recorded rather than
+
+**The two reports themselves suggest why.** TN D-338 states its own crossflow
+Reynolds numbers: *"The critical values of crossflow Reynolds number for vortex
+formation ... range from about 135 to 190"*, while *"the values of crossflow
+Reynolds number for beginning transition were found to be between 190 and
+260."* The values this work's surrogate requires — **153** on Dagenhart & Saric
+and **234** on Boltz — fall in those two ranges respectively. That is consistent
+with the two datasets marking two *different events* — vortex formation against
+the beginning of transition — rather than with one criterion needing two
+constants. It is corroboration, not calibration: whether the surrogate
+Re_θ2 = 0.47 Re_θ sin Λ is on the same scale as the crossflow Reynolds number
+TN D-338 forms is not established here. But it is external evidence pointing at
+a mechanism, and the receptivity attribution below was reached without it.  Two attempts to close the gap fail and are recorded rather than
 dropped: the exact Falkner–Skan–Cooke factor K(λ) in place of the constant
 surrogate makes it worse (pooled variation 77 % against 24 %, and the ratio
 between the two sets inverts), and giving the cross-flow branch its own
