@@ -1596,6 +1596,17 @@ def plot_case(key):
     finish(fig,f"{VP}/val_{key}.png",
            caption=f"Source: {v['source'][:95]}...")
 
+def _short(key):
+    """The case key as the report and the README write it.
+
+    "T3AM" is a filename-safe spelling of the ERCOFTAC T3A- plate, and every
+    other artefact in this project calls that plate T3A-.  The combined figure
+    was labelling its axis with the key, so a reader comparing the figure with
+    the table beside it saw two names for one plate.
+    """
+    return {"T3AM": "T3A\u207b"}.get(key, key)
+
+
 def plot_combined(df_sum):
     fig,ax=new_fig(8.6,5.4)
     cases=list(CASES)
@@ -1607,16 +1618,26 @@ def plot_combined(df_sum):
     pred=[lookup[k] for k in cases]
     ax.bar(x-w/2,exp,w,color=PALETTE[1],label="experiment Re_θt")
     ax.bar(x+w/2,pred,w,color=PALETTE[0],label="UTSS predicted Re_θt")
-    # a constant offset on a log axis is a large gap at Re_theta = 180 and no
-    # gap at all at 1160; scale it instead
+    # LINEAR, and the limit set after nothing.  This axis was set to "log"
+    # AFTER set_ylim, so the limit was discarded; and bars drawn from a zero
+    # baseline have no bottom on a log axis at all, so every one of the ten
+    # rendered as a full-height column running off the top of the frame with
+    # its value label written over the title.  The figure is in the report and
+    # in the README's figure table, and it had been unreadable in both.
+    #
+    # A bar chart needs the zero baseline it draws from, and these five plates
+    # span 168 to 1101 - a factor of 6.6, well inside what a linear axis
+    # shows.  The label offset is a fraction of the RANGE, which is what the
+    # old comment was reaching for when it scaled by 1.04 on a log axis.
+    top = max(max(exp),max(pred))*1.18
     for xi,(e,p) in enumerate(zip(exp,pred)):
-        ax.text(xi-w/2,e*1.04,f"{e:.0f}",ha="center",fontsize=10,color=INK)
-        ax.text(xi+w/2,p*1.04,f"{p:.0f}",ha="center",fontsize=10,color=INK)
-    ax.set_ylim(top=max(max(exp),max(pred))*1.35)
-    ax.set_yscale("log"); ax.set_xticks(x); ax.set_xticklabels(cases)
+        ax.text(xi-w/2,e+0.018*top,f"{e:.0f}",ha="center",fontsize=10,color=INK)
+        ax.text(xi+w/2,p+0.018*top,f"{p:.0f}",ha="center",fontsize=10,color=INK)
+    ax.set_ylim(0, top)
+    ax.set_xticks(x); ax.set_xticklabels([_short(k) for k in cases])
     ax.set_ylabel("transition-onset  Re_θt")
     ax.set_title("Universal validation: transition-onset Re_θt, one calibration set")
-    ax.legend(fontsize=10)
+    ax.legend(fontsize=10, loc="upper left")
     finish(fig,f"{VP}/val_combined_Re_theta_t.png")
 
 if __name__=="__main__":

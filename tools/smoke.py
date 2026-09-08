@@ -1196,6 +1196,48 @@ def sally_n_factors_sit_on_the_conditions_they_were_computed_for():
         % (got, want)
 
 
+@check
+def no_axis_limit_is_set_before_its_scale():
+    """set_ylim before set_yscale silently discards the limit"""
+    import ast
+    # This is how the combined validation figure came to render all ten of its
+    # bars as full-height columns running off the top of the frame, with their
+    # value labels written over the title, in both the report and the README:
+    # set_ylim was called, and then set_yscale("log") replaced the limits.  It
+    # is a source-level fault with no runtime symptom other than the picture,
+    # which is why nothing caught it for so long.
+    pairs = {"set_ylim": ("set_yscale", "semilogy", "loglog"),
+             "set_xlim": ("set_xscale", "semilogx", "loglog")}
+    bad = []
+    for f in ("gen_validation.py", "gen_postprocessing.py", "gen_mesh_setup.py",
+              "gen_geometry.py", "gen_assets.py", "build_docx.py"):
+        p = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), f)
+        if not os.path.exists(p):
+            continue
+        tree = ast.parse(open(p).read())
+        for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+            calls = []
+            for n in ast.walk(fn):
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
+                    # only the same receiver counts: one long function can hold
+                    # several axes, and comparing across them is a false alarm
+                    recv = getattr(n.func.value, "id", None)
+                    if recv:
+                        calls.append((n.lineno, recv, n.func.attr))
+            calls.sort()
+            for i, (ln, recv, a) in enumerate(calls):
+                if a not in pairs:
+                    continue
+                for l2, r2, b in calls[i+1:]:
+                    if r2 == recv and b in pairs[a]:
+                        bad.append("%s:%d %s.%s() then %s() at line %d in %s"
+                                   % (f, ln, recv, a, b, l2, fn.name))
+                        break
+    assert not bad, "an axis limit is set before its scale:\n   " + \
+        "\n   ".join(bad)
+
+
 def main():
     only = None
     if "-k" in sys.argv:

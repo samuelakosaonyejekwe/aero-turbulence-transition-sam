@@ -14,7 +14,7 @@ from uplot import (apply_style, INK, INK_SOFT, PALETTE, FIELD_CMAP, CF_CMAP,
                    GAMMA_CMAP, new_fig, finish)
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, FuncFormatter
 
 def _chord_interp(xs, vals, xq):
     """Interpolate a surface quantity onto a chordwise station list.
@@ -787,9 +787,17 @@ def plot_remaining_csvs():
     for ax,(k,lab) in zip(axs,keys):
         ax.bar(names,fc[k],color=[PALETTE[2],PALETTE[1]],width=0.6)
         ax.set_title(lab,fontsize=11); ax.tick_params(axis="x",labelrotation=15,labelsize=9)
-        if k=="Re_MAC": ax.set_yscale("log")
+        # Re_MAC was on a log axis, and a bar whose baseline is not zero no
+        # longer has a length proportional to its value: 1.07e7 against
+        # 6.41e6 is a factor of 1.67 and it read as about four.  Linear, in
+        # millions, which is the only panel that needs a unit in its label.
         for i,v in enumerate(fc[k]):
-            ax.text(i,v,f"{v:g}",ha="center",va="bottom",fontsize=8.5,color=INK)
+            ax.text(i,v,("%.2f" % (v/1e6)) if k=="Re_MAC" else f"{v:g}",
+                    ha="center",va="bottom",fontsize=8.5,color=INK)
+        if k=="Re_MAC":
+            ax.set_title(lab+"  [millions]",fontsize=11)
+            ax.yaxis.set_major_formatter(
+                FuncFormatter(lambda y,_: "%g"%(y/1e6)))
         ax.margins(y=0.18)
     fig.suptitle("Flight-condition comparison: cruise vs climb (flow_conditions.csv)",
                  color=INK)
