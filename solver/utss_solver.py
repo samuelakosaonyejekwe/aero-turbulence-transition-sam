@@ -971,9 +971,10 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # H = H(lambda) assigns the same profile, and hence the same
         # amplification rate, to two layers that reached the same local
         # gradient by different routes.  Since the tabulated growth rate rises
-        # sevenfold between the Blasius profile and H = 3.9, that distinction
-        # decides where transition is placed on the forward half of a
-        # natural-laminar-flow section.  The march starts where the edge
+        # by at least eightfold between the Blasius profile and H = 3.9 - and
+        # by eighteen at Re_theta = 300, never by the "sevenfold" this comment
+        # used to claim - that distinction decides where transition is placed
+        # on the forward half of a natural-laminar-flow section.  The march starts where the edge
         # velocity first reaches a twentieth of its maximum, seeded from the
         # closed-form solution, because dtheta/dx is singular at a stagnation
         # point.

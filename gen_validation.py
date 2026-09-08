@@ -870,8 +870,11 @@ def crossflow_receptivity(write=True, quiet=False):
         N_cf  ~  sigma * (run length) / theta  ~  sqrt(Re_c),
 
     which is a property of the chord Reynolds number and not of the cross-flow
-    instability.  The two facilities differ by a factor of seven in Re_c, so the
-    N they require is not comparable: measured at the transition station each
+    instability.  The two facilities do not overlap in Re_c at all - the ranges
+    are in crossflow_reynolds_trend.csv and are not restated here, because the
+    factor between them was given as seven in this docstring and in the report
+    and as six in the README, for one quantity - so the N they require is not
+    comparable: measured at the transition station each
     reports, it is 0.0 to 11.9 for Dagenhart & Saric and 43.1 to 129.2 for Boltz
     et al., with scatter larger than the difference.  (Those ranges, and the
     coefficients of variation below, are what this function writes into

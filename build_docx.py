@@ -414,8 +414,9 @@ bullet("Integration: the Squire–Young formula returns the chordwise profile dr
        "the cross-flow mechanism extends the solution to the full 3-D wing.")
 # The tabulated neutral point is computed, not typed: this paragraph read
 # "resolves it to the nearest node of its Reynolds-number grid, Re_theta = 210",
-# and 210 is neither the value (209) nor a node (RET_GRID goes 204.21 -> 233.92
-# with nothing between).
+# and 210 is neither the value (208) nor a node (RET_GRID goes 204.21 -> 233.92
+# with nothing between).  The paragraph reads it from the function; only this
+# note carried a figure, and it had drifted from 208 to "209" already.
 import stability as _stab_doc
 _NEUT, _NEUT_LO, _NEUT_HI = _stab_doc.tabulated_neutral_Re_theta()
 _NEUT_SOLVER = _stab_doc.neutral_Re_theta()
@@ -520,6 +521,20 @@ def _narrative_probes():
                _cr["Tu_pct"], sweep_deg=_W["le_sweep_deg"], **_kw)
     out["cd_unswept"] = float(_u["Cd"])*1e4
     out["cd_swept"] = float(_s12["Cd"])*1e4
+    # What share of the swept C_d the SPAN-WISE term carries.  The narrative
+    # said four per cent and it is nearly seven, which matters because the
+    # sentence goes on to bound what the theta_12 closure is worth: that bound
+    # is this share times the closure's own error, so it moves with it.
+    import numpy as _np
+    _L = _np.radians(_W["le_sweep_deg"])
+    _span = _tot = 0.0
+    for _s in _s12["surfaces"].values():
+        _r_te = _s["Ue_te_ratio"]; _p = (_s["H_te_squire_young"] + 5.0)/2.0
+        _sp = _np.sin(_L)**2*_r_te
+        _ch = _np.cos(_L)**2*_r_te**_p
+        _span += 2.0*_s["theta_te_c"]*_np.cos(_L)*_sp
+        _tot += 2.0*_s["theta_te_c"]*_np.cos(_L)*(_sp + _ch)
+    out["span_share_pct"] = 100.0*_span/_tot
     return out
 
 
@@ -558,9 +573,12 @@ para("This work previously applied cos²Λ to the drag as well as to the lift, j
  + "), which is what a 12° sweep should do to a viscous drag; the drag REDUCTION "
  "relative to the fully-turbulent reference is unchanged, both configurations scaling "
  "together. θ_12 is taken as θ_n, the small-cross-flow closure w/W = u/U_e,n, which is exact "
- "at zero pressure gradient and is the standard turbulent one; the span-wise term is 4 per "
- "cent of the total at this sweep, so the closure is worth under half a per cent of C_d.",
- italic=True, size=10)
+ "at zero pressure gradient and is the standard turbulent one; the span-wise term carries "
+ + ("%.1f" % _OFF["span_share_pct"])
+ + " per cent of the total at this sweep (this said 4), so an error of a tenth in that closure "
+ "is worth "
+ + ("%.2f" % (0.1*_OFF["span_share_pct"]))
+ + " per cent of C_d.", italic=True, size=10)
 
 # ======================================================================
 h1("5.  Why UTSS is Better — Comparison with Existing Solvers")
@@ -1086,6 +1104,10 @@ _tr_bol = _trend.loc["Boltz et al. (independent)"]
 _cfs = pd.read_csv("06_validation/crossflow_criticals_summary.csv")
 _cfs = _cfs[_cfs.criterion == "surrogate Re_theta2"].set_index("dataset")
 _rcp = pd.read_csv("06_validation/crossflow_receptivity_summary.csv")
+# The two facilities' chord Reynolds ranges.  The factor between them was typed
+# as seven here and in gen_validation and as six in the README, for the same
+# quantity; the ranges themselves do not need a factor and cannot disagree.
+_rtr = pd.read_csv("06_validation/crossflow_reynolds_trend.csv")
 _cts = pd.read_csv("06_validation/crossflow_threshold_sweep.csv")
 _cfe = pd.read_csv("06_validation/crossflow_criticals_summary.csv")
 _cfe = _cfe[_cfe.criterion != "surrogate Re_theta2"].set_index("dataset")
@@ -1262,9 +1284,12 @@ para("The gap cannot be converted into a roughness ratio by this method, and say
  "integrates is read off a separated STREAMWISE profile and is nearly Reynolds-independent — "
  "0.0417 at Re_θ = 200 against 0.0461 at 8000 — so N_cf is essentially σ times run length over "
  "θ, which scales as √Re_c: a property of the chord Reynolds number, not of the cross-flow "
- "instability. The two facilities differ by a factor of seven in Re_c, and the N they require "
+ "instability. The two facilities do not overlap in chord Reynolds number at all — "
+ "%.2f–%.2f million against %.1f–%.1f — and the N they require "
  "at their own measured stations is 0.0–11.9 and 43.1–129.2 respectively "
  "(@@TAB:cf_recept@@), while the critical cross-flow Reynolds number is tight within each, at "
+ % (_rtr.Re_c_min.iloc[0]/1e6, _rtr.Re_c_max.iloc[0]/1e6,
+    _rtr.Re_c_min.iloc[1]/1e6, _rtr.Re_c_max.iloc[1]/1e6)
  + ("%.1f and %.1f" % (_rcp.Re_theta2_cov_pct.iloc[0], _rcp.Re_theta2_cov_pct.iloc[1]))
  + " per cent. The elimination behind the receptivity attribution was therefore "
  "incomplete: it had not considered that the branch's own rate carries no cross-flow physics, "

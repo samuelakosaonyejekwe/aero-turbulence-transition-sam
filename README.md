@@ -481,8 +481,9 @@ transition location by a factor of 3.5 on T3A, 2.5 on T3A⁻ and 2.0 on T3B
 
 **Cross-flow.** One explanation is ruled out rather than doubted: within
 Dagenhart & Saric the required critical value *falls* with chord Reynolds number
-(see 06_validation/crossflow_reynolds_trend.csv), while Boltz sits at six times the Reynolds number
-and requires 53 % *more*. The between-facility offset has the opposite sign to
+(see 06_validation/crossflow_reynolds_trend.csv), while Boltz sits at chord
+Reynolds numbers that do not overlap Dagenhart's at all — 9.5–27 million
+against 1.9–3.7 — and requires 53 % *more*. The between-facility offset has the opposite sign to
 the within-facility trend, so no monotone function of Re_c carries one set into
 the other (`06_validation/crossflow_reynolds_trend.csv`). That leaves
 receptivity — the leading-edge finish neither report documents — by elimination.
