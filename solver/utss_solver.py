@@ -1875,17 +1875,25 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         hypersensitive to the panel distribution - at the last point itself the
         cruise section returns 18 counts against 47.
 
-        WHAT THAT CHOICE COSTS.  The result is insensitive to the PANEL COUNT
-        at this station, which is what this docstring used to say; it is NOT
-        insensitive to the station.  The drag runs from about 42.5 counts at
-        0.88c to 47.3 at 0.98c, half a count per per cent of chord, which is an
-        order more than the transition-length constant is worth over a factor
-        of four.  That is measured into
-        04_solution/squire_young_station_sensitivity.csv rather than left
-        undeclared.
+        WHAT THAT CHOICE COSTS - AND IT IS NOT WHAT THIS PROJECT FIRST SAID.
+        The drag runs from about 42.5 counts at 0.88c to 47.3 at 0.98c, and
+        that was reported as a five-count uncertainty band on the headline
+        number.  It is not a band.  It is friction being correctly INCLUDED:
+        between those two stations the layer accumulates 3.94 counts of real
+        skin friction, measured by integrating C_f directly, and the formula
+        moves 3.65.  A forward station is not a worse estimate of the same
+        drag; it is the drag of a shorter aerofoil.
 
-        WHY THE STATION CANNOT SIMPLY BE MOVED TO THE TRAILING EDGE, which is
-        where Squire-Young wants it.  The UTSS-NLF16 has a FINITE-ANGLE
+        The quantity that matters is therefore how much friction the chosen
+        station still OMITS, and that is 0.157 counts at cruise and 0.128 at
+        climb - under a fifth of a count.  The station is converged to that.
+        04_solution/squire_young_station_sensitivity.csv carries the omitted
+        friction beside the drag at every station, and their sum, which is the
+        same number wherever it is evaluated and is what makes the point.
+
+        WHY IT IS STILL NOT MOVED TO THE TRAILING EDGE, which is where
+        Squire-Young wants it, even though only a fifth of a count is left
+        there.  The UTSS-NLF16 has a FINITE-ANGLE
         trailing edge - 26.8 degrees included, measured off the section, not a
         cusp - so the trailing edge is a stagnation point of the inviscid flow
         and U_e goes to zero there PHYSICALLY.  The panel method's collapse is
@@ -1904,10 +1912,15 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         depend on where Head's clamp happens to bite, which is a numerical
         threshold rather than a physical station.
 
-        WHAT WOULD RESOLVE IT is a wake march - carrying the momentum integral
-        past the trailing edge with no wall until the pressure has recovered,
-        which is how a coupled panel code handles a blunt or wedge trailing
-        edge - and that is a formulation extension, not a fix to this routine.
+        A WAKE MARCH WOULD NOT BE WORTH IT.  That was named here as the fix,
+        on the belief that five counts were at stake.  A fifth of a count is,
+        and closing it properly needs viscous-inviscid coupling - displacement
+        feedback that removes the inviscid stagnation point - not a wake march
+        bolted onto an uncoupled solution.  Marching this solver's own aft
+        state to the trailing edge and applying the wake relation returns 18
+        counts against 47, because by then theta has grown to a per cent of
+        chord in response to a deceleration the viscous flow does not have.
+        The aft two per cent is contaminated, and it is worth 0.16 counts.
 
         AND WHETHER THE SHAPE FACTOR THERE IS SOLVED.  Head's entrainment
         method has no validity past separation, so H_turb is clamped at 2.8.

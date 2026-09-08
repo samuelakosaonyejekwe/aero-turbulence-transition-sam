@@ -680,6 +680,32 @@ def squire_young_station_is_declared():
         assert abs(u["x_squire_young"] - xr) < 0.03, \
             "Squire-Young evaluated at %.4f, asked for %.2f" % (u["x_squire_young"], xr)
     assert cds[0.98] > cds[0.90], "the drag no longer rises towards the trailing edge"
+
+    # The rise between stations is FRICTION, not scatter: the drag counted so
+    # far plus the friction still ahead is the same number wherever it is
+    # evaluated.  This is what says the station is converged rather than
+    # uncertain, and it is the statement this project first got backwards.
+    _tz = getattr(np, "trapezoid", None) or np.trapz
+    tot = {}
+    for xr in (0.90, 0.98):
+        r = solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                          W["MAC"], cr["Tu_pct"], cal=dict(sy_x_ref=xr), **kw)
+        cosL = r["cos_sweep"]; chord = W["MAC"]*cosL; Un = cr["U_inf"]*cosL
+        omit = 0.0
+        for sf in ("upper", "lower"):
+            s_ = r["surfaces"][sf]
+            x_ = np.asarray(s_["x"], float); cf_ = np.asarray(s_["Cf"], float)
+            ue_ = np.asarray(s_["Ue"], float)/Un
+            a_ = np.asarray(s_["s"], float)/chord
+            m_ = x_ >= xr
+            if m_.sum() > 1:
+                omit += _tz(cf_[m_]*ue_[m_]**2, a_[m_])
+        tot[xr] = r["Cd"]*1e4 + omit*1e4
+    assert abs(tot[0.98] - tot[0.90]) < 1.5, (
+        "drag-plus-omitted-friction is not station-invariant: %.2f at 0.90c "
+        "against %.2f at 0.98c.  The spread across stations would then be a "
+        "real uncertainty rather than friction being included."
+        % (tot[0.90], tot[0.98]))
     assert abs(cds[0.98] - cds[0.90]) > 1.0, (
         "the evaluation station is worth less than a count now (%.2f vs %.2f); "
         "the sensitivity table and the text that quotes it need re-checking"

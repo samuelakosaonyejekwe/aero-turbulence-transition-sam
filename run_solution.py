@@ -492,30 +492,54 @@ def transition_length_sensitivity():
 
 
 def squire_young_station_sensitivity():
-    """What the case-study drag owes to WHERE Squire-Young is evaluated.
+    """Where Squire-Young is evaluated, and how nearly converged 0.98c is.
 
-    The formula wants the trailing edge, and a panel method cannot supply one:
-    it drives the edge velocity towards the stagnation value there, and
-    Squire-Young raises that ratio to (H+5)/2, so the last control point returns
-    18 counts against 47.  The evaluation is therefore pulled forward to 0.98c.
+    The formula wants the trailing edge, and this section has a 26.8 degree
+    wedge one, so the trailing edge is an inviscid stagnation point: the edge
+    velocity goes to zero there physically and (U_e/U_inf)^((H+5)/2)
+    degenerates.  At the last control point the formula returns 18 counts
+    against 47.  The evaluation is therefore pulled forward to cal["sy_x_ref"].
 
-    That is a choice, and unlike the transition-length constant - whose cost is
-    already measured next door, at a tenth of a count over a factor of four -
-    nothing measured this one.  It is worth about half a count per per cent of
-    chord.  The sweep also reports whether the shape factor at each station is
-    still solved or has reached Head's H = 2.8 clamp, because past the clamp the
-    drag is being formed from a bound.
+    THE SPREAD ACROSS STATIONS IS NOT AN UNCERTAINTY BAND, which is how this
+    project first reported it.  It is friction being correctly included.
+    Between 0.88c and 0.98c the layer accumulates 3.94 counts of real skin
+    friction and the formula moves 3.65 - the same quantity, to a third of a
+    count.  A forward station is not a different estimate of the same drag; it
+    is the drag of a shorter aerofoil.
+
+    What matters is therefore how much friction 0.98c still omits, and that is
+    measured directly here by integrating C_f over the remaining surface:
+    0.157 counts at cruise and 0.128 at climb, under a fifth of a count either
+    way.  The station is converged to that, not uncertain by five counts.  Past
+    0.98c the formula turns over and falls, which is the inviscid singularity
+    taking hold rather than drag being lost.
+
+    The sweep also reports whether the shape factor at each station is still
+    solved or has reached Head's H = 2.8 clamp, and carries an INDEPENDENT
+    route to the drag - the integrated skin friction - so the two can be
+    compared without going through Squire-Young at all.
     """
     X,Y=C.nlf16_panel_points(130); rows=[]
-    for xr in (0.88,0.90,0.92,0.94,0.96,0.98,0.99):
+    for xr in (0.88,0.90,0.92,0.94,0.96,0.98,0.99,1.00):
         r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
                         cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
                         mach=cr["mach"],T_inf_K=cr["T_inf_K"],
                         cal=dict(sy_x_ref=xr))
         u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
+        # the friction still ahead of this station, integrated directly: this
+        # is what evaluating here instead of at the trailing edge omits
+        _tz=getattr(np,"trapezoid",None) or np.trapz
+        cosL=r["cos_sweep"]; chord=W["MAC"]*cosL; Un=cr["U_inf"]*cosL
+        omit=0.0
+        for _s in (u,l):
+            _x=np.asarray(_s["x"],float); _cf=np.asarray(_s["Cf"],float)
+            _ue=np.asarray(_s["Ue"],float)/Un; _a=np.asarray(_s["s"],float)/chord
+            _m=_x>=xr
+            if _m.sum()>1: omit+=_tz(_cf[_m]*_ue[_m]**2,_a[_m])
         rows.append(dict(x_ref=xr,
             x_evaluated_upper=round(float(u["x_squire_young"]),4),
             Cd_counts=round(r["Cd"]*1e4,2),
+            friction_omitted_counts=round(omit*1e4,3),
             H_upper=round(float(u["H_te_squire_young"]),3),
             H_lower=round(float(l["H_te_squire_young"]),3),
             theta_te_c_upper=round(float(u["theta_te_c"]),6),
@@ -523,6 +547,12 @@ def squire_young_station_sensitivity():
     df=pd.DataFrame(rows)
     df["delta_from_shipped_counts"]=(df.Cd_counts
                                      - float(df[df.x_ref==0.98].Cd_counts.iloc[0])).round(2)
+    # The column that settles it.  If the spread across stations were an
+    # uncertainty, this would wander; if it is friction being included, the sum
+    # of the drag counted so far and the friction still ahead is the same
+    # number wherever it is evaluated.  It is, to about a count, from 0.90c up
+    # to the station where the inviscid singularity takes the formula over.
+    df["Cd_plus_omitted_counts"]=(df.Cd_counts+df.friction_omitted_counts).round(2)
     df.to_csv(f"{SOL}/squire_young_station_sensitivity.csv",index=False)
     return df
 

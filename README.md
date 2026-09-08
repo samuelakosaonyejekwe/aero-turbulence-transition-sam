@@ -53,32 +53,39 @@ from 45.0 to 47.3 counts and leaves it within half a count of the same section
 unswept, which is what 12° of sweep should do to a viscous drag; the drag
 *reduction* is unchanged, both configurations scaling together.
 
-**Where the drag is evaluated is worth more than most of what this study
-sweeps.** Squire-Young wants the trailing edge; a panel method drives the edge
-velocity to the stagnation value there, and the exponent (H+5)/2 turns that into
-18 counts against 47.3, so the evaluation is pulled forward to 0.98c. Over the
-range either side the section drag runs from 42.5 to 47.3 counts — about half a
-count per per cent of chord, an order more than the transition-length constant
-is worth over a factor of four
-(`04_solution/squire_young_station_sensitivity.csv`). And Head's method has no
-validity past separation, so H is clamped at 2.8: on the climb case and at every
-incidence above about 3° the upper surface is ON that clamp at the evaluation
-station — half the polar — and the drag there is formed from a bound rather than
-a solved shape factor. `H_sy_at_clip` says which it is, per surface and per
-point. Both of these were undeclared until the fifth audit pass.
+**Where the drag is evaluated, and what that is actually worth.** Squire-Young
+wants the trailing edge; this section has a **26.8° wedge** one, so the trailing
+edge is a stagnation point of the inviscid flow, U_e goes to zero there
+*physically*, and (U_e/U_∞)^((H+5)/2) degenerates — at the last control point it
+returns 18 counts against 47.3. The evaluation is pulled forward to 0.98c, and
+across the range either side the drag runs 42.5 → 47.3 counts.
 
-Neither can be removed inside this formulation, and the reason is one fact
-about the section: its trailing edge is a **26.8° wedge, not a cusp**. A
-finite-angle trailing edge is a stagnation point of the inviscid flow, so U_e
-goes to zero there *physically* — the panel method's collapse is the answer, not
-an artefact — and Squire-Young's (U_e/U_∞)^((H+5)/2) degenerates exactly where
-the formula wants to be evaluated. The station is an irreducible consequence,
-not a tuning constant; and the shape factor reaching Head's clamp is the same
-wedge, a layer decelerating into a stagnation point genuinely approaching
-separation. What would resolve both is a **wake march** — carrying the momentum
-integral past the trailing edge with no wall until the pressure has recovered,
-as a coupled panel code does. That is a formulation extension, and it is named
-here rather than done.
+That spread was reported here as a five-count uncertainty band. **It is not a
+band — it is friction being correctly included.** Between 0.88c and 0.98c the
+layer accumulates 3.94 counts of real skin friction, measured by integrating
+C_f over the surface directly, and the formula moves 3.65: the same quantity to
+a third of a count. A forward station is not a worse estimate of the same drag;
+it is the drag of a shorter aerofoil. What matters is the friction the chosen
+station still *omits*, and that is **0.157 counts at cruise, 0.128 at climb** —
+under a fifth of a count. `04_solution/squire_young_station_sensitivity.csv`
+carries the omitted friction beside the drag at every station and their sum,
+which is the same number wherever it is evaluated. The station is converged to
+a fifth of a count. Past 0.98c the formula turns over, which is the inviscid
+singularity taking hold rather than drag being lost.
+
+The shape-factor clamp is the same wedge. Head's method has no validity past
+separation, so H is clamped at 2.8; on the climb case and above about 3° of
+incidence the upper surface is on that clamp at the evaluation station — half
+the polar — and `H_sy_at_clip` says so per surface and per point. A layer
+decelerating into a stagnation point genuinely approaches separation, so the
+clamp is reached for a physical reason and it is Squire-Young's
+thin-attached-layer premise that fails, not the march. Closing it properly
+needs **viscous–inviscid coupling** — displacement feedback that removes the
+inviscid stagnation point — not the wake march this README previously named,
+and it is worth that same fifth of a count. Marching this solver's own aft
+state to the trailing edge and applying the wake relation returns 18 counts
+against 47, because θ has by then grown to a per cent of chord in response to a
+deceleration the viscous flow does not have.
 
 The transition-length correlation is validated on the flat plates below, which
 span Re_x,t = 6×10⁴ to 1.4×10⁶, and extrapolated on the wing, which transitions
