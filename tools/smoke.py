@@ -228,6 +228,76 @@ def panel_solution():
 
 
 @check
+def panel_method_invariants():
+    """symmetry, antisymmetry and Kutta-Joukowski, which the method must obey exactly"""
+    import case_config as C
+    import gen_validation as V
+    from utss_solver import panel_solve
+
+    def forces(X, Y, a):
+        xc, yc, Cp, Vt, th, S = panel_solve(X, Y, a)
+        nx = -np.sin(th); ny = np.cos(th)
+        Cn = -np.sum(Cp*ny*S); Ca = -np.sum(Cp*nx*S)
+        al = np.radians(a)
+        return Cn*np.cos(al) - Ca*np.sin(al), Cp, Vt, S
+
+    # A SYMMETRIC section at zero incidence must carry exactly no lift, and its
+    # two surfaces must see the same pressure.  Nothing tested this, and it is
+    # the one case where the answer is known to the last bit.
+    X, Y = V._section_points(C.SWEPT2["section"], n=160)   # NACA 64(2)A015
+    cl0, Cp0, _, _ = forces(X, Y, 0.0)
+    assert abs(cl0) < 1e-12, "symmetric section carries c_l = %.3e at alpha = 0" % cl0
+
+    # and lift must be exactly odd in incidence
+    for a in (2.0, 5.0):
+        cp, _, _, _ = forces(X, Y, a)
+        cm, _, _, _ = forces(X, Y, -a)
+        assert abs(cp + cm) < 1e-12, \
+            "c_l is not odd in incidence at %.1f deg: %+.6f / %+.6f" % (a, cp, cm)
+
+    # Kutta-Joukowski: the pressure integral and the circulation must agree to
+    # the discretisation, and the Kutta condition must equalise the pressure
+    # either side of the trailing edge.
+    Xn, Yn = C.nlf16_panel_points(130)
+    for a in (0.0, 1.5, 4.0):
+        cl, Cp, Vt, S = forces(Xn, Yn, a)
+        cl_gamma = 2.0*float(np.sum(Vt*S))       # unit chord, unit free stream
+        assert abs(cl - cl_gamma) < 2e-3, \
+            "lift from pressure %.6f vs from circulation %.6f at %.1f deg" % (cl, cl_gamma, a)
+        assert abs(Cp[0] - Cp[-1]) < 5e-3, \
+            "Kutta condition: Cp jumps %.2e across the trailing edge" % abs(Cp[0]-Cp[-1])
+
+
+@check
+def stability_against_published_eigenvalues():
+    """Orr-Sommerfeld and Falkner-Skan against values published outside this work"""
+    import stability as st
+
+    # Falkner-Skan wall shear, the standard table
+    for beta, want in ((1.0, 1.23259), (0.5, 0.92768), (0.0, 0.46960),
+                       (-0.1, 0.31927), (-0.19, 0.08570)):
+        f2 = st.falkner_skan(beta)[2][0]
+        assert abs(f2 - want) < 5e-5, \
+            "f''(0) at beta=%+.2f is %.6f, published %.5f" % (beta, f2, want)
+
+    # The standard Blasius Orr-Sommerfeld benchmark: at Re_delta* = 998 and
+    # alpha delta* = 0.308 the temporal eigenvalue is c = 0.36412 + 0.00796i.
+    # This module works in momentum-thickness units, so both are divided by H.
+    H = 2.59129
+    pr = st.fs_profile_for_H(H)
+    U, dU, Upp, y, D1 = st._os_profile(pr, 60, 60.0, 6.0)
+    c = st.os_temporal(y, D1, U, Upp, 0.308/H, 998.0/H)
+    assert c is not None, "no unstable mode found at the Blasius benchmark point"
+    assert abs(c.real - 0.36412) < 2e-4, \
+        "phase speed %.5f against the published 0.36412" % c.real
+    # the growth rate carries a systematic deficit of about 1.3 per cent, which
+    # is what "reproduces published amplification rates to within a few per
+    # cent" in _n_crit's docstring is claiming; hold it to that
+    assert abs(c.imag - 0.00796)/0.00796 < 0.03, \
+        "growth rate %.5f against the published 0.00796 - more than 3 %%" % c.imag
+
+
+@check
 def section_panel_loops_are_closed():
     """every section the project panels is a closed loop, not just the designed one"""
     import case_config as C

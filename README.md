@@ -399,7 +399,7 @@ Sources recorded in `06_validation/sources_and_references.csv`.
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
 solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld +
                   amplification database), case_config.py, uplot.py (style)
-tools/            smoke.py (23 checks over the whole solver, well under a
+tools/            smoke.py (25 checks over the whole solver, well under a
                   minute), pipeline.py (staged regeneration, timings written to
                   .pipeline/timings.json), baseline.py (numeric diff of every
                   generated CSV against a snapshot)
@@ -413,7 +413,7 @@ case.docx         the same report as .docx - a build product, not tracked
 
 ## Reproduce
 ```bash
-python3 tools/smoke.py         # 23 checks over the whole solver, under a minute.
+python3 tools/smoke.py         # 25 checks over the whole solver, under a minute.
                                #   Run this FIRST and after every edit: a full
                                #   regeneration is minutes and the faults
                                #   that waste it are all visible here in the
@@ -469,6 +469,14 @@ python3 verify_outputs.py      # every headline number in the rendered PDF
 case with a closed-form answer - an elliptic planform, for which it must return
 a span efficiency of exactly 1 and the exact lift-curve slope - before it
 writes anything.
+
+The smoke set also holds the solver to results published outside this work:
+the Falkner-Skan wall shear f''(0) at five values of beta (to 5e-5); the
+standard Blasius Orr-Sommerfeld benchmark, c = 0.36412 + 0.00796i at
+Re_delta* = 998 and alpha delta* = 0.308, which it reproduces to 1e-5 in phase
+speed and 1.3 % in growth rate; a symmetric section carrying exactly zero lift
+at zero incidence and lift exactly odd in incidence; and Kutta-Joukowski, the
+lift from the pressure integral against the lift from the circulation.
 
 Plot rule enforced throughout: **no black** (navy ink + contrasting healthy
 palette); text never overlaps the data.
