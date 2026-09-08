@@ -1326,12 +1326,16 @@ para("TN D-338 reports crossflow Reynolds numbers of its own: \"the critical val
  % (_dag.mean_critical_value, _bol.mean_critical_value,
     _cfe.loc["Dagenhart & Saric (calibration)"].mean_critical_value,
     _cfe.loc["Boltz et al. (independent)"].mean_critical_value), italic=True, size=10)
+# The second factor is the same quantity the section above gives as a
+# percentage, so it is read from the same two means rather than typed as 1.5
+# beside a "53 per cent more" derived four paragraphs earlier.
 para("What does survive is weaker and qualitative. TN D-338 separates two events in ONE "
  "facility by roughly a factor of 1.4, and the two facilities here differ by a factor of "
- "1.5. A gap of that size between experiments is therefore the size of the gap a single "
+ "%.2f. A gap of that size between experiments is therefore the size of the gap a single "
  "facility reports between vortex formation and the beginning of transition, so what each "
  "experiment CALLS transition remains a candidate explanation alongside receptivity — as an "
- "argument about event definition, not as a numerical match.", italic=True, size=10)
+ "argument about event definition, not as a numerical match."
+ % (_bol.mean_critical_value/_dag.mean_critical_value), italic=True, size=10)
 para("One explanation can be ruled out rather than merely doubted. If the difference "
  "between the two facilities were a Reynolds-number effect the criterion is missing, the "
  "requirement would have to vary with chord Reynolds number in the same direction within a "

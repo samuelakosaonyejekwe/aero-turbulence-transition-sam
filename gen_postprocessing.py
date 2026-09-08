@@ -747,7 +747,13 @@ def plot_remaining_csvs():
             ha = "right"
         ax.text(x, b.get_y()+b.get_height()/2, f"{v:g}",
                 va="center", ha=ha, fontsize=9, color=INK)
-    ax.set_xlim(-0.6,600)
+    # Sized from the data, with room for the label that sits at 1.12x the bar.
+    # This was a literal 600 against a largest constant of 400: it worked, but
+    # only by luck, and a constant above about 530 would have pushed its label
+    # off the axis and one above 600 would have clipped the bar itself with
+    # nothing to say so.
+    _hi=float(cc["num"].max()); _lo=float(cc["num"].min())
+    ax.set_xlim(min(-0.6, 1.6*_lo), 1.5*max(_hi, 0.1))
     ax.axvline(0.0,color=INK_SOFT,lw=0.9)
     ax.invert_yaxis()
     ax.set_title("UTSS calibration constant set (single set, all cases)")
