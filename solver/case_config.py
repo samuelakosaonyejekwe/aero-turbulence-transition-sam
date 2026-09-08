@@ -226,9 +226,20 @@ SWEPT2 = dict(
 # calibration report (McGhee, Beasley & Foster, NASA TP-2328, 1984) gives the
 # LTPT test-section level as 0.012-0.016 percent at M = 0.05 and 0.041-0.044
 # percent at M = 0.15, essentially independent of stagnation pressure at fixed
-# Mach number.  All the TP-1861 runs were made at M = 0.10, so Tu = 0.03 per
+# Mach number.  The Fig. 9 transition runs were made at M = 0.10 - the figure's
+# own caption reads "Transition location (M = 0.10)", though the test programme
+# as a whole varied the Mach number from about 0.1 to 0.4 - so Tu = 0.03 per
 # cent is adopted here, with the 0.02-0.05 per cent spread carried through as a
 # sensitivity band rather than treated as a tuned constant.
+#
+# CHECKED AGAINST THE SOURCE.  The coordinates in 01_geometry/nlf1_0416.dat
+# reproduce Table I of TP-1861 exactly, to all five decimals, over the rows that
+# could be recovered from the report's text; the chord above is the 60.902 cm
+# (23.977 in.) the report states; the open/solid symbol convention below is the
+# one its Fig. 9 caption defines; and "No measurements were obtained for
+# R > 4.0 x 10^6, because the ambient noise level in the tunnel became too
+# high" is the report's own sentence, not an inference.  tools/smoke.py holds
+# the coordinate file to a sample of that table so it cannot drift.
 NLF0416 = dict(
     name      = "Somers NLF(1)-0416 aerofoil, Langley LTPT",
     section   = "01_geometry/nlf1_0416.dat",

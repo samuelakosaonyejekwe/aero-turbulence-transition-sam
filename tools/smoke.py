@@ -278,6 +278,53 @@ def panel_method_invariants():
 
 
 @check
+def section_coordinates_against_their_source():
+    """the NLF(1)-0416 coordinate file against Table I of NASA TP-1861"""
+    import case_config as C
+    # Rows recovered verbatim from the report's own text.  The whole validation
+    # rests on the digitised inputs being what their sources say, and nothing
+    # checked the one input that CAN be checked against a printed table - the
+    # transition locations come off a raster figure and cannot.
+    table_I_upper = [
+        (0.00049, 0.00403), (0.00509, 0.01446), (0.01393, 0.02573),
+        (0.02687, 0.03729), (0.04383, 0.04870), (0.06471, 0.05964),
+        (0.08936, 0.06984), (0.11761, 0.07904), (0.14925, 0.08707),
+        (0.18404, 0.09374), (0.22169, 0.09892), (0.26187, 0.10247),
+        (0.30422, 0.10425), (0.34839, 0.10405), (0.39438, 0.10162),
+    ]
+    pts = []
+    for line in open(C.NLF0416["section"]):
+        q = line.split()
+        if len(q) == 2:
+            try:
+                pts.append((float(q[0]), float(q[1])))
+            except ValueError:
+                pass
+    a = np.array(pts)
+    up = a[:int(np.argmin(a[:, 0])) + 1][::-1]          # LE -> TE, upper
+    for xs, ys in table_I_upper:
+        j = int(np.argmin(np.abs(up[:, 0] - xs)))
+        assert abs(up[j, 0] - xs) < 2e-5 and abs(up[j, 1] - ys) < 2e-5, \
+            ("nlf1_0416.dat departs from TP-1861 Table I at x/c = %.5f: "
+             "file has (%.5f, %.5f), the report has (%.5f, %.5f)"
+             % (xs, up[j, 0], up[j, 1], xs, ys))
+    # and the chord the report states
+    assert abs(C.NLF0416["chord_m"] - 0.60902) < 1e-9, \
+        "chord is not the 60.902 cm TP-1861 tested at"
+    assert abs(C.NLF0416["mach"] - 0.10) < 1e-9, \
+        "Fig. 9 of TP-1861 is captioned M = 0.10"
+    # no transition data above R = 4e6: the report says the tunnel noise
+    # swamped the microphone there
+    assert max(C.NLF0416["data"]) <= 4.0e6 + 1, \
+        "TP-1861 reports no transition measurements above R = 4.0e6"
+    # Boltz: TN D-338 tested -3 to +3 degrees of incidence, 0 to 50 of sweep
+    assert all(-3.0 <= a_ <= 3.0 for a_ in C.SWEPT2["alpha_deg"]), \
+        "an incidence outside the -3 to +3 deg TN D-338 tested"
+    assert all(0.0 <= s_ <= 50.0 for s_ in C.SWEPT2["sweep_deg"]), \
+        "a sweep angle outside the 0 to 50 deg TN D-338 tested"
+
+
+@check
 def stability_against_published_eigenvalues():
     """Orr-Sommerfeld and Falkner-Skan against values published outside this work"""
     import stability as st
