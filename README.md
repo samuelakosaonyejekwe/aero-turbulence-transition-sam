@@ -441,7 +441,7 @@ derivatives the (k, ψ) parameterisation already provides.
 
 It is checked before it is used. Dagenhart & Saric computed stationary
 N-factors with SALLY for three of their six conditions (their Tables 3–5, f = 0)
-and the present solve reproduces them to **0.59 mean and 0.68 RMS** —
+and the present solve reproduces them to **0.50 mean and 0.56 RMS** —
 `06_validation/crossflow_amplification.csv`. On the facility gap it does better
 than the surrogate and still not well enough: the required levels come to
 N_cf = 7.02 and 5.67, a ratio of **1.24** where the critical Re_θ2 differ by

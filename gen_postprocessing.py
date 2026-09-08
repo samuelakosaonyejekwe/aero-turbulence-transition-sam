@@ -723,7 +723,19 @@ def plot_remaining_csvs():
            if str(r.value).strip() in ("True","False")]
     derived=[r.constant for _,r in nonnum.iterrows()
              if str(r.value).strip() not in ("True","False")]
+    # A THIRD kind, which was being drawn as a constant of value zero.  H_sep
+    # and CF_N are selectors: their own calibration_source says "0 = use
+    # lam_sep" and "0 = use the same N_crit as every other branch", so zero
+    # there means the alternative is not in force, not that the constant is
+    # zero - and the chart showed two bars of length nothing with "0" beside
+    # them, which reads as two constants that have been set to zero.  They are
+    # identified from that text rather than by name.
     cc=cc.dropna(subset=["num"]).reset_index(drop=True)
+    # not `off`: the label loop below already uses that name for an offset
+    inactive=[r.constant for _,r in cc.iterrows()
+              if r.num==0.0
+              and str(r.calibration_source).strip().startswith("0 =")]
+    cc=cc[~cc.constant.isin(inactive)].reset_index(drop=True)
     fig,ax=new_fig(8.6,5.0)
     yy=np.arange(len(cc))
     bars=ax.barh(yy,cc["num"],color=PALETTE[4],height=0.6)
@@ -760,6 +772,9 @@ def plot_remaining_csvs():
     note=[]
     if derived: note.append("computed at run time, not fixed: "+", ".join(derived))
     if flags:   note.append("closure switches: "+", ".join(flags))
+    if inactive:
+        note.append("inactive selectors, 0 meaning the alternative is not in "
+                    "force: "+", ".join(inactive))
     finish(fig,f"{CSVP}/calibration_constants.png",
            caption=("Not plotted — "+";  ".join(note)) if note else None)
 

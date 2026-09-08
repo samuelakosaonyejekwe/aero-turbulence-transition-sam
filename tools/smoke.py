@@ -1173,6 +1173,29 @@ def section_files_match_their_designations():
                 "%.2f" % (path, xt, x_want)
 
 
+@check
+def sally_n_factors_sit_on_the_conditions_they_were_computed_for():
+    """each tabulated SALLY N-factor is aligned with its own transition station"""
+    import case_config as C
+    v = C.SWEPT
+    # Dagenhart & Saric analysed three of their six conditions.  Their table
+    # captions identify each by its TRANSITION LOCATION - Table 4's Reynolds
+    # number is a misprint carried over from Table 3 - so the location is what
+    # the alignment is checked on.  The list had 6.4 one place early, against
+    # Rc = 3.27e6 and x/c = 0.33 instead of Rc = 3.73e6 and x/c = 0.30, which
+    # moved that residual from -0.66 to -0.93 and nothing noticed.
+    want = {0.58: 6.8, 0.45: 6.5, 0.30: 6.4}
+    got = {}
+    assert len(v["N_sally"]) == len(v["x_tr_c"]) == len(v["Re_c"]), \
+        "N_sally is not the same length as the conditions it labels"
+    for x, n in zip(v["x_tr_c"], v["N_sally"]):
+        if n is not None:
+            got[round(float(x), 2)] = float(n)
+    assert got == want, \
+        "SALLY N-factors are attached to the wrong stations: %s against %s" \
+        % (got, want)
+
+
 def main():
     only = None
     if "-k" in sys.argv:

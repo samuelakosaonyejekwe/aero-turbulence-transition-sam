@@ -186,7 +186,16 @@ SWEPT = dict(
     # Table 4's caption reads Rc = 2.37e6 for (x/c)tr = 0.45, which Table 2
     # assigns to Rc = 2.73e6 - the caption's Reynolds number is carried over
     # from Table 3 in error, and the transition location identifies the run.
-    N_sally   = [None,   None,   6.8,    6.5,    6.4,    None],
+    # Table 5's caption gives BOTH, Rc = 3.73e6 and (x/c)tr = 0.30, and they
+    # agree with Table 2, so the last condition is the one it analysed.
+    #             Rc=1.92  2.19    2.37    2.73    3.27    3.73  (x10^6)
+    #             x/c=0.78 0.73    0.58    0.45    0.33    0.30
+    # Table 3 is Rc = 2.37e6 at x/c = 0.58, Table 4 is x/c = 0.45, and TABLE 5
+    # IS Rc = 3.73e6 AT x/c = 0.30 - the LAST condition, not the fifth.  This
+    # list had 6.4 against Rc = 3.27e6, one place early, and 3.27e6 carries no
+    # SALLY analysis at all.  The transition location identifies the run, which
+    # is what the alignment is checked on.
+    N_sally   = [None,   None,   6.8,    6.5,    None,   6.4],
     N_sally_source = "NASA/TP-1999-209344, Tables 3, 4 and 5, frequency f = 0, "
                      "maximum over wavelength.",
 )
