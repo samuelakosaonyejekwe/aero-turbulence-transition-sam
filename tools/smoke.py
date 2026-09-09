@@ -1806,6 +1806,91 @@ def a_blank_bubble_length_always_has_a_reason_beside_it():
 
 
 @check
+def the_integrated_forces_table_agrees_with_itself_and_its_neighbours():
+    """every derivable row of integrated_forces.csv, and the drag it shares"""
+    import pandas as pd
+    import case_config as C
+    # This table publishes seventeen quantities and verify_outputs read four of
+    # them, so twelve rows of the most-quoted table in the study were carried
+    # by nothing at all - including the section drag, which nlf_vs_turbulent.csv
+    # ALSO publishes.  Seeding 99.9 counts into it left verify_outputs passing
+    # with exit 0.  Most of the rows are derivable from the others or from a
+    # file beside them; those are checked here, and the two that the report
+    # quotes are now checked against the rendered document as well.
+    root = utss_paths.ROOT
+    f = pd.read_csv(os.path.join(root, "04_solution/integrated_forces.csv")
+                    ).set_index("quantity")
+    def v(k): return float(f.loc[k, "value"])
+    Cd = v("Section profile drag Cd"); Cl = v("Section lift coefficient Cl")
+    assert abs(v("Section Cd (counts)") - 1e4*Cd) < 0.05, (
+        "Section Cd (counts) = %.2f is not 1e4 x %.6f" % (v("Section Cd (counts)"), Cd))
+    assert abs(v("Section L/D") - Cl/Cd) < 0.15, (
+        "Section L/D = %.1f is not Cl/Cd = %.1f" % (v("Section L/D"), Cl/Cd))
+    CL = v("Wing C_L (lifting line, taper + washout + sweep)")
+    assert abs(v("Wing C_L / section c_l") - CL/Cl) < 2e-3, (
+        "Wing C_L / section c_l = %.4f is not %.4f/%.4f" % (v("Wing C_L / section c_l"), CL, Cl))
+    AR = float(pd.read_csv(os.path.join(root, "01_geometry/geometry_definition.csv")
+                           ).set_index("parameter").loc["Aspect ratio AR", "value"])
+    e = v("Span efficiency e (lifting line)"); CDi = v("Wing induced drag C_Di (lifting line)")
+    assert abs(CDi - CL*CL/(np.pi*AR*e)) < 5e-5, (
+        "C_Di = %.5f is not C_L^2/(pi AR e) = %.5f" % (CDi, CL*CL/(np.pi*AR*e)))
+    # ...and against the flow conditions beside it
+    cr = C.CRUISE
+    assert abs(v("Mach number") - cr["mach"]) < 5e-4, "Mach disagrees with case_config"
+    assert abs(v("Dynamic pressure q") - 0.5*cr["rho_inf"]*cr["U_inf"]**2) < 1.0, \
+        "dynamic pressure is not rho U^2 / 2"
+    assert abs(v("Reynolds number Re_MAC")
+               - cr["U_inf"]*C.WING["MAC"]/cr["nu_inf"])/v("Reynolds number Re_MAC") < 2e-3, \
+        "Re_MAC is not U MAC / nu"
+    # THE ROW PUBLISHED TWICE.  Both files carry the section drag in counts.
+    nvt = pd.read_csv(os.path.join(root, "04_solution/nlf_vs_turbulent.csv"))
+    assert abs(v("Section Cd (counts)") - float(nvt.Cd_counts.iloc[0])) < 0.05, (
+        "the section drag disagrees between integrated_forces.csv (%.2f) and "
+        "nlf_vs_turbulent.csv (%.2f)"
+        % (v("Section Cd (counts)"), float(nvt.Cd_counts.iloc[0])))
+
+
+@check
+def the_reference_n_crit_in_cal_really_is_inert():
+    """CAL['N_crit'] is carried for reference and changing it changes nothing"""
+    import case_config as C
+    import utss_solver as U
+    # CAL declares N_crit = 9.0 and 03_model_setup/calibration_constants.csv
+    # publishes its value as "from Tu", because the threshold is recomputed per
+    # station from Mack's correlation and nothing reads the constant.  Those
+    # two statements are only consistent while the entry stays inert, and a
+    # published calibration table carrying a knob that does nothing is a trap:
+    # turn it and the answer does not move, or worse, a later edit starts
+    # reading it and the project has two different N_crit.  Asserted rather
+    # than asserted-in-a-comment.
+    X, Y = C.nlf16_panel_points(60)
+    cr = C.CRUISE; W = C.WING
+
+    def solve(cal):
+        r = U.solve_airfoil(X, Y, cr["alpha_deg"], cr["U_inf"], cr["nu_inf"],
+                            W["MAC"], cr["Tu_pct"],
+                            sweep_deg=W["le_sweep_deg"], mach=cr["mach"],
+                            T_inf_K=cr["T_inf_K"], cal=cal)
+        u = r["surfaces"]["upper"]
+        return (float(u["x_tr_chord"]), float(r["Cd"]),
+                float(u["n_crit"][u["i_tr"]]))
+
+    base = dict(U.CAL)
+    ref = solve(base)
+    for v in (2.0, 25.0):
+        cal = dict(base); cal["N_crit"] = v
+        got = solve(cal)
+        assert got == ref, (
+            "CAL['N_crit'] = %g moved the answer, so it is NOT carried for "
+            "reference and calibration_constants.csv saying \"from Tu\" is "
+            "wrong: %s against %s" % (v, got, ref))
+    assert abs(ref[2] - float(base["N_crit"])) > 0.5, (
+        "the threshold actually used, %.4f, has coincided with the nominal "
+        "%.4f, so this check can no longer tell the two apart"
+        % (ref[2], float(base["N_crit"])))
+
+
+@check
 def the_intermittency_contour_is_not_the_onset_line():
     """the gamma = 1/2 station is published and lies aft of onset on every strip"""
     import pandas as pd

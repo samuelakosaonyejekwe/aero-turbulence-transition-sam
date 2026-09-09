@@ -213,6 +213,7 @@ checked against the compiled report, so this table cannot drift from the solver:
 |---|---|
 | Section lift coefficient c_l (swept strip, streamwise) | 0.496 |
 | Section profile drag | 47.3 counts |
+| Section L/D | 104.9 |
 | Fully-turbulent reference (LE trip) | 95.4 counts |
 | Viscous drag reduction | 50.4 % |
 | Mean laminar extent | 55.4 % chord |

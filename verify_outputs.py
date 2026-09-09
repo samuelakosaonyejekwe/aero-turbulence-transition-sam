@@ -231,6 +231,16 @@ def checks():
         ("section c_l, swept (headline)",
          "%.3f" % float(frc.loc["Section lift coefficient Cl", "value"]),
          T_HEAD),
+        # THE HEADLINE DRAG, out of the integrated-forces table as well as out
+        # of nlf_vs_turbulent.csv.  Both files publish the section drag and
+        # this gate read only the second, so a corrupted value in the first
+        # went through: seeded at 99.9 counts it still passed with exit 0,
+        # because nothing here looked at it and nothing compared the two files
+        # with each other.  The most-quoted number in the study was the one
+        # published twice and checked once.
+        ("section profile drag, counts",
+         "%.1f" % float(frc.loc["Section Cd (counts)", "value"]), T_FRC),
+        ("section L/D", "%.1f" % float(frc.loc["Section L/D", "value"]), T_FRC),
         ("wing C_L", str(frc.loc["Wing C_L (lifting line, taper + washout + sweep)",
                                  "value"]), T_FRC),
         ("span efficiency e", str(frc.loc["Span efficiency e (lifting line)",
