@@ -132,10 +132,20 @@ def bl_normal_grid():
 # ======================================================================
 def mesh_independence():
     rows=[]
-    # Extended past 480 panels: the report quotes a band above 180, and a band
-    # whose upper end is the last point computed is not a bound.  At 600 and
-    # 700 panels C_d is still climbing, which is what the extra rows are for.
-    for npan in [60,90,130,180,240,300,350]:
+    # Extended twice, and for the same reason both times: a band whose upper
+    # end is the last point computed is not a bound.  It stopped at 480, then
+    # at 700 with C_d still climbing, and the report explained the climb by a
+    # momentum thickness at the Squire-Young station that "rises MONOTONICALLY"
+    # - which was true of the seven rows then computed and is NOT true of the
+    # sequence.  Carried to 2600 panels, a factor of twenty on the coarsest and
+    # a decade on the production grid, theta there turns over (0.002964 at 700,
+    # 0.002909 at 900, 0.002999 at 2600) while C_d goes on rising at every
+    # single refinement, +0.12, +0.44, +0.20, +0.21, +0.25 per cent, with the
+    # successive changes NOT decaying.  So the drag is not grid-converged at
+    # any resolution tested here, the explanation the report gave for it was an
+    # artefact of where the sweep was cut off, and the honest statement is the
+    # measured drift - which is what the extra rows are for.
+    for npan in [60,90,130,180,240,300,350,450,600,800,1000,1300]:
         X,Y=C.nlf16_panel_points(npan)
         r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
                         cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
@@ -144,10 +154,14 @@ def mesh_independence():
         # The two quantities that actually move the drag, recorded so the
         # explanation is evidence and not assertion.  Both this module and the
         # report said the residual "is set by which panel the transition point
-        # lands on"; the transition location wanders by under 0.008 chord
-        # across the whole sweep with no trend, while the momentum thickness at
-        # the Squire-Young station rises monotonically by a seventh and the
-        # shape factor there with it, which is where the four counts come from.
+        # lands on"; the transition location wanders by well under a hundredth
+        # of a chord across the whole sweep with no trend, so it is not that.
+        # What does move is the shape factor at the Squire-Young station, which
+        # climbs with refinement all the way out; C_d = 2(theta/c)(Ue/U)^((H+5)/2)
+        # is exponential in it, and 0.98c sits where the panel method's
+        # trailing-edge singularity is resolved progressively more sharply.
+        # theta there does NOT climb monotonically - it turns over past 700
+        # panels - so H is the term carrying the drift.
         rows.append((2*npan,r["Cl"],r["Cd"],u["x_tr_chord"],
                      u["theta_te_c"],u["H_te_squire_young"]))
     df=pd.DataFrame(rows,columns=["n_surface_panels","Cl","Cd","x_tr_upper_c",
@@ -255,39 +269,52 @@ def plot_independence(df):
              label="x_tr/c (upper)")
     ax2.set_ylabel("upper-surface x_tr / c",color=PALETTE[1])
     # What the sweep actually shows, and it is NOT convergence: C_d rises at
-    # every refinement, from the coarsest grid to the finest, and is still
-    # climbing at 700 panels.  Calling it converged would overstate it, and the
-    # earlier reading here - "settles to within about +/-1 count above 180
-    # panels ... the residual wander being set by which panel the transition
-    # point lands on" - described a scatter the column does not contain: the
-    # transition location moves by under 0.008c across the whole sweep with no
-    # trend, while theta at the Squire-Young station rises monotonically by a
-    # seventh and the shape factor there with it.  The drag is not following the
-    # transition station; it is following the aft integral march, which is not
-    # grid-converged.  Both columns are in the CSV so the statement is evidence.
-    # The half-range above 180 panels is what the title states, computed from
-    # the column so it cannot go stale, and the shipped grid's distance from the
-    # finest is stated beside it because that is the part a reader of the
-    # headline drag needs.
+    # every refinement, from the coarsest grid to the finest.  Calling it
+    # converged would overstate it, and so does quoting a BAND: the earlier
+    # title gave a half-range "above 180 panels", which describes a scatter
+    # about a settled value, and this column is a monotone climb with no
+    # settled value to scatter about.  Worse, it then said "still rising at
+    # 700" - the last grid computed WHEN THAT SENTENCE WAS WRITTEN, hard-typed
+    # into a title on a figure whose whole subject is the panel count, so
+    # extending the sweep to 2600 left the caption pinned to a number that had
+    # stopped being the end of it.  Everything the title states is now read
+    # from the column, including where the sweep ends.
+    #
+    # The transition location moves by under a hundredth of a chord across the
+    # whole sweep with no trend, so the drag is not following the transition
+    # station; theta at the Squire-Young station does not even rise
+    # monotonically.  The shape factor there does, and C_d is exponential in
+    # it.  Both columns are in the CSV so the statement is evidence.
     cdc=df["Cd"].values*1e4
-    band=0.5*(cdc[1:].max()-cdc[1:].min())
-    _sel=int(np.argmin(np.abs(df["n_surface_panels"].values-2*N_PANEL_HALF)))
+    npan=df["n_surface_panels"].values
+    _sel=int(np.argmin(np.abs(npan-2*N_PANEL_HALF)))
     _to_finest=cdc[-1]-cdc[_sel]
-    ax.set_title("Mesh sensitivity (cruise): C_d within ±%.1f count above 180 "
-                 "panels;\nstill rising at 700, %+.1f counts from the shipped "
-                 "grid" % (band, _to_finest))
+    _rising=int((np.diff(cdc)>0).sum())
+    ax.set_title("Mesh sensitivity (cruise): C_d rises at %d of %d refinements "
+                 "out to %d panels\nand does not settle; the shipped %d-panel "
+                 "grid is %+.1f counts from the finest"
+                 % (_rising, len(cdc)-1, int(npan[-1]), 2*N_PANEL_HALF,
+                    _to_finest),
+                 # room for the selected-grid label, which lives above the
+                 # frame because no corner INSIDE these axes stays empty
+                 pad=26)
     # The shipped grid, from the constant this module already declares.  It was
     # a literal 260 in three places on a figure whose subject is the panel
     # count, and the module that draws it defines N_PANEL_HALF ten lines above.
     _np_sel = 2*N_PANEL_HALF
     ax.axvline(_np_sel,color=PALETTE[2],ls=":",lw=1.5)
-    # On a white plate, so it stays readable where it crosses a curve: both
-    # series run high on the left of the selected grid, and the label sat on
-    # top of the transition-location line there.
-    ax.text(_np_sel-8,0.96,"selected grid (%d)"%_np_sel,color=PALETTE[2],
-            fontsize=10,ha="right",va="top",transform=ax.get_xaxis_transform(),
-            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="none",
-                      alpha=0.85))
+    # OUTSIDE the data area, immediately above the frame on the line it marks.
+    # Inside, this label has now been overprinted twice by whichever series
+    # happened to run through the corner it was parked in - top-left, where
+    # extending the sweep moved the transition-location maximum, giving
+    # "selected grid (2*0)" with the 6 under a marker on the one figure whose
+    # subject is that number; then bottom-right, onto the x_tr minimum at 480
+    # panels.  There is no corner of these axes that stays empty for every
+    # sweep, so the label stops competing for one: above the frame nothing is
+    # ever plotted, whatever the data does.
+    ax.text(_np_sel,1.015,"selected grid (%d)"%_np_sel,color=PALETTE[2],
+            fontsize=10,ha="center",va="bottom",
+            transform=ax.get_xaxis_transform())
     finish(fig,f"{MP}/mesh_03_independence.png")
 
 # ======================================================================

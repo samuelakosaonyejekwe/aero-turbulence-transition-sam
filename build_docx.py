@@ -708,8 +708,13 @@ image("05_postprocessing/csv_plots/geo_sections_3d.png", width=5.8,
 h1("8.  Mesh / Discretisation")
 _mi = pd.read_csv("02_mesh/mesh_independence.csv")
 _cd = _mi.Cd.to_numpy(float)*1e4
-_hi = _cd[_mi.n_surface_panels >= 180]
 _mm = pd.read_csv("02_mesh/mesh_metrics.csv").set_index("metric")
+# The grid every case-study number is computed on, and what this sweep returns
+# on it - so the gap to the finest grid is stated rather than left to a reader
+# who happens to cross-reference two tables.
+_npan_prod = int(float(_mm.loc["Surface streamwise nodes", "value"])) - 1
+_cd_prod = float(_mi.loc[(_mi.n_surface_panels - _npan_prod).abs().idxmin(),
+                         "Cd"])*1e4
 para("THERE IS NO VOLUME MESH. This method is a surface panel discretisation coupled to "
  "an integral boundary layer, and the wall-normal stack below is a reconstruction grid "
  "used to recover profiles from the marched integral quantities - it is not a grid any "
@@ -721,27 +726,38 @@ para("THERE IS NO VOLUME MESH. This method is a surface panel discretisation cou
  % "@@TAB:mesh_metrics@@", italic=True, size=10)
 para("The surface is discretised with cosine-clustered streamwise nodes; the wall-normal "
  "reconstruction grid places its first point at y⁺ = %s. A "
- "panel-count sweep bounds the discretisation sensitivity rather than demonstrating "
- "asymptotic convergence: from %d to %d surface panels the section drag spans %.1f counts, "
- "%.1f %% of its mean, and above %d panels it stays within about ±%.1f count without "
- "tightening further."
+ "panel-count sweep does NOT demonstrate asymptotic convergence, and is reported because "
+ "it does not: from %d to %d surface panels — a factor of %.0f, and a decade on the grid "
+ "every case-study result is computed on — the section drag rises at EVERY refinement, "
+ "from %.1f to %.1f counts, and the successive changes do not decay (%s per cent over the "
+ "last four). There is no asymptote here to quote a discretisation error against."
  % (str(_mm.loc["Target wall y+","value"]),
     _mi.n_surface_panels.min(), _mi.n_surface_panels.max(),
-    _cd.ptp(), 100.0*_cd.ptp()/_cd.mean(), 180, 0.5*_hi.ptp()) +
- "  This report previously called that residual a wander \"set by which panel the "
- "transition point lands on\". The table says otherwise, which is why the two quantities "
- "that decide it are now in it: the transition location moves by only %.3f chord across the "
- "whole sweep and with no trend, while the momentum thickness at the Squire-Young station "
- "rises MONOTONICALLY from %.5f to %.5f chord — a seventh — and the shape factor there with "
- "it, from %.2f to %.2f. C_d = 2(θ/c)(U_e/U_∞)^((H+5)/2) then rises at every refinement, so "
- "this is the aft integral march not being grid-converged, not the transition station "
- "hopping between panels. The %d-panel grid is used for every case-study "
- "result; the tabulated validation sections are re-splined onto their own "
+    _mi.n_surface_panels.max()/_mi.n_surface_panels.min(),
+    _cd.min(), _cd.max(),
+    ", ".join("%+.2f" % v for v in _mi.dCd_pct.to_numpy()[-4:])) +
+ "  What that costs the headline number is stated rather than left to be inferred: the "
+ "%d-panel production grid returns %.1f counts and the finest grid computed returns %.1f, "
+ "so the section drag quoted throughout this report sits %.1f counts — %.1f %% — BELOW the "
+ "finest resolution tested, and that gap is still opening."
+ % (_npan_prod, _cd_prod, _cd[-1], _cd[-1]-_cd_prod,
+    100.0*(_cd[-1]-_cd_prod)/_cd_prod) +
+ "  This report previously called the residual a wander \"set by which panel the "
+ "transition point lands on\", and then explained it by a momentum thickness at the "
+ "Squire-Young station that \"rises MONOTONICALLY\". Neither is what the table says. The "
+ "transition location moves by only %.3f chord across the whole sweep and with no trend, so "
+ "it is not the first; and θ at that station falls at %d of the %d refinements, so it is "
+ "not the second. What does climb without interruption is the SHAPE FACTOR there, %.2f to "
+ "%.2f, and C_d = 2(θ/c)(U_e/U_∞)^((H+5)/2) is EXPONENTIAL in it. x/c = 0.98 sits close "
+ "enough to the trailing edge that refining the panels resolves the inviscid singularity "
+ "there progressively more sharply, so what is not converging is the EVALUATION STATION, "
+ "not the transition station hopping between panels. The %d-panel grid is used for every "
+ "case-study result; the tabulated validation sections are re-splined onto their own "
  "cosine-clustered grids of 400 and 440 panels."
  % (_mi.x_tr_upper_c.max() - _mi.x_tr_upper_c.min(),
-    _mi.theta_at_sy_c.iloc[0], _mi.theta_at_sy_c.iloc[-1],
+    int((_mi.theta_at_sy_c.diff() < 0).sum()), len(_mi) - 1,
     _mi.H_at_sy.iloc[0], _mi.H_at_sy.iloc[-1],
-    int(float(_mm.loc["Surface streamwise nodes", "value"])) - 1))
+    _npan_prod))
 table_from_csv("02_mesh/mesh_metrics.csv", key="mesh_metrics",
                cap="Metrics of the surface discretisation and of the wall-normal reconstruction stack. No volume mesh is generated.")
 table_from_csv("02_mesh/mesh_independence.csv",

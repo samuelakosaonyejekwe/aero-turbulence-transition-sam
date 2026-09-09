@@ -224,8 +224,23 @@ def pressure_field(cond,name):
     grow=0.010 if area > 0 else -0.010
     inside=Path(poly).contains_points(np.column_stack([Xg.ravel(),Yg.ravel()]),
                                       radius=grow).reshape(Xg.shape)
+    # The mask has to reach the VELOCITY COMPONENTS too, and it did not.  C_p
+    # and the speed were blanked and Vx, Vy were published raw, so this file
+    # asserted two contradictory things about the same 2161 of its 38,801
+    # cells: speed_ms empty, and beside it a Vx, Vy pair whose magnitude is
+    # speed_ms by definition - and which agrees with it to 1e-4 everywhere it
+    # is published.  Recomputed on the blanked rows those components run to
+    # 162.1 m/s against a 131.0 m/s free stream, because that is the panel
+    # singularity, which is the whole reason the cells are masked.
+    #
+    # It reached the figures as well as the data.  gen_postprocessing's quiver
+    # is coloured by the speed, so 98 arrows inside the section were drawn
+    # with a NaN colour - invisible only because a NaN maps to the colormap's
+    # transparent "bad" entry and the white body is stroked over the top at a
+    # higher zorder.  Two accidents, either of which could stop being true.
     Cp=np.where(inside,np.nan,Cp)
     spd=np.sqrt(Vx**2+Vy**2); spd=np.where(inside,np.nan,spd)
+    Vx=np.where(inside,np.nan,Vx); Vy=np.where(inside,np.nan,Vy)
     # Rounded to the precision these quantities are meaningful to, as every
     # other CSV in this project is.  At full float64 this file was four
     # megabytes of seventeen-significant-figure numbers whose last bits move

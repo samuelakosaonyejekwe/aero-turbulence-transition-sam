@@ -71,11 +71,27 @@ def _cmp_frame(a, b, rtol, atol):
                 i = int(np.nanargmax(np.where(bad, rel, -1.0)))
                 moved.append((c, float(rel[i]), i, xv[i], yv[i]))
         else:
+            # A blank cell in a text column is missing, not the string "nan",
+            # and two missing cells are the same cell.  Saying so explicitly is
+            # not defensive: under the pinned pandas the column comes back as
+            # the `str` dtype, whose .astype(str) leaves the missing entries as
+            # float nan OBJECTS rather than converting them, and nan != nan -
+            # so every blank row compared unequal to ITSELF.  Diffing the tree
+            # against a snapshot of the tree reported
+            # transition_length_measured.csv as CHANGED, "nan -> nan", and
+            # exited 1.  A gate that fires on an unchanged tree gates nothing.
+            #
+            # Missing appearing or vanishing is still a change: one side is the
+            # nan object and the other a string, so they compare unequal and
+            # only the both-missing case is excused.
+            xn = x.isna().to_numpy(); yn = y.isna().to_numpy()
             xs = x.astype(str).to_numpy(); ys = y.astype(str).to_numpy()
-            bad = xs != ys
+            bad = (xs != ys) & ~(xn & yn)
             if bad.any():
                 i = int(np.argmax(bad))
-                moved.append((c, float("inf"), i, xs[i], ys[i]))
+                moved.append((c, float("inf"), i,
+                              "(missing)" if xn[i] else xs[i],
+                              "(missing)" if yn[i] else ys[i]))
     return moved, None
 
 
@@ -90,6 +106,13 @@ def _snapshot_csvs(snap):
 
 
 def diff(snap, rtol=1e-9, atol=1e-12, quiet_same=False):
+    # A snapshot directory that is not there is a mistyped path, not an empty
+    # baseline.  os.walk on a missing directory yields nothing, so every CSV
+    # was reported NEW and the run ended "0 unchanged, 62 changed" - which
+    # reads exactly like a regeneration that moved every number.
+    if not os.path.isdir(snap):
+        sys.exit("no snapshot at %s - run `baseline.py save %s` first" %
+                 (snap, snap))
     # The union, not the tracked list.  Iterating over `git ls-files` alone
     # cannot see a CSV that was in the snapshot and is not generated any more:
     # it is simply not visited, and a tool whose whole job is to say which

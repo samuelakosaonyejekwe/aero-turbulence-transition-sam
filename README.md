@@ -224,6 +224,31 @@ checked against the compiled report, so this table cannot drift from the solver:
 The section is quoted at its design incidence, which is not the aircraft trim
 point — the last row is there so the two are not confused.
 
+**The drag is not grid-converged, and the table above does not hide it.**  The
+panel-count sweep in `02_mesh/mesh_independence.csv` runs from 120 to 2600
+surface panels — a decade on the 260-panel grid every result here is computed
+on — and the section drag rises at *every single* refinement, 45.4 counts to
+49.7, with successive changes that do not decay (+0.12, +0.44, +0.20, +0.21,
++0.25 % over the last four).  There is no asymptote, so there is no
+discretisation error to quote; what can be quoted is the measured gap, and the
+**47.3 counts above sits 2.4 counts — 5.2 % — below the finest grid tested, and
+that gap is still opening**.  Section 8 of the report gives the cause: the
+transition location is steady to under a hundredth of a chord across the whole
+sweep, so it is not the transition station, and the momentum thickness at the
+Squire-Young station does not even rise monotonically; the shape factor there
+does, and C_d = 2(θ/c)(U_e/U_∞)^((H+5)/2) is exponential in it.  x/c = 0.98 is
+close enough to the trailing edge that refining the panels keeps resolving the
+inviscid singularity there more sharply.
+
+The drag *reduction* is better behaved, because it is a ratio of two numbers
+that move together — but it is not immune, and the measurement is worth having
+rather than the assurance.  Over the same sweep the fully-turbulent reference
+climbs from 87.9 to 103.3 counts while the NLF drag climbs from 45.4 to 49.7,
+and the reduction goes 48.4, **50.4** (production grid), 51.1, 51.8, 51.9 % —
+successive steps of +2.0, +0.7, +0.7, +0.1 points, so unlike C_d it *is*
+flattening.  **The 50.4 % above is 1.5 points below the finest grid tested**,
+which is 2.9 % of itself against the drag's 5.2 %.
+
 The section lift is the SWEPT strip's, c_l = c_l,n cos²Λ, from
 `04_solution/integrated_forces.csv`; it is the one that belongs beside a
 streamwise profile drag.  The two-dimensional section on its own returns

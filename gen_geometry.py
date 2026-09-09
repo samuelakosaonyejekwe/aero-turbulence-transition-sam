@@ -77,12 +77,36 @@ def te_wedge_deg(co):
 # Drafting primitives  (ISO/ASME dimensioning style)
 # ----------------------------------------------------------------------
 def dim_linear(ax, p1, p2, offset, text, side=1, fs=10, color=DIM,
-               horiz=None):
-    """Dimension with extension lines, arrowheads and centred text."""
+               horiz=None, expect=None):
+    """Dimension with extension lines, arrowheads and centred text.
+
+    `expect` is the length the caller believes it is dimensioning, and a
+    mismatch with the length actually spanned stops the build.  angle_dim has
+    carried this guard since the planform's sweep arc was struck between the
+    wrong two rays - it subtended 78 degrees and was labelled with the 12 the
+    wing has - and the linear dimensions were left without it, although they
+    are the ones where the two ends and the number come from DIFFERENT places:
+    the tip chord is drawn from the planform arrays, xte[-1] - xle[-1], and
+    labelled from WING["tip_chord"].  Nothing checked that those agree.  Two of
+    the three drawing faults already fixed in this file were a length drawn to
+    one value and labelled with another, so the check is cheap insurance
+    against the third.
+
+    The tolerance is half of the last digit these labels print, so a dimension
+    cannot be wrong by as much as it displays.
+    """
     p1 = np.array(p1, float); p2 = np.array(p2, float)
     d = p2 - p1
     if horiz is None:
         horiz = abs(d[0]) >= abs(d[1])
+    if expect is not None:
+        span = abs(d[0]) if horiz else abs(d[1])
+        if abs(span - expect) > max(5e-3*abs(expect), 1e-9):
+            raise ValueError(
+                "linear dimension spans %.6g but is being used to dimension "
+                "%.6g (label %r): the arrow is struck between the wrong two "
+                "points, or the label is not the length drawn"
+                % (span, expect, text))
     if horiz:
         yo = max(p1[1], p2[1]) + offset if side > 0 else min(p1[1], p2[1]) + offset
         a1 = np.array([p1[0], yo]); a2 = np.array([p2[0], yo])
@@ -318,9 +342,10 @@ def draw_airfoil_section(co):
     # the legend, which the dimension line used to run straight through
     dim_linear(ax, (0,-0.225),(1,-0.225), -0.045,
                "CHORD  c (reference)   |   MAC = %.3f m" % C.WING["MAC"],
-               side=-1, fs=10)
+               side=-1, fs=10, expect=1.0)
     # --- x(t_max) horizontal dimension (clear, above) ---
-    dim_linear(ax, (0,0.205),(xt,0.205), 0.028, f"x(t_max) = {xt:.2f} c", side=1, fs=10)
+    dim_linear(ax, (0,0.205),(xt,0.205), 0.028, f"x(t_max) = {xt:.2f} c", side=1, fs=10,
+               expect=xt)
     # --- t_max vertical thickness arrow + leadered label in clear space ---
     ax.plot([xt,xt],[yl_t,yu_t], color=HID, lw=0.8, ls=(0,(4,3)))
     ax.annotate("", xy=(xt,yu_t), xytext=(xt,yl_t),
@@ -392,11 +417,13 @@ def draw_planview(df_pl):
     # dimensions
     bt = W["span_b"]
     dim_linear(ax, (-bt/2, -0.55),(bt/2,-0.55), -0.45,
-               f"SPAN  b = {bt:.2f} m", side=-1)
+               f"SPAN  b = {bt:.2f} m", side=-1, expect=bt)
     dim_linear(ax, (bt/2+0.1, xle[-1]),(bt/2+0.1, xte[-1]), 0.5,
-               f"c_tip = {W['tip_chord']:.2f} m", horiz=False, side=1, fs=10)
+               f"c_tip = {W['tip_chord']:.2f} m", horiz=False, side=1, fs=10,
+               expect=W["tip_chord"])
     dim_linear(ax, (-bt/2-0.1, xle[0]),(-bt/2-0.1, xte[0]), -0.5,
-               f"c_root = {W['root_chord']:.2f} m", horiz=False, side=-1, fs=10)
+               f"c_root = {W['root_chord']:.2f} m", horiz=False, side=-1, fs=10,
+               expect=W["root_chord"])
     # sweep angle
     # Between the SPAN-WISE direction and the leading edge, which is what
     # leading-edge sweep means.  The first ray used to be the root chord, so
@@ -446,7 +473,7 @@ def draw_front_side(df_pl):
                 color=DIM, fontsize=10, ha="center",
                 arrowprops=dict(arrowstyle="->", color=DIM, lw=0.9))
     dim_linear(ax, (-W['span_b']/2,-0.35),(W['span_b']/2,-0.35), -0.25,
-               f"b = {W['span_b']:.2f} m", side=-1)
+               f"b = {W['span_b']:.2f} m", side=-1, expect=W["span_b"])
     ax.set_aspect("equal", adjustable="box")
     # the span dimension sits at z = -0.60; the lower limit has to clear it,
     # or its arrows and label are cut off by the axes frame
@@ -523,7 +550,8 @@ def draw_orthographic(df_pl):
     axp.plot([Y[0],Y[0]],[XLE[0],XTE[0]],color=OUT,lw=1.8)
     axp.plot([Y[-1],Y[-1]],[XLE[-1],XTE[-1]],color=OUT,lw=1.8)
     axp.plot([0,0],[-0.3,xte.max()+0.3],color=CTR,lw=0.9,ls=(0,(8,4)))
-    dim_linear(axp,(-W['span_b']/2,-0.5),(W['span_b']/2,-0.5),-0.4,f"b={W['span_b']:.1f} m",side=-1,fs=10)
+    dim_linear(axp,(-W['span_b']/2,-0.5),(W['span_b']/2,-0.5),-0.4,f"b={W['span_b']:.1f} m",side=-1,fs=10,
+               expect=W["span_b"])
     axp.set_aspect("equal"); axp.invert_yaxis(); axp.grid(False)
     axp.set_title("PLAN", fontsize=10, color=INK); axp.set_xlabel("y [m]"); axp.set_ylabel("x [m]")
     # FRONT (bottom-left)
@@ -543,7 +571,8 @@ def draw_orthographic(df_pl):
     axs = fig.add_subplot(gs[0,1])
     sub=df_pl.iloc[0]; co=C.nlf16_coords(n=80); cc=sub["chord_m"]
     axs.plot(co["xu"]*cc,co["yu"]*cc,color=OUT,lw=1.8); axs.plot(co["xl"]*cc,co["yl"]*cc,color=OUT,lw=1.8)
-    dim_linear(axs,(0,-0.45),(cc,-0.45),-0.12,f"c_root={cc:.2f} m",side=-1,fs=10)
+    dim_linear(axs,(0,-0.45),(cc,-0.45),-0.12,f"c_root={cc:.2f} m",side=-1,fs=10,
+               expect=W["root_chord"])
     axs.set_aspect("equal"); axs.invert_xaxis(); axs.grid(False)
     axs.set_title("SIDE (root section)", fontsize=10, color=INK)
     axs.set_xlabel("x [m]"); axs.set_ylabel("z [m]")
@@ -690,13 +719,15 @@ def draw_section_BB(df_pl):
     # ---- dimensions : spar stations from LE + chord ----
     ax.plot([0,0],[ -0.05*chord, 0.38*chord], color=CTR, lw=0.8, ls=(0,(6,3)))
     dim_linear(ax,(0,0.24*chord),(x_fs*chord,0.24*chord),0.03*chord,
-               f"{x_fs:.2f} c", side=1, fs=10)
+               f"{x_fs:.2f} c", side=1, fs=10, expect=x_fs*chord)
     dim_linear(ax,(0,0.34*chord),(x_rs*chord,0.34*chord),0.03*chord,
-               f"{x_rs:.2f} c", side=1, fs=10)
+               f"{x_rs:.2f} c", side=1, fs=10, expect=x_rs*chord)
     dim_linear(ax,(0,-0.28*chord),(chord,-0.28*chord),-0.05*chord,
-               f"CHORD  c (y = {yc:.1f} m) = {chord:.3f} m", side=-1, fs=10)
+               f"CHORD  c (y = {yc:.1f} m) = {chord:.3f} m", side=-1, fs=10,
+               expect=chord)
     dim_linear(ax,(x_fs*chord,-0.11*chord),(x_rs*chord,-0.11*chord),-0.04*chord,
-               f"integral wing box = {(x_rs-x_fs)*chord:.3f} m", side=-1, fs=10)
+               f"integral wing box = {(x_rs-x_fs)*chord:.3f} m", side=-1, fs=10,
+               expect=(x_rs-x_fs)*chord)
 
     # ---- material callouts, each in its own band of clear head-room --------
     # These sit in DATA coordinates, so they have to stay inside the limits set

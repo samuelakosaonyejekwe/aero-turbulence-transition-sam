@@ -258,23 +258,52 @@ def main():
     total = time.time() - t_all
     if times:
         os.makedirs(LOGDIR, exist_ok=True)
+        # This file is the ONLY record of what each stage costs.  The README
+        # and the CI workflow both say so in as many words - no wall-clock
+        # figure is quoted anywhere in the project, precisely because they are
+        # machine-dependent and this is where the measured ones live - so
+        # losing it silently loses the only answer to "did that get slower".
+        #
+        # It was written two ways that could lose it.  `open(TIMINGS, "w")`
+        # TRUNCATES before json.dump has written a byte, so an interrupt during
+        # the write - and this runs at the end of a regeneration that takes
+        # tens of minutes, which is exactly when a run gets interrupted - left
+        # an empty or half-written file.  And the read above turned ANY failure
+        # into an empty dict without a word, so the next run then silently
+        # discarded every stage time recorded before it.  Write to a temporary
+        # file in the same directory and rename it into place, which is atomic
+        # on this filesystem, and say so when an existing file cannot be read.
         prev = {}
         if os.path.exists(TIMINGS):
             try:
-                prev = json.load(open(TIMINGS))
-            except Exception:                        # noqa: BLE001
+                with open(TIMINGS) as fh:
+                    prev = json.load(fh)
+            except Exception as e:                   # noqa: BLE001
+                print("  WARNING: %s is unreadable (%s); the stage times "
+                      "recorded before this run are lost" % (TIMINGS, e),
+                      flush=True)
                 prev = {}
         prev.update(times)
-        json.dump(prev, open(TIMINGS, "w"), indent=1, sort_keys=True)
+        tmp = TIMINGS + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(prev, fh, indent=1, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, TIMINGS)
     print("\ntotal %.1f s (%.1f min) over %d stage(s), %d worker(s)"
           % (total, total/60.0, len(times), args.jobs))
     if failed:
         print("FAILED at stage %r - see %s/%s.log" % (failed, LOGDIR, failed))
         try:
-            tail = open(os.path.join(LOGDIR, failed + ".log")).read()[-2500:]
+            with open(os.path.join(LOGDIR, failed + ".log")) as fh:
+                tail = fh.read()[-2500:]
             print("\n--- tail of %s.log ---\n%s" % (failed, tail))
-        except Exception:                            # noqa: BLE001
-            pass
+        except Exception as e:                       # noqa: BLE001
+            # The whole point of this branch is to say WHY a stage failed.
+            # Swallowing its own failure left the run reporting a stage name
+            # and nothing else, which is the least useful moment in the
+            # project to go quiet.
+            print("\n(could not read %s/%s.log: %s)" % (LOGDIR, failed, e))
         return 1
     return 0
 

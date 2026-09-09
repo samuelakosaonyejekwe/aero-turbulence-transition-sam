@@ -1645,6 +1645,231 @@ def transition_summary_is_in_the_frame_the_march_ran_in():
         % (row.s_tr_c, le_arc))
 
 
+@check
+def the_generators_use_no_name_they_never_bind():
+    """no module-level name in a generator resolves to nothing"""
+    import ast
+    import builtins
+    # The sibling of report_format_strings_are_well_formed, and it exists for
+    # the same reason.  build_docx.py cannot be imported by a check - importing
+    # it builds the whole document - so a name that is never bound is found
+    # only by RUNNING the docx stage, which is scheduled behind the validation
+    # sweep.  A `np.argmin` written into a module that imports pandas and not
+    # numpy cost a full regeneration to discover, which is the second time this
+    # one file has been broken by an edit that a parse would have caught.
+    #
+    # Only MODULE-LEVEL loads are checked, and every module-level binding form
+    # is collected first - imports, assignments, walrus, for and with targets,
+    # except-as, def and class, and the dunders the interpreter provides.  That
+    # is where these files live (build_docx is almost entirely module-level
+    # code) and it keeps the check exact rather than approximate: a function
+    # body may legitimately use a name bound by its caller's scope, so those
+    # are left to the runtime.
+    GENERATORS = ["build_docx.py", "gen_geometry.py", "gen_mesh_setup.py",
+                  "gen_postprocessing.py", "gen_validation.py",
+                  "gen_equations.py", "gen_assets.py", "run_solution.py",
+                  "verify_outputs.py"]
+    bad = []
+    for rel in GENERATORS:
+        path = os.path.join(utss_paths.ROOT, rel)
+        tree = ast.parse(open(path, encoding="utf-8").read(), rel)
+        bound = {"__name__", "__file__", "__doc__", "__builtins__", "__spec__"}
+
+        def bind(t):
+            """Record every name a target pattern binds."""
+            if isinstance(t, ast.Name):
+                bound.add(t.id)
+            elif isinstance(t, (ast.Tuple, ast.List)):
+                for e in t.elts:
+                    bind(e)
+            elif isinstance(t, ast.Starred):
+                bind(t.value)
+
+        # pass 1: everything bound anywhere at module level, in source order or
+        # not - a name bound later in the file is still bound for a function
+        # defined earlier, so order is deliberately not modelled
+        for n in tree.body:
+            if isinstance(n, (ast.Import, ast.ImportFrom)):
+                for a in n.names:
+                    bound.add((a.asname or a.name).split(".")[0])
+            elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                bound.add(n.name)
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Assign):
+                for t in n.targets:
+                    bind(t)
+            elif isinstance(n, (ast.AugAssign, ast.AnnAssign)):
+                bind(n.target)
+            elif isinstance(n, ast.NamedExpr):
+                bind(n.target)
+            elif isinstance(n, (ast.For, ast.AsyncFor)):
+                bind(n.target)
+            elif isinstance(n, (ast.With, ast.AsyncWith)):
+                for it in n.items:
+                    if it.optional_vars is not None:
+                        bind(it.optional_vars)
+            elif isinstance(n, ast.ExceptHandler) and n.name:
+                bound.add(n.name)
+            elif isinstance(n, (ast.Import, ast.ImportFrom)):
+                for a in n.names:
+                    bound.add((a.asname or a.name).split(".")[0])
+            elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                ast.ClassDef)):
+                bound.add(n.name)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    a = n.args
+                    for x in (list(a.posonlyargs) + list(a.args) +
+                              list(a.kwonlyargs) +
+                              ([a.vararg] if a.vararg else []) +
+                              ([a.kwarg] if a.kwarg else [])):
+                        bound.add(x.arg)
+            elif isinstance(n, (ast.ListComp, ast.SetComp, ast.DictComp,
+                                ast.GeneratorExp)):
+                for g in n.generators:
+                    bind(g.target)
+            elif isinstance(n, ast.Lambda):
+                a = n.args
+                for x in (list(a.posonlyargs) + list(a.args) +
+                          list(a.kwonlyargs) +
+                          ([a.vararg] if a.vararg else []) +
+                          ([a.kwarg] if a.kwarg else [])):
+                    bound.add(x.arg)
+            elif isinstance(n, ast.Global):
+                bound.update(n.names)
+
+        # pass 2: module-level statements only, every name they LOAD
+        for stmt in tree.body:
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                 ast.ClassDef)):
+                continue
+            for n in ast.walk(stmt):
+                if (isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+                        and n.id not in bound
+                        and not hasattr(builtins, n.id)):
+                    bad.append("%s:%d %s" % (rel, n.lineno, n.id))
+    assert not bad, ("module-level name(s) that are never bound: %s"
+                     % ", ".join(sorted(set(bad))[:10]))
+
+
+@check
+def every_validation_case_publishes_its_data_or_says_why_not():
+    """a plate with no experiment_<key>.csv is named as such in the sources file"""
+    import pandas as pd
+    import gen_validation as GV
+    # Four of the five plates publish experiment_<key>.csv beside
+    # solver_<key>.csv; Schubauer & Skramstad publishes only the solver file,
+    # because NACA Report 909 gives its results as un-digitisable 1948 figures.
+    # That is a good reason, and it lived in a Python comment - so a reader of
+    # the published data met a set with a hole in it and no explanation.  The
+    # rule this holds is not "every case has a file" but "every case has a file
+    # OR the sources table says, in the data, that it does not".
+    root = utss_paths.ROOT
+    src = pd.read_csv(os.path.join(root, "06_validation/sources_and_references.csv"))
+    blob = " ".join(src["reference"].astype(str))
+    for key in GV.CASES:
+        have_solver = os.path.exists(
+            os.path.join(root, "06_validation/solver_%s.csv" % key))
+        assert have_solver, "no solver_%s.csv for a case in CASES" % key
+        if os.path.exists(os.path.join(root, "06_validation/experiment_%s.csv" % key)):
+            continue
+        assert "experiment_%s.csv" % key in blob, (
+            "%s publishes no experiment_%s.csv and sources_and_references.csv "
+            "does not say why; the absence has to be stated where a reader of "
+            "the data will meet it" % (key, key))
+
+
+@check
+def a_blank_bubble_length_always_has_a_reason_beside_it():
+    """bubble_len_theta_s is blank only where there is no bubble to measure"""
+    import pandas as pd
+    # aerofoil_nlf0416.csv carries a separation point and a bubble length, and
+    # one row has the first and not the second.  That is correct - the bubble
+    # BURST, so it has no reattachment and no finite length - but nothing said
+    # so, and "blank because burst" and "blank because it went missing" are the
+    # same blank.  The columns that explain it are already in the file; this
+    # holds them to it, in both directions.
+    d = pd.read_csv(os.path.join(utss_paths.ROOT,
+                                 "06_validation/aerofoil_nlf0416.csv"))
+    no_len = d["bubble_len_theta_s"].isna().to_numpy()
+    no_sep = d["x_sep_c"].isna().to_numpy()
+    burst = d["burst"].astype(bool).to_numpy()
+    unexplained = no_len & ~no_sep & ~burst
+    assert not unexplained.any(), (
+        "%d row(s) have a separation point and no bubble length and did not "
+        "burst: rows %s" % (int(unexplained.sum()),
+                            list(np.flatnonzero(unexplained))))
+    # and the converse: a length without a separation point is meaningless
+    orphan = ~no_len & no_sep
+    assert not orphan.any(), (
+        "%d row(s) carry a bubble length with no separation point: rows %s"
+        % (int(orphan.sum()), list(np.flatnonzero(orphan))))
+
+
+@check
+def the_field_files_mask_every_column_or_none():
+    """speed_ms is blank exactly where Vx_ms, Vy_ms are, and equals their magnitude"""
+    import pandas as pd
+    # field_pressure_*.csv blanks the cells inside the section and within a
+    # panel length of it, because they sit on the panel singularity.  It
+    # blanked C_p and the speed and published Vx, Vy raw, so the file said both
+    # "there is no flow here" and, in the next two columns, what that flow was
+    # - up to 162.1 m/s against a 131.0 m/s free stream.  A masked field has to
+    # be masked in every column that describes it, or the file contradicts
+    # itself and whoever recomputes the speed from the components gets numbers
+    # where the file says there are none.
+    for case in ("cruise", "climb"):
+        p = os.path.join(utss_paths.ROOT, "04_solution/field_pressure_%s.csv" % case)
+        df = pd.read_csv(p)
+        m = df["speed_ms"].isna().to_numpy()
+        for c in ("Cp", "Vx_ms", "Vy_ms"):
+            assert (df[c].isna().to_numpy() == m).all(), (
+                "%s: %s is masked on %d cells and speed_ms on %d - a masked "
+                "field must be masked in every column"
+                % (case, c, int(df[c].isna().sum()), int(m.sum())))
+        assert m.any(), "%s: nothing is masked; the body is not being blanked" % case
+        v = np.hypot(df["Vx_ms"].to_numpy(float), df["Vy_ms"].to_numpy(float))
+        d = np.abs(df["speed_ms"].to_numpy(float) - v)[~m]
+        assert d.max() < 1e-3, (
+            "%s: speed_ms is not the magnitude of (Vx_ms, Vy_ms); worst "
+            "disagreement %.3g m/s" % (case, d.max()))
+
+
+@check
+def the_baseline_diff_calls_an_unchanged_column_unchanged():
+    """a text column with blank cells does not compare unequal to itself"""
+    import pandas as pd
+    sys.path.insert(0, os.path.join(utss_paths.ROOT, "tools"))
+    import baseline as B
+    # baseline.py is what says WHICH numbers a change moved, and its documented
+    # contract is that it exits 1 only when something did.  It was exiting 1 on
+    # an unchanged tree: under the pinned pandas a text column comes back as
+    # the `str` dtype, whose .astype(str) leaves blank cells as float nan
+    # OBJECTS rather than converting them, and nan != nan - so every blank row
+    # compared unequal to itself and transition_length_measured.csv was
+    # reported CHANGED, "nan -> nan", against a snapshot of ITSELF.
+    #
+    # The tracked CSV that has such a column is the one the check builds from,
+    # so this fails again if the dtype behaviour changes underneath it.
+    a = pd.read_csv(os.path.join(utss_paths.ROOT,
+                                 "06_validation/transition_length_measured.csv"))
+    blank = [c for c in a.columns
+             if not pd.api.types.is_numeric_dtype(a[c]) and a[c].isna().any()]
+    assert blank, ("no tracked CSV column with blank text cells is left to "
+                   "exercise the comparison this check exists for")
+    moved, note = B._cmp_frame(a, a.copy(), 1e-9, 1e-12)
+    assert note is None and not moved, (
+        "a frame compares unequal to itself: %s %s" % (note, moved))
+
+    # and a genuine change in such a column is still caught, including a blank
+    # appearing where text was - only BOTH sides missing is excused
+    c = blank[0]
+    i = int(a[c].notna().to_numpy().argmax())
+    b = a.copy(); b.loc[i, c] = "EDITED"
+    assert B._cmp_frame(a, b, 1e-9, 1e-12)[0], "an edited text cell went unseen"
+    b = a.copy(); b.loc[i, c] = None
+    assert B._cmp_frame(a, b, 1e-9, 1e-12)[0], "a blanked text cell went unseen"
+
+
 def main():
     only = None
     if "-k" in sys.argv:

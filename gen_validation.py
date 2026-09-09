@@ -283,9 +283,24 @@ def run_validation():
       "ERCOFTAC Workshop; reproduced in Savill (1993) and Langtry & Menter, AIAA J. 47(12), 2009."),
      ("Validation","ERCOFTAC T3B flat plate",
       "Roach & Brierley (1990), ERCOFTAC T3B (Tu=6%); Langtry & Menter, AIAA J. 47(12), 2009."),
+     # WHY THIS CASE HAS NO experiment_SS.csv.  Every other validation plate
+     # publishes solver_<key>.csv beside experiment_<key>.csv; this one
+     # publishes only the solver file, and until now the reason lived in a
+     # Python comment where no reader of the data would meet it - a published
+     # set with a hole in it and the explanation somewhere else.  NACA Report
+     # 909 gives its transition results as figures in a 1948 scan and no
+     # reliable digitisation was available, so the onset Reynolds number is all
+     # that is carried, and it is carried in validation_summary.csv rather than
+     # duplicated into a one-row experiment file.
      ("Validation","Schubauer & Skramstad natural transition",
       "Schubauer G.B. & Skramstad H.K. (1948), 'Laminar boundary-layer "
-      "oscillations and transition on a flat plate', NACA Report 909."),
+      "oscillations and transition on a flat plate', NACA Report 909.  NO "
+      "MEASURED C_f DISTRIBUTION IS CARRIED for this case and there is no "
+      "experiment_SS.csv: the report's transition results are figures in a "
+      "1948 scan and no reliable digitisation was available to the author, so "
+      "only the onset Reynolds number is used - Re_x,tr = 2.8e6 at Tu = "
+      "0.03 %, equivalently Re_theta_t = 1100 via Re_theta = 0.664 sqrt(Re_x) "
+      "- and it appears in validation_summary.csv."),
      ("Calibration","Bypass onset correlation (AGS)",
       "Abu-Ghannam B.J. & Shaw R. (1980), 'Natural transition of boundary layers "
       "- the effects of turbulence, pressure gradient and flow history', J. Mech. Eng. Sci. 22(5)."),
