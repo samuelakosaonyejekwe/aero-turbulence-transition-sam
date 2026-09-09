@@ -929,6 +929,36 @@ para("The polar carries θ_TE/c, the trailing-edge momentum thickness as a fract
  "rather than typed, and neither was what it returns.)"
  % (float(_pol.theta_te_c.max()), _OFF["te260"], _OFF["te160"], _OFF["te360"],
     _OFF["cd"]))
+_bke = pd.read_csv("04_solution/laminar_bucket_edge.csv")
+_bke_i = int(_bke.forward_peak_has_crossed.astype(bool).to_numpy().argmax())
+_bke_a, _bke_b = _bke.iloc[_bke_i - 1], _bke.iloc[_bke_i]
+para("THE POLAR IS TABULATED AT ONE DEGREE AND STEPS OVER A DISCONTINUITY. Between 2° and 3° "
+ "the upper-surface transition collapses from %.3f chord to %.3f and the section drag rises "
+ "%.0f per cent, and the table above shows it without saying why. It is not a resolution "
+ "failure: refining the incidence does not smooth the jump, only locate it. This section has "
+ "TWO competing amplification maxima — one under the leading-edge suction peak, one in the "
+ "mid-chord recovery — and onset is wherever N/N_crit first reaches one, so the answer is "
+ "decided by which of them crosses first. %s resolves the crossing: the forward peak rises "
+ "smoothly through %.4f at %.2f° and %.4f at %.2f°, and on those two neighbouring solves the "
+ "transition point moves from %.4f chord to %.4f — %.0f per cent of the chord, for a crossing "
+ "by %.0f parts in ten thousand. x_tr is genuinely discontinuous in incidence while the N "
+ "field beneath it is smooth. That is the edge of the laminar bucket, a property of the "
+ "aerofoil and not of the discretisation, and the drag either side of it is as trustworthy as "
+ "anywhere else on the polar."
+ % (float(_pol.loc[_pol.alpha_deg == 2.0, "xtr_upper_c"].iloc[0]),
+    float(_pol.loc[_pol.alpha_deg == 3.0, "xtr_upper_c"].iloc[0]),
+    100.0*(float(_pol.loc[_pol.alpha_deg == 3.0, "Cd"].iloc[0])
+           / float(_pol.loc[_pol.alpha_deg == 2.0, "Cd"].iloc[0]) - 1.0),
+    "@@TAB:bucket_edge@@",
+    float(_bke_a.N_over_Ncrit_forward), float(_bke_a.alpha_deg),
+    float(_bke_b.N_over_Ncrit_forward), float(_bke_b.alpha_deg),
+    float(_bke_a.x_tr_upper_c), float(_bke_b.x_tr_upper_c),
+    100.0*(float(_bke_a.x_tr_upper_c) - float(_bke_b.x_tr_upper_c)),
+    1e4*(float(_bke_b.N_over_Ncrit_forward) - 1.0)))
+table_from_csv("04_solution/laminar_bucket_edge.csv", key="bucket_edge",
+               cap="The edge of the laminar bucket, resolved (laminar_bucket_edge.csv). "
+                   "The transition point jumps when the leading-edge amplification peak "
+                   "crosses N_crit, not when the incidence passes a threshold.")
 _sys = pd.read_csv("04_solution/squire_young_station_sensitivity.csv")
 # The shipped station is the row the sweep marks as its own reference, not a
 # literal 0.98: that equality tied the report to a constant it does not read.

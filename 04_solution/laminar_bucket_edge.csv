@@ -1,0 +1,17 @@
+alpha_deg,Cd_counts,x_tr_upper_c,N_over_Ncrit_forward,x_forward_peak_c,forward_peak_has_crossed,mechanism
+2.8,53.53,0.4324,0.8696,0.1988,False,TS-natural
+2.82,54.37,0.4204,0.8878,0.1892,False,TS-natural
+2.84,55.37,0.4084,0.9063,0.1892,False,TS-natural
+2.86,55.41,0.4084,0.9245,0.1892,False,TS-natural
+2.88,56.41,0.3964,0.9429,0.1988,False,TS-natural
+2.9,57.49,0.3845,0.9618,0.1988,False,TS-natural
+2.92,59.43,0.3609,0.981,0.1892,False,TS-natural
+2.94,73.52,0.1892,1.0008,0.1892,True,TS-natural
+2.96,76.52,0.1528,1.004,0.1528,True,TS-natural
+2.98,77.92,0.1358,1.0069,0.1358,True,TS-natural
+3.0,78.24,0.1276,1.0125,0.1276,True,TS-natural
+3.02,78.95,0.1196,1.0147,0.1196,True,TS-natural
+3.04,79.66,0.1119,1.0128,0.1119,True,TS-natural
+3.06,80.36,0.1044,1.0109,0.1044,True,TS-natural
+3.08,81.17,0.0971,1.0057,0.0971,True,TS-natural
+3.1,81.29,0.0971,1.0238,0.0971,True,TS-natural

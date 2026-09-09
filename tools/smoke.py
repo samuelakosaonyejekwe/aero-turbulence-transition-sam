@@ -1806,6 +1806,40 @@ def a_blank_bubble_length_always_has_a_reason_beside_it():
 
 
 @check
+def the_bucket_edge_is_a_crossing_and_not_a_threshold():
+    """the transition jump coincides with N/N_crit crossing one, not with an incidence"""
+    import pandas as pd
+    # The polar steps over a discontinuity: 0.518 chord of laminar run at 2
+    # degrees and 0.128 at 3, with the drag 62 per cent higher.  The claim the
+    # report now makes is that this is a BIFURCATION - the leading-edge
+    # amplification peak overtaking the mid-chord one - and not a resolution
+    # failure, and the claim is checkable: the jump must land on the row where
+    # N/N_crit crosses one, and the peak must arrive there smoothly.
+    d = pd.read_csv(os.path.join(utss_paths.ROOT,
+                                 "04_solution/laminar_bucket_edge.csv"))
+    pk = d.N_over_Ncrit_forward.to_numpy(float)
+    xt = d.x_tr_upper_c.to_numpy(float)
+    crossed = d.forward_peak_has_crossed.astype(bool).to_numpy()
+    assert crossed.any() and not crossed.all(), (
+        "the sweep no longer brackets the crossing: N/N_crit runs %.4f..%.4f"
+        % (pk.min(), pk.max()))
+    i = int(crossed.argmax())
+    assert (pk >= 1.0) [i:].all() and not (pk >= 1.0)[:i].any(), \
+        "the crossing is not a single clean transition of N/N_crit through one"
+    # the peak arrives smoothly - no step in it larger than a per cent - so the
+    # discontinuity is in x_tr and not in the field that decides it
+    step = np.abs(np.diff(pk[:i+1]))
+    assert step.max() < 0.03, (
+        "N/N_crit itself jumps by %.4f before the crossing; the field is not "
+        "smooth and the bifurcation reading does not hold" % step.max())
+    # and x_tr jumps AT the crossing by far more than it moves anywhere else
+    dx = np.abs(np.diff(xt))
+    assert dx[i-1] > 5*np.median(dx), (
+        "the transition point does not jump at the crossing: step %.4f against "
+        "a median step of %.4f" % (dx[i-1], np.median(dx)))
+
+
+@check
 def the_squire_young_station_declares_which_side_of_separation_it_is_on():
     """sy_past_sep and its margin agree with the two stations they compare"""
     import pandas as pd

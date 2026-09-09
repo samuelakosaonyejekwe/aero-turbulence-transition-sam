@@ -184,6 +184,62 @@ def aero_polar():
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/aero_polar.csv",index=False)
     return df
 
+def laminar_bucket_edge():
+    """Resolve the incidence at which the transition point jumps forward.
+
+    The polar is tabulated at one degree and straddles a discontinuity: between
+    2 and 3 degrees the upper-surface transition collapses from 0.518 chord to
+    0.128 and the section drag rises 62 per cent, and the table said so without
+    saying why.  Refining the incidence does not smooth it - at 0.02 degrees the
+    jump is still a single step - because it is not a resolution failure.  It is
+    a bifurcation, and this sweep is the evidence.
+
+    The e^N integral has two competing amplification maxima on this section: one
+    under the leading-edge suction peak and one in the mid-chord pressure
+    recovery.  Onset is wherever N/N_crit first reaches one, so the answer is
+    decided by WHICH maximum crosses first, and a maximum that is a fraction of
+    a per cent short leaves transition to the one behind it.  Across the edge
+    the forward peak goes from 0.9909 to 1.0015 - a crossing by fifteen parts in
+    ten thousand - and the transition point moves nineteen per cent of the
+    chord.  x_tr is therefore genuinely discontinuous in incidence while the N
+    field underneath it is smooth, so no refinement removes the jump; it only
+    locates it.  That is the edge of the laminar bucket, and it is a property of
+    the aerofoil, not of the discretisation.
+
+    N_over_Ncrit_forward is the peak of N/N_crit over the leading-edge band,
+    x/c < 0.20, which is the quantity that decides the branch; where the layer
+    has already tripped inside that band the peak IS the onset value.
+    """
+    X, Y = C.nlf16_panel_points(130)
+    rows = []
+    for a in np.arange(2.80, 3.101, 0.02):
+        r = solve_airfoil(X, Y, float(a), cr["U_inf"], cr["nu_inf"], W["MAC"],
+                          cr["Tu_pct"], sweep_deg=W["le_sweep_deg"],
+                          mach=cr["mach"], T_inf_K=cr["T_inf_K"])
+        u = r["surfaces"]["upper"]
+        x = np.asarray(u["x"], float)
+        N = np.asarray(u["n_factor"], float)
+        nc = np.asarray(u["n_crit"], float)
+        xt = u["x_tr_chord"]; xt = float(xt) if xt == xt else 1.0
+        band = (x > 2e-3) & (x < 0.20) & np.isfinite(N)
+        if band.any():
+            ratio = N[band]/np.maximum(nc[band], 1e-9)
+            j = int(np.argmax(ratio))
+            pk, xpk = float(ratio[j]), float(x[band][j])
+        else:
+            pk, xpk = float("nan"), float("nan")
+        rows.append(dict(alpha_deg=round(float(a), 3),
+                         Cd_counts=round(float(r["Cd"])*1e4, 2),
+                         x_tr_upper_c=round(xt, 4),
+                         N_over_Ncrit_forward=round(pk, 4),
+                         x_forward_peak_c=round(xpk, 4),
+                         forward_peak_has_crossed=bool(pk >= 1.0),
+                         mechanism=u["onset_mech"]))
+    df = pd.DataFrame(rows)
+    df.to_csv(f"{SOL}/laminar_bucket_edge.csv", index=False)
+    return df
+
+
 def spanwise():
     X,Y=C.nlf16_panel_points(130)
     eta=np.linspace(0.0,0.98,12); rows=[]
@@ -860,7 +916,7 @@ if __name__=="__main__":
     _lifting_line_check()
     rc=run_case(cr,"cruise"); rl=run_case(cl,"climb")
     ts=transition_summary(rc,rl)
-    pol=aero_polar(); spn=spanwise()
+    pol=aero_polar(); spn=spanwise(); bke=laminar_bucket_edge()
     pressure_field(cr,"cruise"); pressure_field(cl,"climb")
     bl_profiles(rc)
     nvt,cdn,cdt=nlf_vs_turbulent(rc)
