@@ -1105,7 +1105,7 @@ para("INTEGRATING THIS TABLE DOES NOT RETURN THE WING C_L TWO TABLES EARLIER, an
     float((_sp.c_l_section/_sp.c_l_lifting_line).iloc[-1]),
     _CL_strip, _CL_pub, 100.0*(_CL_pub-_CL_strip)/_CL_pub, _CL_ll_int,
     float(_sp.eta.max())), italic=True, size=10)
-table_from_csv("04_solution/spanwise_distribution.csv",
+table_from_csv("04_solution/spanwise_distribution.csv", key="spanwise",
                cap="Span-wise distribution (spanwise_distribution.csv).")
 image("05_postprocessing/csv_plots/spanwise_transition.png", width=5.8,
       cap="Span-wise transition front and section drag.")
@@ -1167,8 +1167,24 @@ for f,c in [("bl_velocity_profiles","Boundary-layer velocity profiles."),
 table_from_csv("04_solution/bl_profiles_cruise.csv", max_rows=28, sample=True,
    cap="BL velocity/temperature profiles (bl_profiles_cruise.csv, sampled).")
 h2("10.3  Three-dimensional surface contours and vectors")
-para("The full 3-D wing surface is coloured by the predicted fields; the transition front is "
- "directly visible as the laminar-to-turbulent boundary on the intermittency contour.")
+para("The full 3-D wing surface is coloured by the predicted fields. The intermittency contour "
+ "shows the laminar-to-turbulent change, BUT THE COLOUR BOUNDARY IS NOT THE ONSET LINE, and "
+ "this sentence used to invite exactly that misreading by calling it \"the transition front\". "
+ "Transition has a length: γ leaves zero at onset and reaches one only after the Narasimha "
+ "spot-growth distance, so the boundary the eye picks out — the γ = ½ contour — lies aft of "
+ "onset by %.3f to %.3f chord across this span, more than the whole %.3f chord difference "
+ "between the cruise upper and lower onsets that Section 9 treats as a result. On the upper "
+ "surface onset runs %.3f at the root to %.3f at the tip while the half-intermittency contour "
+ "runs %.3f to %.3f; both columns are in %s so the figure can be read against the numbers "
+ "rather than instead of them. Outboard of about %.0f per cent semi-span the layer does not "
+ "reach γ = 0.9 before the trailing edge at all, so there the contour never closes."
+ % ((_sp.x_gamma50_upper_c - _sp.xtr_upper_c).min(),
+    (_sp.x_gamma50_upper_c - _sp.xtr_upper_c).max(),
+    abs(float(_ts_clip.loc[(_ts_clip.case == "CRUISE") & (_ts_clip.surface == "upper"), "x_tr_c"].iloc[0])
+        - float(_ts_clip.loc[(_ts_clip.case == "CRUISE") & (_ts_clip.surface == "lower"), "x_tr_c"].iloc[0])),
+    _sp.xtr_upper_c.min(), _sp.xtr_upper_c.max(),
+    _sp.x_gamma50_upper_c.min(), _sp.x_gamma50_upper_c.max(),
+    "@@TAB:spanwise@@", 80.0))
 for f,c in [("td_Cp","3-D wing surface contour — pressure C_p."),
             ("td_Cf","3-D wing surface contour — skin friction C_f (×10³)."),
             ("td_gamma","3-D wing surface contour — intermittency γ (transition front)."),

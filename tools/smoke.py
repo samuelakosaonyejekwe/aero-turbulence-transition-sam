@@ -1806,6 +1806,33 @@ def a_blank_bubble_length_always_has_a_reason_beside_it():
 
 
 @check
+def the_intermittency_contour_is_not_the_onset_line():
+    """the gamma = 1/2 station is published and lies aft of onset on every strip"""
+    import pandas as pd
+    # Sec. 10.3 used to call the colour boundary of the 3-D intermittency
+    # figure "the transition front".  It is not: gamma leaves zero at onset and
+    # reaches one only after the Narasimha spot-growth length, so the contour
+    # an eye picks out is gamma = 1/2, which sits 0.14 to 0.20 chord aft of
+    # onset here - more than the whole cruise upper-to-lower difference the
+    # report treats as a result.  Both stations are columns now; this holds the
+    # ordering that makes the distinction meaningful.
+    d = pd.read_csv(os.path.join(utss_paths.ROOT,
+                                 "04_solution/spanwise_distribution.csv"))
+    for up in ("upper", "lower"):
+        onset = d["xtr_%s_c" % up].to_numpy(float)
+        half = d["x_gamma50_%s_c" % up].to_numpy(float)
+        ok = np.isfinite(onset) & np.isfinite(half) & (onset < 1.0)
+        assert ok.any(), "no strip has both an onset and a half-intermittency station"
+        assert (half[ok] > onset[ok]).all(), (
+            "%s surface: the gamma = 1/2 contour is not aft of onset on every "
+            "strip: %s vs %s" % (up, list(half[ok]), list(onset[ok])))
+        gap = half[ok] - onset[ok]
+        assert gap.min() > 0.02, (
+            "%s surface: the two stations have collapsed onto each other "
+            "(smallest gap %.4f chord); transition has a length" % (up, gap.min()))
+
+
+@check
 def the_span_table_carries_the_loading_that_closes_the_wing_lift():
     """integrating c_l_lifting_line over the span returns the published wing C_L"""
     import pandas as pd

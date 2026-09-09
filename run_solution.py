@@ -277,6 +277,20 @@ def spanwise():
         # mean laminar fraction is defined at every station
         xu=u["x_tr_chord"]; xu=1.0 if xu!=xu else float(xu)
         xl=l["x_tr_chord"]; xl=1.0 if xl!=xl else float(xl)
+        # WHERE THE INTERMITTENCY CONTOUR ACTUALLY CHANGES COLOUR.  Onset is
+        # where gamma leaves zero; the boundary an eye reads off the 3-D
+        # intermittency figure is the gamma = 0.5 contour, and transition has a
+        # LENGTH, so the two are not the same station.  Measured over this
+        # span the second lies 0.14 to 0.20 chord aft of the first, which is
+        # more than the whole difference between the cruise upper and lower
+        # onsets - so a reader invited to read "the transition front" off that
+        # figure was being invited to read the wrong number.  Published so the
+        # report can quote it instead of asserting it.
+        def _x_at_gamma(sf, q):
+            xs=np.asarray(sf["x"],float); g=np.asarray(sf["gamma"],float)
+            m=np.isfinite(g) & np.isfinite(xs)
+            if not m.any() or not (g[m] >= q).any(): return None
+            return round(float(xs[m][int(np.argmax(g[m] >= q))]), 3)
         rows.append(dict(eta=round(e,3), y_m=round(e*W["span_b"]/2,3),
             chord_m=round(chord,3), Re_local=round(Re,-2),
             alpha_geom_deg=round(ageo,2),
@@ -285,6 +299,8 @@ def spanwise():
             c_l_section=round(r["Cl"],4),
             c_l_lifting_line=round(_a0e*np.radians(aeff-_al0),4),
             xtr_upper_c=round(xu,3), xtr_lower_c=round(xl,3),
+            x_gamma50_upper_c=_x_at_gamma(u,0.5),
+            x_gamma50_lower_c=_x_at_gamma(l,0.5),
             Cd_section=round(r["Cd"],5),
             laminar_fraction=round(0.5*(xu+xl),3)))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/spanwise_distribution.csv",index=False)
