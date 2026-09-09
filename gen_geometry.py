@@ -583,6 +583,11 @@ def draw_section_BB(df_pl):
     # ---- outer skin (OML) ----
     ax.plot(xu,yu,color=OUT,lw=2.4); ax.plot(xl,yl,color=OUT,lw=2.4)
     # ---- inner skin line (constant skin thickness) -> skin band w/ hatch ----
+    # A FRACTION OF CHORD, which is what the drawing draws.  Its annotation
+    # read "t ~ 12 mm", as though the 0.012 were metres: at this station the
+    # band drawn is 0.012 x 2.141 m = 25.7 mm, so the label and the geometry
+    # disagreed by a factor of two.  The label is derived from this line now
+    # and gives both forms, so the two cannot part company again.
     tsk=0.012*chord
     xs_=np.linspace(0.005,0.995,200)*chord
     yUi=np.array([yU(x) for x in xs_])-tsk
@@ -627,7 +632,8 @@ def draw_section_BB(df_pl):
                 xytext=(0.10*chord, 0.44*chord), color=PALETTE[1], fontsize=10,
                 ha="center", va="center",
                 arrowprops=dict(arrowstyle="->", color=PALETTE[1], lw=0.9))
-    ax.annotate("CFRP skin\n(t ≈ 12 mm)", xy=(0.42*chord, yU(0.42*chord)),
+    ax.annotate(f"CFRP skin\n(t = {tsk/chord:.3f} c = {tsk*1e3:.0f} mm)",
+                xy=(0.42*chord, yU(0.42*chord)),
                 xytext=(0.46*chord, 0.30*chord), color=PALETTE[0], fontsize=10,
                 ha="center", va="center",
                 arrowprops=dict(arrowstyle="->", color=PALETTE[0], lw=0.9))
