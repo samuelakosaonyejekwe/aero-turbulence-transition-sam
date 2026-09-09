@@ -70,36 +70,51 @@ def _panel(fig, w_in, h_in):
 
 
 def _wing_crop():
-    """The wing surface cut out of the 3-D render, without its furniture.
+    """The wing surface cut out of the 3-D render, with the axes REMOVED.
 
     Pasting the whole figure in shrinks the wing to a fifth of the panel and
     carries its title, colorbar and axis labels with it, unreadable at that
-    size.  The surface is found instead by its SATURATION - it is the only
-    strongly coloured thing on a light-grey 3-D box - and the colorbar, which
-    is also saturated, is identified as the narrow columns that are coloured
-    over most of the figure height and excluded.
+    size.  The surface is found by its SATURATION - it is the only strongly
+    coloured thing on a light-grey 3-D box.
+
+    A BOUNDING BOX IS NOT ENOUGH, which is what this used to do.  The y-axis
+    label and its tick numbers are drawn on the floor pane BENEATH the wing,
+    inside the surface's own bounding box, so no crop can exclude them; and the
+    z tick labels sit between the surface's right edge and the colorbar, where
+    the right-hand padding cut them through the middle of a glyph.  Both cards
+    shipped with "y span [m]", "8 6 4 2" and three half-eaten "0.0"s on them,
+    on the two most-looked-at images in the repository.
+
+    So the mask is used as an ALPHA channel rather than as a crop rule: the
+    surface is closed, hole-filled and reduced to its largest connected
+    component - which is the wing, the colorbar being an order of magnitude
+    smaller - and everything else becomes transparent.  The wing then sits on
+    the card's own gradient instead of in a white box, and there is no axis
+    furniture left to clip.
     """
     im = plt.imread(WING)
     rgb = im[..., :3]
     mx = rgb.max(-1); mn = rgb.min(-1)
-    mask = (mx - mn > 0.25) & (mx > 0.3)
+    mask = (mx - mn > 0.18) & (mx > 0.25)
     if not mask.any():
         return im
-    h, w = mask.shape
-    bar = mask.sum(0) > 0.25*h            # the colorbar strip
-    right = int(np.nonzero(bar)[0].min()) - int(0.02*w) if bar.any() else w
-    m2 = mask[:, :right]
-    if not m2.any():
+    from scipy import ndimage as ndi
+    # close the hatched tip cap and the contour seams, then keep the wing
+    mask = ndi.binary_closing(mask, structure=np.ones((9, 9)))
+    lab, n = ndi.label(mask)
+    if n > 1:
+        sizes = ndi.sum(mask, lab, range(1, n + 1))
+        mask = lab == (1 + int(np.argmax(sizes)))
+    mask = ndi.binary_fill_holes(mask)
+    if not mask.any():
         return im
-    ys, xs = np.nonzero(m2)
-    # Asymmetric on purpose.  The tick labels sit BELOW the surface, so equal
-    # padding either cut them through the middle of a glyph or dragged the
-    # whole axis frame in; a small bottom margin excludes them cleanly and the
-    # wing stays the subject.
-    px = int(0.035*w)
-    y0 = max(0, ys.min() - int(0.055*h)); y1 = min(h, ys.max() + int(0.012*h))
-    x0 = max(0, xs.min() - px); x1 = min(right, xs.max() + px)
-    return im[y0:y1, x0:x1]
+    ys, xs = np.nonzero(mask)
+    h, w = mask.shape
+    pad = int(0.004*w)
+    y0 = max(0, ys.min() - pad); y1 = min(h, ys.max() + pad + 1)
+    x0 = max(0, xs.min() - pad); x1 = min(w, xs.max() + pad + 1)
+    out = np.dstack([rgb, mask.astype(rgb.dtype)])
+    return out[y0:y1, x0:x1]
 
 
 def _wing(fig, rect):
@@ -122,7 +137,11 @@ def _stat(ax, x, y, big, small, size_big, size_small):
 def banner(h):
     fig = plt.figure(figsize=(16.0, 4.0), dpi=100)
     ax = _panel(fig, 16.0, 4.0)
-    _wing(fig, [0.700, 0.075, 0.290, 0.85])
+    # The rect is deliberately taller than the wing image's aspect, so the
+    # surface is fitted inside it with a margin instead of bleeding off the
+    # top and right edges of the card, which is what the old rect did once
+    # the axis furniture stopped padding the crop.
+    _wing(fig, [0.685, 0.090, 0.285, 0.82])
     ax.add_patch(Rectangle((0.70, 0), 0.30, 1, transform=ax.transAxes,
                            color=BG_DARK, alpha=0.0, zorder=1))
     ax.text(0.043, 0.845, "AERODYNAMICS   ·   CFD CASE STUDY", color=ACCENT,
@@ -147,7 +166,8 @@ def banner(h):
 def social(h):
     fig = plt.figure(figsize=(12.8, 6.4), dpi=100)
     ax = _panel(fig, 12.8, 6.4)
-    _wing(fig, [0.520, 0.115, 0.470, 0.77])
+    # see the note on the banner rect: fitted with a margin, not bled off
+    _wing(fig, [0.505, 0.130, 0.455, 0.74])
     ax.text(0.050, 0.875, "AERODYNAMICS   ·   CFD CASE STUDY", color=ACCENT,
             fontsize=14, fontweight="bold", va="center")
     ax.text(0.047, 0.755, "AETHER-NLF 25", color=TEXT, fontsize=48,

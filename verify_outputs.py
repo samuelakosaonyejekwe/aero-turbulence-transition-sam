@@ -22,8 +22,8 @@ HOW THE MATCHING WORKS, AND WHY IT IS NOT `value in text`
 --------------------------------------------------------
 The first version of this script asked `value in txt` over the whole extracted
 document.  That is not a check.  "168" occurs inside "1683", inside "0.1685",
-inside a page number and inside any of the several hundred other numbers a
-66-page report prints; a three-digit value was all but guaranteed to "pass"
+inside a page number and inside any of the several thousand other numbers an
+eighty-page report prints; a three-digit value was all but guaranteed to "pass"
 whatever the report actually said.  Two things fix it:
 
   * numbers are matched as whole numeric TOKENS - not preceded by a digit or a
@@ -207,6 +207,9 @@ def checks():
     T_NSUM = "NLF(1)-0416 error statistics by surface"
     T_ABL = "Ablation study"
     T_VSUM = "Validation summary"
+    T_HEAD = "Headline predictions"
+    T_CFC = "What each swept-wing experiment requires of the cross-flow"
+    T_LENF = "The two forms of the transition-length correlation"
 
     want = [
         ("mean laminar extent", f"{nvt.mean_laminar_pct.iloc[0]:.1f}", T_NVT),
@@ -217,7 +220,17 @@ def checks():
         ("cruise upper x_tr/c", f"{tr('CRUISE','upper','x_tr_c'):.3f}", T_TS),
         ("cruise lower x_tr/c", f"{tr('CRUISE','lower','x_tr_c'):.3f}", T_TS),
         ("climb upper x_tr/c", f"{tr('CLIMB','upper','x_tr_c'):.3f}", T_TS),
-        ("section c_l", str(geo.loc[cl_row, "value"]), T_GEO),
+        # BOTH section lift coefficients, because they are different
+        # quantities and were being confused.  The geometry table's is the
+        # 2-D unswept section; the headline table's is the swept strip the
+        # case study actually reports, c_l = c_l,n cos^2(L), four per cent
+        # lower.  The README quoted the first in a headline table whose drag
+        # came from the second, and this file checked only the first, so
+        # nothing saw it.
+        ("section c_l, 2-D unswept", str(geo.loc[cl_row, "value"]), T_GEO),
+        ("section c_l, swept (headline)",
+         "%.3f" % float(frc.loc["Section lift coefficient Cl", "value"]),
+         T_HEAD),
         ("wing C_L", str(frc.loc["Wing C_L (lifting line, taper + washout + sweep)",
                                  "value"]), T_FRC),
         ("span efficiency e", str(frc.loc["Span efficiency e (lifting line)",
@@ -247,6 +260,33 @@ def checks():
         ("swept, independent C1=150", f"{sw2.err_pct_C1_150.abs().mean():.1f}", T_SW),
         ("swept, independent C1=200", f"{sw2.err_pct_C1_200.abs().mean():.1f}", T_SW),
     ]
+    # What each swept-wing facility requires of the criterion, and the scatter
+    # it requires it with.  The README carries this table by hand and nothing
+    # checked it; the coefficients of variation in it were also formed with a
+    # different ddof from the two other tables that report the scatter of the
+    # SAME ten numbers, so they disagreed with themselves.
+    _cfc = "06_validation/crossflow_criticals_summary.csv"
+    if os.path.exists(_cfc):
+        cfc = pd.read_csv(_cfc)
+        cfc = cfc[cfc.criterion == "surrogate Re_theta2"].set_index("dataset")
+        for _lab, _row in (("Dagenhart", "Dagenhart & Saric (calibration)"),
+                           ("Boltz", "Boltz et al. (independent)"),
+                           ("pooled", "Both facilities pooled")):
+            want += [
+                ("cross-flow critical Re_theta2, " + _lab,
+                 "%.0f" % cfc.loc[_row, "mean_critical_value"], T_CFC),
+                ("cross-flow scatter, " + _lab,
+                 "%.1f" % cfc.loc[_row, "coeff_of_variation_pct"], T_CFC),
+            ]
+    # The transition-length forms.  The README quoted the T3C4 difference as
+    # 2.85 per cent against the 2.71 the table generates.
+    _lenf = "06_validation/transition_length_forms.csv"
+    if os.path.exists(_lenf):
+        lenf = pd.read_csv(_lenf)
+        _t3 = lenf[lenf.case.str.contains("T3C4")]
+        if len(_t3):
+            want.append(("transition-length forms, T3C4 difference",
+                         "%.2f" % float(_t3.diff_pct.iloc[0]), T_LENF))
     # The Squire-Young station claim.  Two of its figures were typed into the
     # report, the README and two docstrings and stayed there through a change
     # to the swept-drag formulation that moved the drag they are differences
@@ -258,6 +298,12 @@ def checks():
             ("SY friction accumulated",
              f"{sy.friction_accumulated_counts:.2f}", None),
             ("SY formula moves", f"{sy.squire_young_moves_counts:.2f}", None),
+            # The drag movement over the range the invariant spread is taken
+            # on.  Without this the report was free to set a spread measured
+            # from 0.90c against a movement measured from 0.88c, which is what
+            # it did.
+            ("SY formula moves from the invariant station",
+             f"{sy.squire_young_moves_from_invariant_lo_counts:.2f}", None),
             ("SY omitted at cruise",
              f"{sy.friction_omitted_cruise_counts:.3f}", None),
             ("SY omitted at climb",
@@ -328,6 +374,18 @@ def structural_checks(txt, raw):
     out.append(("no unrounded float64 in the document", not longs,
                 "clean" if not longs
                 else "%d value(s), e.g. %s" % (len(longs), ", ".join(longs[:4]))))
+
+    # ... and no number printed beyond ten SIGNIFICANT figures, which is not
+    # the same test and is the one that was missing.  The generators round with
+    # .round(n), which rounds DECIMAL PLACES: a quantity of order 1e7 has none
+    # left to round, so the stagnation station's skin-friction coefficient went
+    # into the report's sampled state table as 16804859.1563012 - seven
+    # decimals, sixteen significant figures - and the check above passed it.
+    sig = [m for m in re.findall(r"\d+\.\d+", txt)
+           if len(re.sub(r"[^0-9]", "", m).lstrip("0")) > 10]
+    out.append(("no number beyond ten significant figures", not sig,
+                "clean" if not sig
+                else "%d value(s), e.g. %s" % (len(sig), ", ".join(sig[:4]))))
 
     # A number rendered as a bare sentinel or a failed format.
     # "nan" is matched case-insensitively: str(float('nan')) is 'nan' but numpy

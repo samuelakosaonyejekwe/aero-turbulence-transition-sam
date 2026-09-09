@@ -476,18 +476,24 @@ def growth_curve(H_target, Re_theta, alphas, N=110, y_max=60.0, y_half=6.0,
 # ----------------------------------------------------------------------
 # The table is indexed by shape factor, momentum-thickness Reynolds number and
 # dimensionless frequency, and holds the spatial amplification rate
-# sigma = -alpha_i*theta.  The shape-factor range stops short of the
-# Falkner-Skan separation profile (H = 4.00, and fs_H_range returns 3.9974;
-# this said 4.04, which is neither that value nor the 4.00 the same file gives
-# for the same profile eighty lines further down): the eigenvalue problem is
-# stiff
-# there and the separation-induced branch of the transition kernel, not the
-# amplification integral, is what decides transition in a separating layer.
-# The shape-factor grid is dense below H = 3.0, where the neutral boundary of
-# the Orr-Sommerfeld problem moves quickly and a coarse grid interpolates
-# across it, and it now runs past separation onto the reverse-flow branch so
-# that a separated shear layer reads its amplification rate from the same
-# table as an attached one.
+# sigma = -alpha_i*theta.  The shape-factor grid runs from H = 2.15 - strongly
+# accelerated and effectively stable - PAST the Falkner-Skan separation profile
+# (H = 4.00; fs_H_range returns 3.9974) and on along the reverse-flow branch to
+# its last node, H = 4.90, which is H_REVERSE, so that a separated shear layer
+# reads its amplification rate from the same table as an attached one.  It is
+# dense below H = 3.0, where the neutral boundary of the Orr-Sommerfeld problem
+# moves quickly and a coarse grid interpolates across it.
+#
+# This paragraph used to OPEN by saying the range "stops short of the
+# Falkner-Skan separation profile ... the eigenvalue problem is stiff there and
+# the separation-induced branch of the transition kernel, not the amplification
+# integral, is what decides transition in a separating layer", and then CLOSE
+# by saying it "now runs past separation onto the reverse-flow branch".  Both
+# cannot be true; the second is, because arange(3.00, 4.96, 0.095) ends at
+# 4.90.  The first sentence described the table as it stood before the bubble
+# closure was written and should have gone with it - that closure reads sigma
+# at H_REVERSE out of THIS table, so a range stopping at separation would have
+# left it with nothing to read.
 H_GRID   = np.concatenate([np.arange(2.15, 3.00, 0.025),
                            np.arange(3.00, 4.96, 0.095)])
 RET_GRID = np.geomspace(40.0, 8000.0, 40)
@@ -641,8 +647,9 @@ def tabulated_neutral_Re_theta(H=2.59129, hi=400.0, step=0.25):
     """Where the INTERPOLATED table first amplifies, and the nodes bracketing it.
 
     Returns (Re_theta, node_below, node_above).  neutral_Re_theta() measures the
-    eigenvalue solver by a direct sweep and puts the Blasius neutral point at
-    201 against the accepted 200.5; this measures what the boundary-layer march
+    eigenvalue solver by a direct sweep and returns 200.46 against the accepted
+    200.5 - not the 201 this docstring used to give.  THIS function measures
+    something else: what the boundary-layer march
     actually reads, which is the bilinear interpolation of RET_GRID.  The two
     differ because the last node below the crossing holds an exact zero, so the
     interpolant cannot turn positive until it has climbed away from that node.
@@ -1158,12 +1165,18 @@ def crossflow_factor(lam):
 #   the physical mode decays away from the wall and the spurious ones do not.
 #
 #   The outer boundary has to be far enough out for that test to mean anything.
-#   A wave of wavenumber k decays as exp(-k y), so at k = 0.1 and y_max = 40 it
-#   is still at five per cent of its peak where the decay is being measured and
-#   a strict filter throws the physical mode away - leaving only short waves and
+#   cf_modes measures the eigenfunction over the outer fifth of the domain and
+#   requires it to be under 2 per cent of the peak.  A wave of wavenumber k
+#   decays as exp(-k y), so at k = 0.1 the longest wave of interest is at
+#   exp(-0.1*0.8*40) = 4 per cent where that is measured on a y_max = 40 theta
+#   grid: the filter throws the PHYSICAL mode away, leaving only short waves and
 #   putting the envelope maximum on the edge of the surviving band.  At
-#   y_max = 100 the same mode is at 0.3 per cent while the spurious ones stay
-#   above 25 per cent, and the two separate cleanly.
+#   y_max = 100 theta the same wave is at exp(-8) = 0.03 per cent and passes,
+#   while the discretised continuous spectrum stays above 25 per cent of its
+#   peak out there (measured) and does not.  The two then separate cleanly.
+#   (This gave the two decay figures as five per cent and 0.3 per cent; neither
+#   is what exp(-k y) returns at the station the filter looks at, and the first
+#   of them did not even fail the 2 per cent test the sentence turns on.)
 #
 # The stationary condition is then solved as a real equation in the wave angle
 # rather than as a complex Newton step.  omega_r passes once through zero as
@@ -1517,8 +1530,8 @@ def crossflow_sigma(lam, sweep_deg, Re_theta):
     # Below the lowest tabulated Reynolds number the rate is taken as zero, not
     # held at the floor value.  The mode is damped there over all but six of
     # the table's 152 (lambda, sweep) cells, and those six are the
-    # plane-stagnation corner - beta >= 2 with more than 60 degrees of local
-    # sweep - which a march passes through only in its first few stations, at
+    # plane-stagnation corner - beta >= 2 at 60 degrees of local sweep or more
+    # - which a march passes through only in its first few stations, at
     # the attachment line, where a local-similarity description is not the
     # right one in any case.  Holding the rate at the floor instead invents
     # amplification exactly where the momentum thickness is smallest and
@@ -1642,9 +1655,10 @@ def H_from_Hstar(Hstar, H_prev=None):
     """Invert H*(H).
 
     On the ATTACHED branch H* falls monotonically with H and the inversion is
-    unique.  Across the whole family it is not: H* has a minimum at H = 4.027,
-    the fold where the attached and reverse-flow branches meet, and rises again
-    beyond it, so one H* names two profiles - one attached, one separated.
+    unique.  Across the whole family it is not: H* has a minimum at H = 4.03 -
+    a flat one, agreeing to six decimals over 4.025 to 4.040 - the fold where
+    the attached and reverse-flow branches meet, and rises again beyond it, so
+    one H* names two profiles, one attached and one separated.
 
     With nothing else to go on the attached root is the right one, and a bare
     call returns it; the dead-air march used to be capped at the fold for
@@ -1655,7 +1669,7 @@ def H_from_Hstar(Hstar, H_prev=None):
     bubble reaches.
 
     The inversion is ill-conditioned on the reverse branch - H* moves by only
-    0.7 per cent between H = 4.03 and H = 4.99 - so it is used there to CARRY a
+    0.8 per cent between H = 4.03 and H = 4.99 - so it is used there to CARRY a
     march that is already close, never to establish a shape factor from nothing.
     The caller limits how far H may move in one step for the same reason.
     """

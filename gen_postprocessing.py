@@ -271,15 +271,31 @@ def plot_surface(case):
     # Show the run over which the criterion is live.  On the climb case
     # transition is at 0.025c, so the whole crossing sits in the leftmost three
     # per cent of a full-chord axis and cannot be read.
+    #
+    # The limit follows the CURVES, not a fixed multiple of the onset station.
+    # 3*x_tr floored at 0.2 gave the climb panel an axis running to 0.2c while
+    # Re_theta left the top of the frame at 0.04c, so three quarters of the
+    # figure was blank; on cruise it ran to the trailing edge with the last
+    # third empty for the same reason.  The axis now stops a little past the
+    # station where Re_theta climbs out of the y-limit, with the onset still
+    # comfortably inside it.
     if it is not None:
-        ax.set_xlim(-0.01, min(1.0, max(3.0*float(up["x_c"][it]), 0.2)))
+        _ytop = ax.get_ylim()[1]
+        _rt = up["Re_theta"].to_numpy(float)
+        _out = np.nonzero(_rt > _ytop)[0]
+        _x_out = (float(up["x_c"][int(_out[0])]) if _out.size
+                  else float(up["x_c"].max()))
+        ax.set_xlim(-0.01, min(1.0, max(1.35*float(up["x_c"][it]),
+                                        1.15*_x_out, 0.05)))
     ax.set_xlabel("x/c"); ax.set_ylabel("Re_θ",color=PALETTE[0])
     mech=(up["state"].iloc[-1] if it is None else
           pd.read_csv(f"{SOL}/transition_summary.csv")
             .query("case==@case.upper() and surface=='upper'")["mechanism"].iloc[0])
     ax.set_title(f"Transition criterion — {case} upper (governing mechanism: {mech})")
     l1,la1=ax.get_legend_handles_labels(); l2,la2=ax2.get_legend_handles_labels()
-    ax.legend(l1+l2,la1+la2,fontsize=9,loc="upper left",framealpha=0.93)
+    # "best", not "upper left": on the climb case the Re_theta_t threshold
+    # starts at the top-left corner and the box sat on it
+    ax.legend(l1+l2,la1+la2,fontsize=9,loc="best",framealpha=0.93)
     finish(fig,f"{CSVP}/{case}_Retheta.png")
 
     # --- intermittency ---
@@ -620,10 +636,20 @@ def plot_3d(field):
             ax.plot_surface(XX,YY,ZZ,facecolors=fc,rstride=1,cstride=1,
                             linewidth=0,antialiased=True,shade=False)
         m=cm.ScalarMappable(norm=norm,cmap=cmap); m.set_array([])
-        cb=fig.colorbar(m,ax=ax,shrink=0.6,pad=0.02); cb.set_label(lab)
+        # pad 0.10, not 0.02.  A 3-D axes puts its z tick labels and its z
+        # label OUTSIDE its own bounding box on the right, so a colorbar packed
+        # against that box lands on top of them - which is what filling the
+        # sheet with set_box_aspect(zoom=) made visible: "z [m]" was printed
+        # across the colorbar's top tick label.
+        cb=fig.colorbar(m,ax=ax,shrink=0.6,pad=0.10); cb.set_label(lab)
         ax.set_xlabel("x [m]"); ax.set_ylabel("y span [m]"); ax.set_zlabel("z [m]")
         ax.view_init(elev=34,azim=-62); _tidy3d(ax)
-        try: ax.set_box_aspect((3.0,7.0,1.2))
+        # zoom fills the sheet: a 3-D axes leaves a wide margin round its own
+        # bounding box, so these renders were a wing in the middle of a great
+        # deal of white - and gen_assets crops this very figure for the README
+        # banner and the social card
+        try: ax.set_box_aspect((3.0,7.0,1.2), zoom=1.25)
+        except TypeError: ax.set_box_aspect((3.0,7.0,1.2))
         except Exception: pass
         ax.set_title(f"3D wing surface contour: {lab} (cruise) — AETHER-NLF 25",
                      color=INK,fontweight="normal")
@@ -660,10 +686,12 @@ def plot_3d_vectors(field):
     ax.quiver(pts[:,0],pts[:,1],pts[:,2],pts[:,3],pts[:,4],pts[:,5],
               length=0.5,normalize=True,colors=cols,linewidth=1.3)
     m=cm.ScalarMappable(norm=norm,cmap=CF_CMAP); m.set_array([])
-    cb=fig.colorbar(m,ax=ax,shrink=0.6,pad=0.02); cb.set_label("C_f")
+    # pad 0.10 for the same reason as the surface-contour colorbars above
+    cb=fig.colorbar(m,ax=ax,shrink=0.6,pad=0.10); cb.set_label("C_f")
     ax.set_xlabel("x [m]"); ax.set_ylabel("y span [m]"); ax.set_zlabel("z [m]")
     ax.view_init(elev=40,azim=-65); _tidy3d(ax)
-    try: ax.set_box_aspect((3.0,7.0,1.2))
+    try: ax.set_box_aspect((3.0,7.0,1.2), zoom=1.25)
+    except TypeError: ax.set_box_aspect((3.0,7.0,1.2))
     except Exception: pass
     ax.set_title("Upper-surface flow direction, coloured by C_f (strip "
                  "formulation: chordwise only)",
@@ -689,7 +717,8 @@ def plot_remaining_csvs():
             ax.plot(s["X_m"],s["Y_m"],s["Z_m"],color=col,lw=1.1)
     ax.set_xlabel("x [m]"); ax.set_ylabel("y span [m]"); ax.set_zlabel("z [m]")
     ax.view_init(elev=26,azim=-60); _tidy3d(ax)
-    try: ax.set_box_aspect((3,7,1.2))
+    try: ax.set_box_aspect((3,7,1.2), zoom=1.25)
+    except TypeError: ax.set_box_aspect((3,7,1.2))
     except Exception: pass
     ax.set_title("Lofted wing sections (from wing_sections_3d.csv)",color=INK)
     ax.grid(False)

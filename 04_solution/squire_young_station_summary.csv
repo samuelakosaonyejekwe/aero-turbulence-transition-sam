@@ -1,2 +1,2 @@
-x_lo,x_shipped,friction_accumulated_counts,squire_young_moves_counts,difference_counts,invariant_spread_from_0p90_counts,friction_omitted_cruise_counts,friction_omitted_climb_counts
-0.88,0.98,3.052,4.84,1.788,1.19,0.157,0.128
+x_lo,x_shipped,friction_accumulated_counts,squire_young_moves_counts,difference_counts,x_invariant_lo,invariant_spread_from_0p90_counts,squire_young_moves_from_invariant_lo_counts,friction_omitted_cruise_counts,friction_omitted_climb_counts
+0.88,0.98,2.996,4.84,1.844,0.9,1.23,3.4,0.156,0.127

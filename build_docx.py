@@ -474,46 +474,18 @@ h2(_eq_section("4.1"))
 for k in ["E02","E03","E01","E04"]: equation(k)
 h2(_eq_section("4.2"))
 for k in ["E05","E06","E06b","E06c","E07"]: equation(k)
-h2(_eq_section("4.3"))
-para("Bypass onset uses the Abu-Ghannam & Shaw correlation evaluated at the flow-history-averaged "
- "Tu; natural/TS onset integrates one amplification factor per physical frequency using the "
- "tabulated Orr-Sommerfeld growth rates and triggers on their envelope at N_crit; "
- "separation-induced onset closes a laminar bubble across the dead-air region; and cross-flow "
- "onset closes an amplification integral on the stationary vortex (Eq. E11b), the C1 criterion "
- "of Eq. E11 serving only to mark where that integral starts.")
-para("Each branch reports the same quantity — how far through its own criterion the layer has "
- "got, as a number that reaches unity at onset — and the kernel fires at the first station "
- "where any of them does. Writing the four commensurably is what makes them one kernel: only "
- "the bypass branch produces an onset REYNOLDS NUMBER, the other three closing on "
- "amplification integrals, so a minimum taken over four Reynolds numbers ranges over one live "
- "term and three placeholders. Earlier versions of this report stated the kernel that way, and "
- "the output showed it: the onset-Reynolds-number column of every cruise surface file was "
- "entirely empty, because the branch that governs there does not produce one.")
-for k in ["E08","E09","E10","E10b","E10c","E11","E11b","E11c","E11d","E12","E12b","E13","E13b","E14"]: equation(k)
-para("The natural and bypass routes are the same transition seen through two closures with "
- "different ranges of validity, so Eq. E14 blends them over a declared window rather than "
- "switching between them. A single threshold made the predicted transition location a STEP "
- "function of the free-stream turbulence: on the cruise section, Tu = 0.1000 % gave "
- "x_tr/c = 0.542 and 0.1001 % gave 0.373 — 0.17c and a third of the profile drag across one "
- "part in a thousand of an input this study quotes to two figures, with the design point at "
- "0.07 %. The window, Tu = 0.10–0.25 %, is wider than the spread of any case here (the "
- "noisiest natural case is 0.07 %, the quietest bypass case 0.87 %), so no result in this "
- "work is blended; it is there so that the model is a function of Tu rather than a switch.",
- italic=True, size=10)
-h2(_eq_section("4.4"))
-for k in ["E15","E16","E17","E18","E19"]: equation(k)
-_pol = pd.read_csv("04_solution/aero_polar.csv")
 
 
 def _narrative_probes():
     """The solves that back statements in the narrative, run rather than recalled.
 
-    Two of them: the 16 deg / Re_c = 2e5 example outside the incidence
+    Three of them: the 16 deg / Re_c = 2e5 example outside the incidence
     envelope, at three panel counts because the point being made is that the
     quantity has stopped meaning anything and a single value would read as a
-    result; and the same section solved unswept, which is what says whether the
+    result; the same section solved unswept, which is what says whether the
     corrected swept-drag conversion leaves a 12 deg wing where a 12 deg wing
-    should be.
+    should be; and the natural/bypass step the blend of Eq. E14 removes, which
+    was quoted from an edition of the solver that no longer exists.
     """
     import case_config as _CC
     from utss_solver import solve_airfoil as _sa, _swept_drag_factor as _sdf
@@ -541,6 +513,19 @@ def _narrative_probes():
                _cr["Tu_pct"], sweep_deg=_W["le_sweep_deg"], **_kw)
     out["cd_unswept"] = float(_u["Cd"])*1e4
     out["cd_swept"] = float(_s12["Cd"])*1e4
+    # The step the natural/bypass BLEND removes, measured on the shipped solver
+    # instead of quoted from the version that still had the hard gate.  Forcing
+    # each closure alone at the old gate value, Tu = 0.1 %, is what a switch
+    # there did to the answer.  The pair used to be typed here, in the README
+    # and in two solver comments as x_tr/c = 0.542 against 0.373 and "a third
+    # of the profile drag", and none of the three reproduces on this solver -
+    # the swept-drag formulation and the anchor have both moved since.
+    for _tag, _c in (("nat", dict(Tu_BP_lo=1e9, Tu_BP_hi=2e9)),
+                     ("byp", dict(Tu_BP_lo=0.0, Tu_BP_hi=1e-9))):
+        _rr = _sa(_X, _Y, _cr["alpha_deg"], _cr["U_inf"], _cr["nu_inf"],
+                  _W["MAC"], 0.1, sweep_deg=_W["le_sweep_deg"], cal=_c, **_kw)
+        out["step_xtr_" + _tag] = float(_rr["surfaces"]["upper"]["x_tr_chord"])
+        out["step_cd_" + _tag] = float(_rr["Cd"])*1e4
     # What share of the swept C_d the SPAN-WISE term carries.  The narrative
     # said four per cent and it is nearly seven, which matters because the
     # sentence goes on to bound what the theta_12 closure is worth: that bound
@@ -559,6 +544,47 @@ def _narrative_probes():
 
 
 _OFF = _narrative_probes()
+
+
+h2(_eq_section("4.3"))
+para("Bypass onset uses the Abu-Ghannam & Shaw correlation evaluated at the flow-history-averaged "
+ "Tu; natural/TS onset integrates one amplification factor per physical frequency using the "
+ "tabulated Orr-Sommerfeld growth rates and triggers on their envelope at N_crit; "
+ "separation-induced onset closes a laminar bubble across the dead-air region; and cross-flow "
+ "onset closes an amplification integral on the stationary vortex (Eq. E11b), the C1 criterion "
+ "of Eq. E11 serving only to mark where that integral starts.")
+para("Each branch reports the same quantity — how far through its own criterion the layer has "
+ "got, as a number that reaches unity at onset — and the kernel fires at the first station "
+ "where any of them does. Writing the four commensurably is what makes them one kernel: only "
+ "the bypass branch produces an onset REYNOLDS NUMBER, the other three closing on "
+ "amplification integrals, so a minimum taken over four Reynolds numbers ranges over one live "
+ "term and three placeholders. Earlier versions of this report stated the kernel that way, and "
+ "the output showed it: the onset-Reynolds-number column of every cruise surface file was "
+ "entirely empty, because the branch that governs there does not produce one.")
+for k in ["E08","E09","E10","E10b","E10c","E11","E11b","E11c","E11d","E12","E12b","E13","E13b","E14"]: equation(k)
+para("The natural and bypass routes are the same transition seen through two closures with "
+ "different ranges of validity, so Eq. E14 blends them over a declared window rather than "
+ "switching between them. A single threshold made the predicted transition location a STEP "
+ "function of the free-stream turbulence. Measured on this solver by forcing each closure "
+ "alone at the old gate value of Tu = 0.1 %%, which is what a switch there did: the "
+ "amplification integral puts the cruise section's upper-surface transition at x_tr/c = %.3f "
+ "and the correlation at %.3f, a step of %.3f c and of %.0f counts (%.0f %%) in profile drag "
+ "across one part in a thousand of an input this study quotes to two figures, with the design "
+ "point at 0.07 %%. The window, Tu = 0.10–0.25 %%, is wider than the spread of any case here "
+ "(the noisiest natural case is 0.07 %%, the quietest bypass case 0.87 %%), so no result in "
+ "this work is blended; it is there so that the model is a function of Tu rather than a "
+ "switch. This paragraph used to quote 0.542 and 0.373 and \"a third of the profile drag\", "
+ "a pair frozen from the edition that still had the gate; neither number reproduces now."
+ % (_OFF["step_xtr_nat"], _OFF["step_xtr_byp"],
+    _OFF["step_xtr_nat"] - _OFF["step_xtr_byp"],
+    _OFF["step_cd_byp"] - _OFF["step_cd_nat"],
+    100.0*(_OFF["step_cd_byp"] - _OFF["step_cd_nat"])/_OFF["step_cd_nat"]),
+ italic=True, size=10)
+h2(_eq_section("4.4"))
+for k in ["E15","E16","E17","E18","E19"]: equation(k)
+_pol = pd.read_csv("04_solution/aero_polar.csv")
+
+
 
 h2(_eq_section("4.5"))
 for k in ["E20","E20b","E20c","E21","E22","E22b","E25","E26","E23","E24"]: equation(k)
@@ -619,9 +645,15 @@ manual_table(
 para("Novelty. The distinguishing element is the unified transition kernel "
  "(Eq. E13): a single closed expression that selects the governing transition mechanism "
  "locally, by putting four co-resident mechanisms on one commensurable scale of onset "
- "progress — each modulated by a calibration weight that acts the same way on all four — and "
+ "progress — each carrying a calibration weight — and "
  "firing at the first station where any of them completes, then feeding a single intermittency "
- "closure. "
+ "closure. Those weights are NOT all in the same sense, and this sentence used to say they "
+ "were: a_TS, and a_SEP and a_CF in the shipped configuration, multiply a PROGRESS, so a small "
+ "value switches their branch off, while a_BP — and a_SEP and a_CF on their non-default paths — "
+ "multiply an onset THRESHOLD, where switching off takes a large one. Eq. E13b writes each "
+ "weight where it acts. That is not a nicety: a diagnostic in gen_validation.py took this "
+ "paragraph at its word, set every weight small, and left the separation branch live on all ten "
+ "swept-wing conditions it was meant to hold open. "
  "Unlike e^N codes (TS only) or correlation RANS models (which require case-by-case re-tuning "
  "and a full CFD solve), UTSS reproduces natural, bypass, separation and cross-flow transition "
  "with ONE calibration set at panel-method cost. Every one of the four branches is the "
@@ -696,13 +728,20 @@ para("The surface is discretised with cosine-clustered streamwise nodes; the wal
  % (str(_mm.loc["Target wall y+","value"]),
     _mi.n_surface_panels.min(), _mi.n_surface_panels.max(),
     _cd.ptp(), 100.0*_cd.ptp()/_cd.mean(), 180, 0.5*_hi.ptp()) +
- "  The residual wander is not a truncation error that refinement removes — "
- "it is set by which panel the transition point lands on, so it scales with the panel "
- "spacing at transition and is of the same order as the ±0.025c bracket the aerofoil "
- "measurements themselves carry. The %d-panel grid is used for every case-study "
+ "  This report previously called that residual a wander \"set by which panel the "
+ "transition point lands on\". The table says otherwise, which is why the two quantities "
+ "that decide it are now in it: the transition location moves by only %.3f chord across the "
+ "whole sweep and with no trend, while the momentum thickness at the Squire-Young station "
+ "rises MONOTONICALLY from %.5f to %.5f chord — a seventh — and the shape factor there with "
+ "it, from %.2f to %.2f. C_d = 2(θ/c)(U_e/U_∞)^((H+5)/2) then rises at every refinement, so "
+ "this is the aft integral march not being grid-converged, not the transition station "
+ "hopping between panels. The %d-panel grid is used for every case-study "
  "result; the tabulated validation sections are re-splined onto their own "
  "cosine-clustered grids of 400 and 440 panels."
- % (int(float(_mm.loc["Surface streamwise nodes", "value"])) - 1))
+ % (_mi.x_tr_upper_c.max() - _mi.x_tr_upper_c.min(),
+    _mi.theta_at_sy_c.iloc[0], _mi.theta_at_sy_c.iloc[-1],
+    _mi.H_at_sy.iloc[0], _mi.H_at_sy.iloc[-1],
+    int(float(_mm.loc["Surface streamwise nodes", "value"])) - 1))
 table_from_csv("02_mesh/mesh_metrics.csv", key="mesh_metrics",
                cap="Metrics of the surface discretisation and of the wall-normal reconstruction stack. No volume mesh is generated.")
 table_from_csv("02_mesh/mesh_independence.csv",
@@ -759,7 +798,8 @@ para("The extent of the transitional region is Dhawan and Narasimha's published 
  "Re_λ = 9 Re_x,t^0.75, with λ the distance over which the intermittency rises from 0.25 to "
  "0.75. This work previously reported it as validated on the flat plates of Section 11.1, "
  "which span Re_x,t = 6×10⁴ to 1.4×10⁶ — the four ERCOFTAC plates, which are the ones that "
- "carry C_f through transition and so constrain a length rather than an onset; Schubauer & "
+ "carry C_f through transition at all, though only two of them complete it (@@TAB:len_meas@@); "
+ "Schubauer & "
  "Skramstad reaches 2.8×10⁶ but gives only a station — and EXTRAPOLATED on the wing, which "
  "transitions at %.1f×10⁶. That extrapolation was of the variable, not of the physics."
  % (_ts_cr.Re_x_tr/1e6))
@@ -793,6 +833,36 @@ table_from_csv("06_validation/transition_length_forms.csv", key="len_forms",
                    "(transition_length_forms.csv). They are the same law "
                    "wherever Re_theta = 0.664 sqrt(Re_x), and part company only "
                    "where a pressure gradient breaks that.")
+# The LENGTH itself, against the plates that resolve one.  This report, the
+# README and run_solution all said the correlation was "validated on the four
+# ERCOFTAC plates ... the only ones that constrain a length rather than an
+# onset" and reproduced the measured extent of the C_f rise "to within a factor
+# of two", and nothing in this project measured a length.  Both halves needed
+# correcting, so both are read from the table now.
+_tlm = pd.read_csv("06_validation/transition_length_measured.csv")
+_tlm_ok = _tlm[_tlm.resolves_the_length.astype(bool)]
+_tlm_no = _tlm[~_tlm.resolves_the_length.astype(bool)]
+para("The LENGTH the closure returns is a separate question from the onset every other table "
+ "here scores, and it is measured in @@TAB:len_meas@@ rather than asserted. Taking Narasimha's "
+ "own definition — the distance over which the intermittency runs from 0.25 to 0.75, with the "
+ "measured intermittency formed from the measured skin friction against the laminar and "
+ "turbulent flat-plate correlations — only %d of the %d plates carrying C_f data resolve a "
+ "length at all: %s. On the %d that do, the model returns %s times the measured extent. This "
+ "report previously called the closure \"validated on the four ERCOFTAC plates\" and quoted a "
+ "factor of two, and neither figure had a generating source."
+ % (len(_tlm_ok), len(_tlm),
+    "; ".join("%s because %s"
+              % (r.case.split(" flat plate")[0], r.not_resolved_because)
+              for _, r in _tlm_no.iterrows()),
+    len(_tlm_ok),
+    " and ".join("%.2f" % v for v in _tlm_ok.model_over_measured)))
+table_from_csv("06_validation/transition_length_measured.csv", key="len_meas",
+               cap="The transition LENGTH against the plates that resolve one "
+                   "(transition_length_measured.csv). Two of the four plates "
+                   "with skin-friction data do not: T3A- has not completed the "
+                   "rise at its last measured station, and T3C4's pressure "
+                   "gradient invalidates the flat-plate correlations the "
+                   "measured intermittency is formed against.")
 para("What the case-study drag owes to the closure is measured all the same, by sweeping the "
  "constant over a factor of four:")
 table_from_csv("04_solution/transition_length_sensitivity.csv",
@@ -878,14 +948,37 @@ para("It is friction being correctly INCLUDED. Between %.2f c and %.2f c the lay
  "this paragraph used to claim. A forward station is not a worse estimate of the same drag; it "
  "is the drag of a shorter aerofoil. What settles it is their SUM, the last column of "
  "@@TAB:sy_station@@: the drag counted so far plus the friction still ahead varies by only "
- "%.2f counts from %.2f c up, where the drag alone moves %.2f. The friction the chosen station "
+ "%.2f counts from %.2f c up, where over that same range the drag alone moves %.2f. (Both "
+ "halves of that comparison are now measured on the SAME range. This sentence used to set the "
+ "spread, which is taken from %.2f c, against the %.2f counts the drag moves from %.2f c - two "
+ "different ranges, which overstated the contrast.) The friction the chosen station "
  "still omits is %.3f counts at cruise and %.3f at climb, so the station is converged to under "
  "a fifth of a count and is not uncertain by five. Past %.2f c the formula turns over and "
- "falls — that is the inviscid singularity taking hold, not drag being lost."
+ "falls — that is the inviscid singularity taking hold, not drag being lost. "
+ "The omitted friction is in the SAME frame as the drag it is added to, and getting it there "
+ "is the argument of Eq. E20c applied to the wall shear instead of the wake. It used to be the "
+ "chordwise integral alone, referred to U_n and c_n — a normal-plane coefficient added to a "
+ "streamwise one. The conversion has two terms and neither needs a trailing-edge evaluation. "
+ "The chordwise wall shear contributes cos³Λ ∫C_f(U_e,n/U_n)² d(s_n/c_n). The span-wise wall "
+ "shear contributes as well, because Squire-Young's span-wise term carries it only as far as "
+ "the evaluation station; under the same small-cross-flow closure the drag formula already "
+ "uses, τ_wz = (W/U_e,n)τ_wx, so it integrates over the same stations to "
+ "cosΛ sin²Λ ∫C_f(U_e,n/U_n) d(s_n/c_n) — the FIRST power of the velocity ratio against the "
+ "second, the same asymmetry E20c carries and for the same reason. The two together make the "
+ "span-wise contribution independent of the station, so the sum above is cos³Λ times a purely "
+ "chordwise quantity plus a constant, which is what the invariance claim can be made about. "
+ "It is not adopted for giving the smallest spread and does not: measured from 0.90c up, the "
+ "unconverted form gave 1.19 counts, the chordwise half-correction gives 1.31 and this gives "
+ "1.23. The smallest of those is the one that adds two frames together. What settles the form "
+ "is the yawed flat plate, where U_e,n = U_n and the two terms collapse to cos³Λ + cosΛsin²Λ "
+ "= cosΛ exactly — the independence principle's answer, and the same check E20c itself is held "
+ "to in tools/smoke.py."
  % (_sy_sm.x_lo, _sy_sm.x_shipped, _sy_sm.friction_accumulated_counts,
     _sy_sm.squire_young_moves_counts, _sy_sm.difference_counts,
-    _sy_sm.invariant_spread_from_0p90_counts, 0.90,
-    _sy_sm.squire_young_moves_counts, _sy_sm.friction_omitted_cruise_counts,
+    _sy_sm.invariant_spread_from_0p90_counts, _sy_sm.x_invariant_lo,
+    _sy_sm.squire_young_moves_from_invariant_lo_counts,
+    _sy_sm.x_invariant_lo, _sy_sm.squire_young_moves_counts, _sy_sm.x_lo,
+    _sy_sm.friction_omitted_cruise_counts,
     _sy_sm.friction_omitted_climb_counts, _sy_ship.x_ref), italic=True, size=10)
 para("And whether the shape factor at that station is solved. Head's entrainment method has no "
  "validity past separation, so H is clamped at 2.8, and on the climb case and at every "
@@ -976,10 +1069,16 @@ for f,c in [("val_T3A","Validation — ERCOFTAC T3A flat plate (Tu = 3.0 %, bypa
 h2("11.1a  Where the flat-plate residuals come from")
 para("The residuals are accounted for here, and the accounting is generated by "
  "gen_validation.py rather than argued.")
+_rd0 = pd.read_csv("06_validation/residual_diagnostics.csv")
+_lam_r = _rd0.laminar_run_meas_over_march.dropna()
+_lam_worst = float((_lam_r - 1.0).abs().max())*100.0
+_lam_t3c4 = float((_rd0[_rd0.case.str.contains("T3C4")]
+                   .laminar_run_meas_over_march.iloc[0] - 1.0))*100.0
 para("The laminar branch is not where they are. Compared against the model's own marched "
  "momentum thickness at the same stations — not against flat-plate Blasius, which is the "
  "wrong reference for the one plate that has a pressure gradient — the measured laminar "
- "layer agrees to within 6 % on all four plates that carry C_f data, and to 2 % on T3C4. "
+ "layer agrees to within %.0f %% on all %d plates that carry C_f data, and to %.0f %% on T3C4. "
+ % (_lam_worst, len(_lam_r), abs(_lam_t3c4)) +
  "An earlier version of this report attributed the T3C4 residual to the pre-transitional "
  "thickening a laminar layer undergoes in a turbulent free stream, on the strength of the "
  "measured momentum thickness being 1.36 times Blasius at onset. That comparison was wrong: "
@@ -1033,12 +1132,12 @@ para("Reading the amplification rate at the marched shape factor instead of at t
     int(_nsum0.loc["All", "within_bracket"]),
     _bub.loc["shape factor at reattachment", "model"]),
  italic=True, size=10)
-_rd = pd.read_csv("06_validation/residual_diagnostics.csv").set_index("branch",
-                                                                     drop=False)
+# residual_diagnostics.csv is read once, as _rd0 above.  It was read twice more
+# here - the first into a name nothing ever used - and three reads of one file
+# are three chances for them to become three different files.
 _gain = {r.case.split(" flat plate")[0].replace("ERCOFTAC ", ""):
          r.location_gain_bypass_threshold
-         for _, r in pd.read_csv(
-             "06_validation/residual_diagnostics.csv").iterrows()
+         for _, r in _rd0.iterrows()
          if r.location_gain_bypass_threshold == r.location_gain_bypass_threshold}
 para("Conditioning. In a decaying stream the onset threshold rises while Re_θ grows only as "
  "the square root of distance, so the two curves close at a shallow angle and the crossing "
@@ -1223,11 +1322,15 @@ para("Two things make this harder than the two-dimensional problem and both deci
  "continuous spectrum crowds onto the physical mode rather than onto c_r = 1, and a nearest-root "
  "search returns growth rates three orders above anything physical. What separates them is the "
  "eigenfunction, not the eigenvalue. And the outer boundary must be far enough out for that "
- "test to mean anything: a wave of wavenumber k decays as exp(−k y), so at k = 0.1 and "
- "y_max = 40 θ it is still at five per cent of its peak where the decay is measured and a strict "
- "filter discards it, leaving only short waves and putting the envelope maximum on the edge of "
- "the surviving band. At y_max = 100 θ the same mode is at 0.3 per cent while the spurious ones "
- "stay above 25 per cent.")
+ "test to mean anything. The filter measures the eigenfunction over the outer fifth of the "
+ "domain and requires it to be under 2 per cent of its peak; a wave of wavenumber k decays as "
+ "exp(−k y), so at k = 0.1 — the longest wave of interest — that is exp(−0.1×0.8×40) = 4 per "
+ "cent on a y_max = 40 θ grid, and the filter throws the PHYSICAL mode away, leaving only short "
+ "waves and putting the envelope maximum on the edge of the surviving band. At y_max = 100 θ "
+ "the same wave is at exp(−8) = 0.03 per cent and passes, while the discretised continuous "
+ "spectrum stays above 25 per cent of its peak out there and does not. This paragraph gave the "
+ "two decay figures as five and 0.3 per cent; neither is what exp(−k y) returns where the "
+ "filter looks, and the first did not even fail the 2 per cent test the argument turns on.")
 _abz = _amp[_amp.dataset.str.startswith("Boltz")].sort_values("sweep_deg")
 para("The result is checked against an independent stability code before it is used for anything. "
  "Dagenhart & Saric computed stationary N-factors with SALLY for three of their six conditions "
@@ -1307,25 +1410,34 @@ para("The gap cannot be converted into a roughness ratio by this method, and say
  "θ, which scales as √Re_c: a property of the chord Reynolds number, not of the cross-flow "
  "instability. The two facilities do not overlap in chord Reynolds number at all — "
  "%.2f–%.2f million against %.1f–%.1f — and the N they require "
- "at their own measured stations is 0.0–11.9 and 43.1–129.2 respectively "
+ "at their own measured stations is %.1f–%.1f and %.1f–%.1f respectively "
  "(@@TAB:cf_recept@@), while the critical cross-flow Reynolds number is tight within each, at "
  % (_rtr.Re_c_min.iloc[0]/1e6, _rtr.Re_c_max.iloc[0]/1e6,
-    _rtr.Re_c_min.iloc[1]/1e6, _rtr.Re_c_max.iloc[1]/1e6)
+    _rtr.Re_c_min.iloc[1]/1e6, _rtr.Re_c_max.iloc[1]/1e6,
+    _rcp.N_cf_min.iloc[0], _rcp.N_cf_max.iloc[0],
+    _rcp.N_cf_min.iloc[1], _rcp.N_cf_max.iloc[1])
  + ("%.1f and %.1f" % (_rcp.Re_theta2_cov_pct.iloc[0], _rcp.Re_theta2_cov_pct.iloc[1]))
  + " per cent. The elimination behind the receptivity attribution was therefore "
  "incomplete: it had not considered that the branch's own rate carries no cross-flow physics, "
  "which is a defect of the model and not a property of the experiments.")
 _pool_amp = float(pd.concat([_sw1.err_pct.abs(),
                              _sw2.err_pct_C1_150.abs()]).mean())
+# The local-threshold variant, read from the table that scores it rather than
+# typed beside the two figures that already are read.  Its three numbers stood
+# here as 17.2, 55.1 and 32.4 with nothing regenerating them.
+_cf_loc = _cff[_cff.formulation.str.startswith(
+    "local C1 threshold, no")].iloc[0]
 para("What would close it is a defined piece of work on the method rather than a request for "
  "measurements on two wings from 1960 and 1999: the Orr-Sommerfeld problem solved on the "
  "Falkner-Skan-Cooke CROSS-FLOW profile — which stability.fsc_profile already returns — and "
  "tabulated the way the streamwise rates of Sec. 4.3 are. Both closures were compared over "
  "both facilities while this was established: the amplification integral, which is the shipped "
  "form, gives %.1f and %.1f per cent (read from the two tables above, where they had been "
- "left at 21.8 and 51.1), the local C1 criterion 17.2 and 55.1, pooled %.1f against 32.4. "
+ "left at 21.8 and 51.1), the local C1 criterion %.1f and %.1f, pooled %.1f against %.1f. "
  "Neither dominates, so the shipped form is kept and the comparison recorded rather than the "
- "choice asserted." % (_e_cal, _e_ind, _pool_amp))
+ "choice asserted."
+ % (_e_cal, _e_ind, _cf_loc.calibration_err_pct, _cf_loc.independent_err_pct,
+    _pool_amp, _cf_loc.pooled_err_pct))
 table_from_csv("06_validation/crossflow_receptivity_summary.csv", key="cf_recept",
                cap="What each swept-wing facility requires, in the two currencies: a critical "
                    "cross-flow Reynolds number, which is consistent within each facility, and "

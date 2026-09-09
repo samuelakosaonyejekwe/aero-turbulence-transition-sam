@@ -69,8 +69,16 @@ EQS = [
    r"\left[(U-c)(D^2-\alpha^2) - U''\right]\hat{v} = \frac{1}{i\alpha Re_\theta}(D^2-\alpha^2)^2\hat{v}"),
  ("E10c","4.3  Unified four-mechanism transition kernel (novel contribution)","Gaster transformation (temporal to spatial growth rate)",
    r"\sigma = -\alpha_i\theta = \frac{\omega_i}{c_g}, \quad c_g = \frac{\partial\omega_r}{\partial\alpha_r}"),
+ # BOTH sweep factors, because which one is right depends on the frame the
+ # marched Re_theta arrives in and getting it wrong is a factor of cos(L) -
+ # 0.64 at 50 degrees.  Every swept case in this work is solved in the plane
+ # normal to the leading edge, so the sin(L) form is the one in force; the
+ # sin(L)cos(L) form is the same criterion written on the streamwise Re_theta.
+ # Printing only the second left the shipped relation unstated.
  ("E11","4.3  Unified four-mechanism transition kernel (novel contribution)","Cross-flow criterion (swept wing, C1 on Re_theta2)",
-   r"Re_{\theta 2} = k_{cf}\,Re_\theta\,\sin\Lambda\,\cos\Lambda \ \ge\ C_1"),
+   r"Re_{\theta 2} = k_{cf}\,Re_{\theta,n}\,\sin\Lambda "
+   r"= k_{cf}\,Re_\theta\,\sin\Lambda\,\cos\Lambda \ \ge\ C_1, \quad "
+   r"Re_{\theta,n} = Re_\theta\cos\Lambda"),
  ("E11b","4.3  Unified four-mechanism transition kernel (novel contribution)","Cross-flow amplification integral (the closure actually used)",
    r"N_{cf} = \int_{x_{c1}}^{x} \frac{\sigma(H_{rev})}{\theta}\,dx' \ \ge\ N_{crit}"),
  # The stationary cross-flow eigenvalue problem.  It is not the shipped
@@ -95,12 +103,31 @@ EQS = [
  ("E12b","4.3  Unified four-mechanism transition kernel (novel contribution)","Separation bubble: reattachment condition",
    r"N_{bub} = \int_{x_s}^{x_r} \frac{\sigma(H_{rev}, Re_\theta)}{\theta}\,dx' = N_{crit}, \quad "
    r"\sigma(H_{rev}) \approx 0.0435"),
+ # THE INDEX SET IS {nat, SEP, CF}, not {TS, BP, SEP, CF}.  The natural and
+ # bypass progresses are blended into ONE by Eq. E14 before the maximum is
+ # taken, and a maximum over all four is a different calculation: it would let
+ # the bypass branch fire at a turbulence level at which Eq. E14 gives it no
+ # weight at all.  The kernel selection block of march_bl maximises over three
+ # terms, and has since the blend replaced the Tu gate.  This report criticises
+ # its own earlier editions for stating this kernel in a form the solver was not
+ # running - "a minimum over four onset Reynolds numbers" - and the equation
+ # that replaced it had the same fault in a smaller way.
  ("E13","4.3  Unified four-mechanism transition kernel (novel contribution)","Unified transition kernel: onset where the first mechanism completes",
-   r"x_t = \min\left\{\, x \;:\; \max_{m}\; a_m\, p_m(x) \ge 1 \,\right\}, "
-   r"\quad m \in \{TS,\; BP,\; SEP,\; CF\}"),
- ("E13b","4.3  Unified four-mechanism transition kernel (novel contribution)","The four onset progresses, each reaching unity at its own onset",
-   r"p_{TS} = \frac{N}{N_{crit}}, \quad p_{BP} = \frac{Re_\theta}{Re_{\theta t}^{AGS}}, "
-   r"\quad p_{SEP} = \frac{N_{bub}}{N_{crit}}, \quad p_{CF} = \frac{N_{cf}}{N_{crit}}"),
+   r"x_t = \min\left\{\, x \;:\; \max_{m}\; p_m(x) \ge 1 \,\right\}, "
+   r"\quad m \in \{nat,\; SEP,\; CF\}, \quad "
+   r"p_{nat}\ \text{from Eq. (E14)}"),
+ # Each weight is written WHERE IT ACTS.  a_TS, a_SEP and a_CF multiply a
+ # PROGRESS, so a small value switches that branch off; a_BP multiplies an
+ # onset THRESHOLD, where it takes a large one.  (On their non-default paths -
+ # bubble = False, cf_amp = False - a_SEP and a_CF multiply a threshold too.)
+ # Writing all four as one factor on the progress, which the previous form of
+ # E13 did, is the assertion that left a diagnostic in gen_validation.py with
+ # the separation branch still live on all ten swept-wing conditions.
+ ("E13b","4.3  Unified four-mechanism transition kernel (novel contribution)","The four onset progresses, each reaching unity at its own onset, with each weight where it acts",
+   r"p_{TS} = \frac{a_{TS} N}{N_{crit}}, \quad "
+   r"p_{BP} = \frac{Re_\theta}{a_{BP}\,Re_{\theta t}^{AGS}}, \quad "
+   r"p_{SEP} = \frac{a_{SEP} N_{bub}}{N_{crit}}, \quad "
+   r"p_{CF} = \frac{a_{CF} N_{cf}}{N_{crit}}"),
  ("E14","4.3  Unified four-mechanism transition kernel (novel contribution)","Natural / bypass blend across the validity window",
    r"p_{nat} = (1-w)\,p_{TS} + w\,p_{BP}, \quad "
    r"w = 3t^{2}-2t^{3}, \quad t = \mathrm{clip}\!\left(\frac{Tu - Tu_{lo}}{Tu_{hi}-Tu_{lo}},0,1\right)"),
@@ -135,11 +162,27 @@ EQS = [
    r"c_l = c_{l,n}\cos^{2}\Lambda"),
  ("E21","4.5  Drag, temperature and reference quantities","Crocco-Busemann temperature profile",
    r"\frac{T}{T_e} = 1 + r\frac{\gamma-1}{2}M_e^{2}\left[1-\left(\frac{u}{U_e}\right)^{2}\right]"),
+ # The recovery factor is not one value.  _ref_temp_nu switches between the
+ # laminar and turbulent forms and the profile reconstruction blends them by
+ # the intermittency, and 03_model_setup/material_properties.csv tabulates
+ # both; this equation gave only Pr^(1/3), which is the turbulent one.
  ("E22","4.5  Drag, temperature and reference quantities","Recovery (adiabatic-wall) temperature",
-   r"T_r = T_e\left(1 + r\frac{\gamma-1}{2}M_e^{2}\right), \quad r \approx Pr^{1/3}"),
+   r"T_r = T_e\left(1 + r\frac{\gamma-1}{2}M_e^{2}\right), \quad "
+   r"r = Pr^{1/2}\ \text{(laminar)},\ \ Pr^{1/3}\ \text{(turbulent)}, "
+   r"\quad r = (1-\gamma)Pr^{1/2} + \gamma\,Pr^{1/3}"),
+ # The SECOND form is the one in force for the case study.  This equation gave
+ # the power law alone, which _ref_temp_nu uses only when the caller has no
+ # edge temperature - every low-speed validation case, where it is exact
+ # anyway.  solve_airfoil supplies T_e, so the cruise and climb results are
+ # closed with Sutherland evaluated at T_ref and at T_e, using the constants
+ # 03_model_setup/material_properties.csv declares.  A document that claims to
+ # hold every governing equation printed the fallback and not the closure.
  ("E22b","4.5  Drag, temperature and reference quantities","Eckert reference temperature (compressible closures)",
    r"\frac{T_{ref}}{T_e} = 1 + 0.032 M_e^{2} + 0.58\left(\frac{T_w}{T_e}-1\right), \quad "
-   r"\frac{\nu_{ref}}{\nu_e} = \left(\frac{T_{ref}}{T_e}\right)^{1+\omega}"),
+   r"\frac{\nu_{ref}}{\nu_e} = \frac{T_{ref}}{T_e}\,"
+   r"\frac{\mu_{Suth}(T_{ref})}{\mu_{Suth}(T_e)} "
+   r"\;\longrightarrow\; \left(\frac{T_{ref}}{T_e}\right)^{1+\omega}"
+   r"\ \text{where } T_e \text{ is not known}"),
  ("E23","4.5  Drag, temperature and reference quantities","Reynolds number (mean aerodynamic chord)",
    r"Re_{MAC} = \frac{\rho_\infty U_\infty \overline{c}}{\mu_\infty} = \frac{U_\infty \overline{c}}{\nu_\infty}"),
  ("E25","4.5  Drag, temperature and reference quantities","Prandtl lifting line (Glauert monoplane equation, odd n for a symmetric wing)",

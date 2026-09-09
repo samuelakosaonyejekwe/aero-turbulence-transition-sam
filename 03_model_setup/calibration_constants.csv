@@ -8,7 +8,7 @@ N_floor,0.5,lower clamp on N_crit at high Tu,clamp; bypass governs there
 Tu_BP_lo,0.1,Tu [%] below which the bypass correlation carries no weight,lower edge of the natural/bypass blend; below it the e^N branch alone governs
 Tu_BP_hi,0.25,Tu [%] above which the bypass correlation carries all the weight,"upper edge of the same blend.  Replaces the single Tu_TS_max gate, which made the predicted transition location a step function of Tu; the window is wider than the spread of any case here, so no result in this study is blended"
 C_len,9.0,"transition-length scale, Re_lambda = C_len Re_x_t^0.75",Dhawan & Narasimha (1958) published value; not fitted here
-CF_C1,150.0,crossflow critical Re_theta2,"Arnal et al.; facility-dependent: 150 fits Dagenhart (14.7%), 200 fits Boltz (18.4%)"
+CF_C1,150.0,crossflow critical Re_theta2,"Arnal et al.; FITTED on Dagenhart & Saric, and facility-dependent - the band C1 = 150-200 is reported rather than one value.  The mean error each end returns on each set is in 06_validation/swept_wing_crossflow.csv and 06_validation/swept_wing_independent.csv, and every formulation of the branch is scored in 06_validation/crossflow_formulations.csv"
 cf_amp,True,"crossflow closed by an amplification integral, not a local threshold",rate computed (0.0435); threshold is the same N_crit; adds no constant
 CF_ratio,0.47,theta2/theta surrogate for crossflow,FITTED on Dagenhart & Saric; independent check in Sec. IV.C
 sigma_sep,from table,shear-layer amplification rate in a bubble,"computed on the reverse-flow Falkner-Skan branch; 0.0435, not fitted"
@@ -30,4 +30,4 @@ sep_floor,120.0,min separation-induced onset Re_theta (ablation path only),super
 d_omega,1.03,max ratio between adjacent frequencies in the e^N integration,"discretisation, stated as a RESOLUTION rather than a count: with a fixed count of 40 the Schubauer-Skramstad onset moved 5 % between 24 and 64 frequencies and did not settle.  At this spacing Re_x,tr is unchanged from 1.10 down to 1.0075"
 n_freq_min,40,floor on the frequency count,guards a degenerate range
 n_freq_max,400,cap on the frequency count,guards a degenerate range
-CF_N,0.0,separate amplification threshold for the crossflow branch (ablation path only),"0 = use the same N_crit as every other branch; exposed to test whether a roughness-seeded branch needs its own threshold, and it does not - see 06_validation/crossflow_criticals_summary.csv"
+CF_N,0.0,separate amplification threshold for the crossflow branch (ablation path only),"0 = use the same N_crit as every other branch; exposed to test whether a roughness-seeded branch needs its own threshold, and it does not - the sweep that settles it, with C1 refitted at every threshold so the two constants are not confounded, is 06_validation/crossflow_threshold_sweep.csv"

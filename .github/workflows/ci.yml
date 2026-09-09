@@ -4,16 +4,16 @@ name: checks
 # are worth running, and nothing made anyone run them: a commit that broke the
 # march's output contract, or a rename that left a generator reading a column
 # that no longer exists, would be found by whoever next spent the best part of
-# ten minutes on a full regeneration.  tools/smoke.py finds both in well under a
-# minute, so it runs on every push.  (Timings here are orders of magnitude, not
-# measurements: they are machine-dependent, and the precise figures this comment
-# used to give - seven seconds, four minutes - were both a third of what the
-# same work costs now.  tools/pipeline.py writes the real ones to
-# .pipeline/timings.json every run.)
+# a quarter of an hour on a full regeneration.  tools/smoke.py finds both in a
+# small fraction of that, so it runs on every push.  (No wall-clock figure is
+# quoted anywhere here.  They are machine-dependent, and the precise ones this
+# comment used to give - seven seconds, four minutes - were both a third of what
+# the same work costs now.  tools/pipeline.py writes the measured per-stage
+# times to .pipeline/timings.json every run.)
 #
 # The full regeneration is NOT run here.  It needs the Falkner-Skan families and
-# the amplification database, which take about seven minutes to build on two
-# cores, and it writes 40-odd figures; that belongs on the machine the results
+# the amplification database, which take minutes and hours respectively to
+# build, and it writes 50-odd figures; that belongs on the machine the results
 # are published from, not in CI.  What CI guards is that the code still holds
 # together and that the committed CSVs still say what the committed document
 # says.
@@ -51,8 +51,7 @@ jobs:
       - name: Cache the Falkner-Skan families
         # Deterministic functions of the source, so they are keyed on it.  The
         # amplification database is committed; these two are not, because they
-        # rebuild in well under a minute - but not on every job if we can help
-        # it.  (Measured at 35 s on the reference machine; this said fourteen.)
+        # rebuild quickly - but not on every job if we can help it.
         uses: actions/cache@v6
         with:
           path: |
@@ -84,7 +83,7 @@ jobs:
       - name: Data outputs regenerate identically
         # The numbers THESE STAGES OWN must reproduce, and on a clean runner
         # with a fresh install of the pinned environment they do, bit for bit.
-        # That is thirteen of the sixty tracked CSVs - 01_geometry, 02_mesh,
+        # That is thirteen of the sixty-two tracked CSVs - 01_geometry, 02_mesh,
         # 03_model_setup and 07_equations - because the step above runs the
         # cheap stages only; 04_solution and 06_validation need the solve and
         # the validation sweep, which belong on the machine the results are

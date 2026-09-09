@@ -167,16 +167,27 @@ def run_validation():
         # the ERCOFTAC tables define Re_x on the LOCAL free-stream velocity,
         # so form it the same way; identical to U*x/nu on the ZPG plates
         rex=float(r["Ue"][it])*r["x_tr"]/v["nu"]
+        # The first station of the march has no boundary layer, and its
+        # skin friction is absent rather than filled in - the same treatment
+        # run_solution gives the aerofoil's stagnation station, for the same
+        # reason.  The plate is marched from x = 1e-4 m, where the Thwaites
+        # integral is still zero and theta comes back at its own 1e-16 floor,
+        # so C_f = 2 l nu/(U_e theta) is the floor and not the flow: these five
+        # files published 119 on T3A and 426 on T3C4 as skin-friction
+        # coefficients.  Re_theta < 1 is not a boundary layer.  The Blasius and
+        # turbulent REFERENCE columns are closed-form functions of Re_x and
+        # stay; they are what the row is for.
+        _bl=np.where(np.asarray(r["Re_theta"],float) >= 1.0, 1.0, np.nan)
         # Rounded to the precision these quantities are meaningful to, the
         # same convention run_solution.py states.  Written raw these five files
         # carried some 23,000 seventeen-figure numbers, and the report samples
         # rows out of them.
         dfs=pd.DataFrame({"Re_x":np.round(r["Re_x"],0),
-                          "Cf_solver":np.round(r["Cf"],7),
+                          "Cf_solver":np.round(r["Cf"]*_bl,7),
                           "Cf_laminar_blasius":np.round(r["Cf_lam_ref"],7),
                           "Cf_turbulent_ref":np.round(r["Cf_turb_ref"],7),
                           "intermittency_gamma":np.round(r["gamma"],5),
-                          "Re_theta":np.round(r["Re_theta"],2)})
+                          "Re_theta":np.round(np.asarray(r["Re_theta"],float)*_bl,2)})
         dfs.to_csv(f"{VAL}/solver_{key}.csv",index=False)
         err=None
         if ex["Cf"] is not None:
@@ -193,8 +204,10 @@ def run_validation():
             # onset error a second time, in the wrong units: wherever the
             # measurement is still laminar and the prediction has already gone
             # turbulent the two differ by the whole laminar-to-turbulent step,
-            # which is a factor of five, so a plate whose onset is 16 per cent
-            # early reports a 217 per cent C_f error.  The error is therefore
+            # which is a factor of five, so T3A-, whose onset is 16 per cent
+            # early, reports a 122 per cent pooled C_f error against 4 per cent
+            # over its laminar run.  (This said 217; the pooled figure is in
+            # validation_summary.csv and has moved since.)  The error is therefore
             # also given over the two intervals on which both curves are in the
             # same state - upstream of the earlier of the two onsets, and
             # downstream of the later - where it says what it appears to say.
@@ -577,11 +590,24 @@ def crossflow_criticals(write=True, quiet=False):
                          ("Re_cf_exact_FSC", "exact Falkner-Skan-Cooke Re_cf")):
             v = d[col].to_numpy(float)
             m = float(v.mean())
-            # population coefficient of variation, so the pooled figure and the
-            # per-facility ones are formed the same way
+            # SAMPLE coefficient of variation, ddof = 1.  This was the
+            # population one, justified as making the pooled figure and the
+            # per-facility ones "formed the same way" - which ddof = 1 does
+            # equally, so the justification decided nothing while the
+            # convention decided the number.  Three other tables in this
+            # module (crossflow_receptivity_summary and
+            # crossflow_amplification_summary) already used ddof = 1, and
+            # crossflow_receptivity computes the SAME ten Re_theta2 values
+            # this does: the two files reported the scatter of one set of
+            # numbers as 17.8/4.0 and 19.5/4.6, and the README then compared
+            # a population 4.0 against a sample 28.7 as though they were the
+            # same measure.  Four and six points are a sample of a facility,
+            # not a population, and the unbiased estimator is the one that
+            # does not understate a claim of internal consistency.
             stat.append(dict(dataset=name, criterion=lab,
                              mean_critical_value=round(m, 1),
-                             coeff_of_variation_pct=round(float(v.std())/m*100, 1),
+                             coeff_of_variation_pct=round(
+                                 float(v.std(ddof=1))/m*100, 1),
                              n_points=len(d)))
     # Whether a Reynolds-number term could carry one facility into the other.
     # It cannot, and the reason is worth recording: WITHIN Dagenhart & Saric the
@@ -776,10 +802,13 @@ def crossflow_amplification(write=True, quiet=False):
                                         np.asarray(u[key], float)[k]))
         # the local sweep the similarity solution is given, at two stations, so
         # that the statement "it is not the leading-edge value" is reported
-        # from the march rather than typed
-        We = U*np.sin(np.radians(sw))
-        Ll = np.degrees(np.arctan2(We, np.maximum(np.asarray(u["Ue"], float),
-                                                  1e-9)))
+        # from the march rather than typed.  Read from the march's own
+        # sweep_local array rather than re-derived here: the formula was
+        # written out a second time in this function, and a second copy of a
+        # quantity is a second copy that can drift - the frame the free-stream
+        # speed arrives in decides whether it is U tan(L) or U sin(L), which is
+        # exactly the trap march_bl's own comment documents.
+        Ll = np.asarray(u["sweep_local"], float)
         loc = [float(np.interp(xx, x[k], Ll[k])) for xx in (0.03, 0.60)]
         return (g("n_cf"), g("n_factor"), g("n_crit"), g("Re_theta"),
                 loc[0], loc[1])
@@ -1077,7 +1106,13 @@ def bubble_diagnostics(key="T3C4", write=True, quiet=False):
          "C_f-floor interval alone the measured value is -0.20 /s, which is "
          "the figure the report's shape-factor arithmetic uses"),
         ("max |U_e spline - tabulated| [m/s]", round(float(np.abs(du).max()), 3),
-         0.01, "tabulated to 0.01 m/s, so the spline is within quotation"),
+         0.01,
+         "the edge velocities are tabulated to 0.01 m/s and the spline is a "
+         "SMOOTHING fit weighted at half of that, not an interpolant, so a "
+         "departure of order one quotation step is intended rather than an "
+         "error; the worst is %.1f steps.  (This note read 'so the spline is "
+         "within quotation', which the value beside it contradicted.)"
+         % (float(np.abs(du).max())/0.01)),
     ]
     df = pd.DataFrame(rows, columns=["quantity", "model", "measured", "note"])
     if write:
@@ -1276,6 +1311,78 @@ def nlf0416_summary(df, write=True):
     return out
 
 
+def transition_length_measured(write=True, quiet=False):
+    """The transition LENGTH against the plates that actually resolve one.
+
+    Every other table here scores an ONSET.  The transition-length closure was
+    described in the README, in run_solution's docstring and in the report as
+    "validated on the four ERCOFTAC plates ... the only ones that constrain a
+    LENGTH rather than an onset", and as reproducing the measured extent of the
+    skin-friction rise "to within a factor of two" - and nothing in this project
+    measured a length.  Both halves of that turn out to need correcting, which
+    is why it is generated rather than asserted.
+
+    The length is defined exactly as Narasimha defines it: the distance over
+    which the intermittency runs from 0.25 to 0.75.  The measured intermittency
+    is formed from the measured skin friction against the flat-plate laminar and
+    turbulent correlations, gamma = (C_f - C_f,lam)/(C_f,turb - C_f,lam), and
+    the two crossings are interpolated between the stations that bracket them.
+
+    Only TWO of the four plates with C_f data resolve it.  T3A- is still at
+    gamma = 0.38 at the last measured station, so its rise is not complete on
+    the plate; and T3C4 carries a pressure gradient, which is precisely what
+    makes the flat-plate references the intermittency is formed against
+    inapplicable - its gamma so formed is not even monotone.  Where the two
+    plates do resolve it, the model reproduces the measured length to better
+    than a third, which is the claim the "factor of two" was reaching for.
+    """
+    rows = []
+    for key in CASES:
+        v = C.VALIDATION[key]; ex = EXP[key]
+        if ex["Cf"] is None:
+            continue
+        r = solve_case(key)
+        rx = np.asarray(ex["Re_x"], float); cf = np.asarray(ex["Cf"], float)
+        g = ((cf - 0.664/np.sqrt(rx))
+             / (0.0592/rx**0.2 - 0.664/np.sqrt(rx)))
+        i0 = int(np.argmin(cf))
+
+        def cross(t, gv=g, xv=rx, i_from=i0):
+            for i in range(i_from, len(gv) - 1):
+                if gv[i] < t <= gv[i+1]:
+                    f = (t - gv[i])/(gv[i+1] - gv[i])
+                    return float(xv[i] + f*(xv[i+1] - xv[i]))
+            return None
+
+        a, b = cross(0.25), cross(0.75)
+        zpg = bool(ex.get("Ue") is None and v["dUe"] == 0.0)
+        ok = bool(zpg and a is not None and b is not None)
+        # the model's own length, in the same variable: Re_lambda formed on the
+        # local edge velocity at onset, which is how march_bl states it
+        re_lam_mod = float(r["Ue"][r["i_tr"]])*float(r["lam_len"])/v["nu"]
+        re_lam_meas = (b - a) if ok else None
+        rows.append(dict(
+            case=v["name"],
+            resolves_the_length=ok,
+            not_resolved_because=("" if ok else
+                                  ("gamma has only reached %.2f at the last "
+                                   "measured station" % g[-1] if zpg else
+                                   "a pressure gradient, so the flat-plate "
+                                   "correlations the measured intermittency is "
+                                   "formed against do not apply")),
+            Re_x_at_gamma_025=(f"{a:.3e}" if ok else None),
+            Re_x_at_gamma_075=(f"{b:.3e}" if ok else None),
+            Re_lambda_measured=(f"{re_lam_meas:.3e}" if ok else None),
+            Re_lambda_model=f"{re_lam_mod:.3e}",
+            model_over_measured=(round(re_lam_mod/re_lam_meas, 2) if ok else None)))
+    df = pd.DataFrame(rows)
+    if write:
+        df.to_csv(f"{VAL}/transition_length_measured.csv", index=False)
+    if not quiet:
+        print(df.to_string(index=False))
+    return df
+
+
 def transition_length_forms(write=True, quiet=False):
     """The two forms of Dhawan & Narasimha's transition length, measured.
 
@@ -1463,7 +1570,10 @@ def run_ablations(write=True, quiet=False, jobs=None):
     The four configurations are independent - each is 86 aerofoil solves plus
     one plate, and none of them reads what another writes - so they are run
     concurrently.  This is the single most expensive thing in the validation
-    (154 s of the 213 s the stage takes), and it is embarrassingly parallel.
+    stage and it is embarrassingly parallel.  No timing is quoted: this said
+    "154 s of the 213 s the stage takes", which is a measurement of one machine
+    on one day, and tools/pipeline.py writes the real per-stage figures to
+    .pipeline/timings.json every run.
     The worker count defaults to the PHYSICAL core count, not the logical one:
     these solves are dense linear algebra on a few hundred square matrices, so
     hyperthreads add contention rather than throughput, and each worker is held
@@ -1492,7 +1602,7 @@ def run_ablations(write=True, quiet=False, jobs=None):
     return out
 
 
-def plot_nlf0416(df=None):
+def plot_nlf0416(df=None, out=None):
     """Reproduce the layout of Fig. 9 of TP-1861 with the predictions overlaid.
 
     One panel per chord Reynolds number, transition location against lift
@@ -1536,11 +1646,14 @@ def plot_nlf0416(df=None):
             # at -9.54 deg.  Those points remain in every error statistic; they
             # are only excluded from the polyline, which would otherwise sweep
             # across the panel and misrepresent the trend.
-            out = d.degenerate
-            good = d[~out]
+            # `declared`, not `out`: `out` is this function's output-path
+            # parameter, and shadowing it here made the parameter a pandas
+            # Series by the time the save line read it
+            declared = d.degenerate
+            good = d[~declared]
             ax.plot(good.x_tr_c_pred, good.c_l_exp, "-", lw=2.0, color=col,
                     alpha=0.85, label=f"UTSS, {surf}")
-            bad = d[out]
+            bad = d[declared]
             if len(bad):
                 ax.plot(bad.x_tr_c_pred, bad.c_l_exp, "x", ms=7, mew=1.6,
                         color=PALETTE[2], lw=0)
@@ -1573,12 +1686,19 @@ def plot_nlf0416(df=None):
              "set: the one constant of the natural branch is set on the "
              "Schubauer & Skramstad plate alone.",
              ha="center", fontsize=8.5, color=INK_SOFT, style="italic")
+    # `out` exists so a CHECK can exercise this without writing into the
+    # repository.  tools/smoke.py calls this routine to prove the panel
+    # selection still matches rows when the committed CSV is read back, and a
+    # check that overwrites a tracked figure every time it runs is not a check
+    # - it is the same fault run_solution.bl_profiles carries a guard for.
     import os as _os
-    _os.makedirs(VP, exist_ok=True)
-    fig.savefig(f"{VP}/val_aerofoil_nlf0416.png", bbox_inches="tight",
-                facecolor="white")
+    out = out or f"{VP}/val_aerofoil_nlf0416.png"
+    _d = _os.path.dirname(out)
+    if _d:
+        _os.makedirs(_d, exist_ok=True)
+    fig.savefig(out, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    return f"{VP}/val_aerofoil_nlf0416.png"
+    return out
 
 
 def plot_case(key):
@@ -1601,7 +1721,42 @@ def plot_case(key):
     ax.axvline(float(r["Ue"][r["i_tr"]])*r["x_tr"]/v["nu"],
                color=PALETTE[4],ls="-.",lw=1.3,label="UTSS predicted onset")
     ax.set_xlabel("Re_x"); ax.set_ylabel("skin-friction  C_f")
-    ax.set_ylim(2e-4,8e-3)
+    # The y-limits come from the DATA, per plate.  They were hard-coded at
+    # (2e-4, 8e-3) for all five, and on T3C4 - the one plate whose skin
+    # friction reaches the hot-film floor - that dropped THREE of its twelve
+    # measured points clean off the frame with no warning of any kind: the
+    # first station at C_f = 8.67e-3 above the top, and the two plateau
+    # stations at 1.87e-4 and 1.83e-4 below the bottom.  Those two are exactly
+    # the pair that defines the onset bracket the whole T3C4 result is quoted
+    # against, so the figure was omitting the evidence for its own caption.  A
+    # log axis discards a point outside its limits silently, which is why this
+    # is invisible in the source and obvious on the picture.
+    #
+    # Widening the fixed pair was not enough either: on T3A the measurements
+    # span 2.1e-3 to 5.2e-3 and a floor at 2e-4 left a whole empty decade under
+    # the data.  The limits come from the measurement and from the solver curve
+    # OVER THE MEASURED RANGE, so every point is inside the frame and none of
+    # the frame is empty; the solver's contribution is floored, because C_f is
+    # identically zero inside a bubble and a log axis has no bottom.  With no
+    # measured C_f - Schubauer & Skramstad gives only an onset station - the
+    # decade pair that suited the solver curve is kept.
+    _ylo, _yhi = 2e-4, 8e-3
+    if ex["Cf"] is not None:
+        _cfe = np.asarray(ex["Cf"], float)
+        _rxe = np.asarray(ex["Re_x"], float)
+        _rxs = np.asarray(r["Re_x"], float); _cfs = np.asarray(r["Cf"], float)
+        _in = (_rxs >= _rxe.min()) & (_rxs <= _rxe.max()) & (_cfs > 0.0)
+        _ylo, _yhi = float(_cfe.min()), float(_cfe.max())
+        if _in.any():
+            _sol = _cfs[_in]
+            # floored just below the lowest measurement: inside a bubble the
+            # closure sets C_f identically to zero, which a log axis cannot
+            # show at all, and chasing the plunge downwards buys a decade of
+            # empty frame on T3C4 for no information
+            _ylo = min(_ylo, max(float(_sol.min()), 0.7*float(_cfe.min())))
+            _yhi = max(_yhi, float(_sol.max()))
+        _ylo /= 1.35; _yhi *= 1.35
+    ax.set_ylim(_ylo, _yhi)
     # A log axis over 2e-4 to 8e-3 contains ONE decade boundary, so the default
     # locator labelled a single tick - "10^-3" - and left the reader with no
     # way to read any other value off the axis on all five of these figures.
@@ -1609,22 +1764,42 @@ def plot_case(key):
     # Both the major and the minor ticks in the SAME units.  Labelling the
     # minors as C_f x 10^3 while the one major tick stayed "10^-3" put two
     # conventions on one axis, which is worse than the single unreadable label
-    # it replaced.
+    # it replaced.  The label window follows the limits above rather than
+    # repeating them, or a widened axis comes back with unlabelled ticks.
     _kilo = FuncFormatter(
-        lambda y, _: ("%g" % (y*1e3)) if 2e-4 <= y <= 8e-3 else "")
+        lambda y, _: ("%g" % (y*1e3)) if _ylo <= y <= _yhi else "")
     ax.yaxis.set_minor_locator(LogLocator(base=10.0, subs=(2, 3, 5), numticks=12))
     ax.yaxis.set_minor_formatter(_kilo)
     ax.yaxis.set_major_formatter(_kilo)
     ax.tick_params(axis="y", which="minor", labelsize=8.5)
     ax.set_ylabel(r"skin-friction  $C_f \times 10^{3}$")
-    # the march starts at x = 1e-4 m, so autoscaling put two empty decades of
-    # Re_x to the left of anything worth reading
-    _rx = np.asarray(r["Re_x"], float)
-    _lo = min(_rx[_rx > 0].min(), (min(ex["Re_x"]) if ex["Cf"] is not None
-                                   else ex["Re_x_t"]))
-    ax.set_xlim(max(_lo*0.5, 1e3), _rx.max()*1.4)
-    ax.set_title(f"Validation: {key}  (Tu={v['Tu_pct']}%)  —  "
-                 f"Re_θt pred {r['Re_theta'][r['i_tr']]:.0f} vs exp {ex['Re_theta_t']:.0f}")
+    # The march starts at x = 1e-4 m, where C_f is far off the top of any
+    # sensible axis, so taking the minimum of the SOLVER's Re_x - which is what
+    # this did, floored at 1e3 - put the left-hand limit two decades before
+    # anything is drawn: on T3A- the axis began at 1e3 and the first curve
+    # entered at 2e4.  The comment claimed to have fixed exactly that.  The
+    # limit is now the earliest Re_x at which something is actually visible: a
+    # measurement, or the solver curve once it has come down inside the
+    # y-window set above.
+    _rx = np.asarray(r["Re_x"], float); _cfs2 = np.asarray(r["Cf"], float)
+    _seen = (_rx > 0.0) & (_cfs2 > _ylo) & (_cfs2 < _yhi)
+    _lo = float(_rx[_seen].min()) if _seen.any() else float(_rx[_rx > 0].min())
+    if ex["Cf"] is not None:
+        _lo = min(_lo, float(min(ex["Re_x"])))
+    ax.set_xlim(_lo*0.6, _rx.max()*1.4)
+    # _short(key), not the key.  "T3AM" is a filename-safe spelling and every
+    # table, the README and the combined figure call that plate T3A-, so the
+    # per-case figure was the one artefact giving it a second name.
+    # Where the measurement does not resolve onset to a single station the
+    # title says so.  On T3C4 the two stations at the C_f floor are two per
+    # cent apart, the error is quoted against the BRACKET they span everywhere
+    # else in this project, and the figure was the one place still presenting
+    # the upper edge alone as though it were the measurement.
+    _lo, _hi = ex.get("Re_theta_t_lo"), ex.get("Re_theta_t_hi")
+    _exp = (f"{_lo:.0f}–{_hi:.0f}" if _lo is not None and _hi is not None
+            and _hi > _lo else f"{ex['Re_theta_t']:.0f}")
+    ax.set_title(f"Validation: {_short(key)}  (Tu={v['Tu_pct']}%)  —  "
+                 f"Re_θt pred {r['Re_theta'][r['i_tr']]:.0f} vs exp {_exp}")
     ax.legend(loc="lower left",fontsize=10)
     finish(fig,f"{VP}/val_{key}.png",
            caption="Source: "+_cite(v["source"]))
@@ -1652,8 +1827,13 @@ def _short(key):
     other artefact in this project calls that plate T3A-.  The combined figure
     was labelling its axis with the key, so a reader comparing the figure with
     the table beside it saw two names for one plate.
+
+    "SS" was the same fault, left behind when T3AM was fixed: no table, caption
+    or paragraph in this project calls that plate SS - they all call it
+    Schubauer & Skramstad - so the five per-case figures and the combined bar
+    chart were the only artefacts giving it a second name.
     """
-    return {"T3AM": "T3A\u207b"}.get(key, key)
+    return {"T3AM": "T3A\u207b", "SS": "Schubauer & Skramstad"}.get(key, key)
 
 
 def plot_combined(df_sum):
@@ -1665,7 +1845,28 @@ def plot_combined(df_sum):
     lookup={by_name[row["case"]]: row["Re_theta_t_pred"]
             for _,row in df_sum.iterrows()}
     pred=[lookup[k] for k in cases]
+    # Where the measurement does not resolve onset to a single station, the
+    # bar carries the bracket it does resolve it to.  T3C4's two stations at
+    # the C_f floor are two per cent apart and the error is quoted against
+    # that bracket everywhere else in this project; this figure drew the upper
+    # edge alone, so a reader comparing it with the table beside it read a
+    # -30 % residual where the text reports -13.9 %.
+    _lo = np.array([EXP[k].get("Re_theta_t_lo") or EXP[k]["Re_theta_t"]
+                    for k in cases], float)
+    _hi = np.array([EXP[k].get("Re_theta_t_hi") or EXP[k]["Re_theta_t"]
+                    for k in cases], float)
+    _e = np.asarray(exp, float)
+    _err = np.vstack([_e - _lo, _hi - _e])
     ax.bar(x-w/2,exp,w,color=PALETTE[1],label="experiment Re_θt")
+    # only on the bars that HAVE a bracket: a zero-length error bar still draws
+    # its caps, which put a stray tick on top of the four plates whose onset is
+    # resolved to one station
+    _has = _err.max(axis=0) > 0.0
+    if _has.any():
+        ax.errorbar(x[_has]-w/2, np.asarray(exp, float)[_has],
+                    yerr=_err[:, _has], fmt="none", ecolor=INK,
+                    elinewidth=1.3, capsize=5, capthick=1.3, zorder=4,
+                    label="onset bracket where the stations do not resolve it")
     ax.bar(x+w/2,pred,w,color=PALETTE[0],label="UTSS predicted Re_θt")
     # LINEAR, and the limit set after nothing.  This axis was set to "log"
     # AFTER set_ylim, so the limit was discarded; and bars drawn from a zero
@@ -1680,10 +1881,17 @@ def plot_combined(df_sum):
     # old comment was reaching for when it scaled by 1.04 on a log axis.
     top = max(max(exp),max(pred))*1.18
     for xi,(e,p) in enumerate(zip(exp,pred)):
-        ax.text(xi-w/2,e+0.018*top,f"{e:.0f}",ha="center",fontsize=10,color=INK)
+        # the bracket, where the stations do not resolve onset to one value
+        lab = (f"{_lo[xi]:.0f}–{_hi[xi]:.0f}" if _hi[xi] > _lo[xi]
+               else f"{e:.0f}")
+        ax.text(xi-w/2,e+0.018*top,lab,ha="center",fontsize=10,color=INK)
         ax.text(xi+w/2,p+0.018*top,f"{p:.0f}",ha="center",fontsize=10,color=INK)
     ax.set_ylim(0, top)
-    ax.set_xticks(x); ax.set_xticklabels([_short(k) for k in cases])
+    # wrapped at the ampersand for the tick labels only: five categories share
+    # the axis, so the one two-word name has to take two lines or it runs into
+    # its neighbours
+    ax.set_xticks(x)
+    ax.set_xticklabels([_short(k).replace(" & ", " &\n") for k in cases])
     ax.set_ylabel("transition-onset  Re_θt")
     ax.set_title("Universal validation: transition-onset Re_θt, one calibration set")
     ax.legend(fontsize=10, loc="upper left")
@@ -1713,6 +1921,7 @@ if __name__=="__main__":
     print(nlf0416_summary(df_nlf).to_string(index=False))
     bubble_length_scaling(df_nlf)
     transition_length_forms()
+    transition_length_measured()
     plot_nlf0416(df_nlf)
     if do_abl:
         run_ablations()

@@ -49,9 +49,11 @@ at zero pressure gradient the expression returns exactly cosΛ for every sweep
 and every shape factor, which is that answer.  The cos²Λ this replaced is short
 by a further cosΛ: 2 % at the 12° of this wing, 29 % at 45°.  It is asserted in
 `tools/smoke.py`, not described.  The correction raises the section profile drag
-from 45.0 to 47.3 counts and leaves it within half a count of the same section
-unswept, which is what 12° of sweep should do to a viscous drag; the drag
-*reduction* is unchanged, both configurations scaling together.
+from 45.0 to 47.3 counts and leaves it within **0.56 counts** of the same
+section solved unswept, which is what 12° of sweep should do to a viscous drag;
+the drag *reduction* is unchanged, both configurations scaling together.  (This
+said "within half a count"; the report computes the pair — 47.31 against 46.75 —
+so the figure moves when the solve does.)
 
 **Where the drag is evaluated, and what that is actually worth.** Squire-Young
 wants the trailing edge; this section has a **26.8° wedge** one, so the trailing
@@ -62,22 +64,52 @@ across the range either side the drag runs 42.5 → 47.3 counts.
 
 That spread was reported here as a five-count uncertainty band. **It is not a
 band — it is friction being correctly included.** Between 0.88c and 0.98c the
-layer accumulates **3.05** counts of real skin friction, measured by integrating
+layer accumulates **3.00** counts of real skin friction, measured by integrating
 C_f over the surface directly, while the formula moves **4.84**: the same
 quantity to 1.8 counts, not the third of a count this paragraph used to claim —
 that pair was typed in four places and had been stale by more than a count since
 the swept-drag formulation changed the drag they are differences of. What
 settles it is their **sum**: the drag counted so far plus the friction still
-ahead varies by only **1.19** counts from 0.90c up, where the drag alone moves
-4.84. A forward station is not a worse estimate of the same drag; it is the drag
-of a shorter aerofoil. The friction the chosen station still *omits* is **0.157
-counts at cruise, 0.128 at climb** — under a fifth of a count.
+ahead varies by only **1.23** counts from 0.90c up, where over that same range
+the drag alone moves **3.40**.  (Both halves of that comparison are measured on
+one range now.  This set the spread, which is taken from 0.90c, against the
+4.84 counts the drag moves from *0.88c* — two different ranges, which
+overstated the contrast; `squire_young_moves_from_invariant_lo_counts` in the
+summary CSV is the matching figure, and `verify_outputs.py` holds the report to
+it.)  A forward station is not a worse estimate of the same drag; it is the drag
+of a shorter aerofoil. The friction the chosen station still *omits* is **0.156
+counts at cruise, 0.127 at climb** — under a fifth of a count.
 `04_solution/squire_young_station_summary.csv` computes all six of these
 figures, and `04_solution/squire_young_station_sensitivity.csv` carries the omitted friction beside
 the drag at every station; the climb figure had no generating source at all
 until that summary was added. The station is converged to a fifth of a count.
 Past 0.98c the formula turns over, which is the inviscid singularity taking hold
 rather than drag being lost.
+
+The omitted friction is in the **same frame** as the drag it is added to. It
+used to be the chordwise integral alone, referred to U_n and c_n — a
+normal-plane coefficient added to a streamwise one. Converting it is the E20c
+argument applied to the wall shear rather than the wake, and it has two terms,
+neither needing a trailing-edge evaluation:
+
+    omitted = cos³Λ  ∫ C_f (U_e,n/U_n)² d(s_n/c_n)     chordwise wall shear
+            + cosΛ sin²Λ ∫ C_f (U_e,n/U_n)  d(s_n/c_n)  span-wise wall shear
+
+The span-wise term is there because Squire–Young's own span-wise term carries
+that shear only as far as the evaluation station; under the same
+small-cross-flow closure the drag formula already uses, τ_wz = (W/U_e,n)τ_wx,
+so it integrates directly over the same stations. First power against second —
+the same asymmetry, for the same reason. Together they make the span-wise
+contribution station-independent, so the sum is cos³Λ times a purely chordwise
+quantity plus a constant, which is what the invariance claim can be made about.
+
+It is **not** adopted for giving the smallest spread, and it does not: from
+0.90c up the unconverted form gave 1.19 counts, the chordwise half-correction
+gives 1.31, this gives **1.23**. The smallest of the three is the one that adds
+two frames together. What settles the form is the **yawed flat plate**: with
+U_e,n = U_n the two terms collapse to cos³Λ + cosΛsin²Λ = cosΛ exactly, the
+independence principle's answer, and `tools/smoke.py` holds it there — the same
+check E20c itself is held to.
 
 The shape-factor clamp is the same wedge. Head's method has no validity past
 separation, so H is clamped at 2.8; on the climb case and above about 3° of
@@ -93,12 +125,22 @@ state to the trailing edge and applying the wake relation returns 18 counts
 against 47, because θ has by then grown to a per cent of chord in response to a
 deceleration the viscous flow does not have.
 
-The transition-length correlation is validated on the four ERCOFTAC plates
-below — the ones that carry C_f measurements through transition, and therefore
-the only ones that constrain a LENGTH rather than an onset — which span
-Re_x,t = 6×10⁴ to 1.4×10⁶, and extrapolated on the wing, which transitions
-at 3.6×10⁶ (`04_solution/transition_summary.csv`, Re_x_tr = 3.554×10⁶ on the
-upper surface; this said 3.7).  The extrapolation is not damped — that would add an undeclared
+The transition-length correlation is scored against the ERCOFTAC plates below
+that carry C_f measurements through transition — and **only two of the four
+resolve a LENGTH at all**, which this file used to claim all four did.  Taking
+Narasimha's own definition, the distance over which the intermittency runs from
+0.25 to 0.75, T3A⁻ has reached only γ = 0.38 at its last measured station and
+T3C4's pressure gradient invalidates the flat-plate correlations the measured
+intermittency has to be formed against.  On T3A and T3B, which do resolve it,
+the model returns **1.32 and 0.91 times** the measured extent; the claim of a
+factor of two that stood here had no generating source, and
+`06_validation/transition_length_measured.csv` is now that source.  Those
+plates span
+Re_x,t = 6×10⁴ to 1.4×10⁶, and the correlation is extrapolated on the wing, which transitions
+at 3.5×10⁶ (`04_solution/transition_summary.csv`, Re_x_tr = 3.476×10⁶ on the
+upper surface; this said 3.7, then 3.554×10⁶ — the latter formed the Reynolds
+number on the *streamwise* free-stream speed and the *normal-plane* arc length,
+which is the frame error `transition_summary` now avoids).  The extrapolation is not damped — that would add an undeclared
 constant — but what it costs is measured: over the range in which the
 transitional region still closes on the section, C_len from a quarter of the
 published value up to it, the section drag moves **0.04 counts**. Above the
@@ -154,10 +196,13 @@ Three elements are not correlations:
   The amplification rate is **not fitted**: it is read
   from the reverse-flow branch of the tabulated family, which returns 0.0435 at
   Re_θ = 400 (0.042–0.045 over the range these bubbles span). The shape factor
-  itself is marched on the *attached* branch and bounded by its separation value
-  H = 3.997 — it cannot be continued past the fold, where H*(H) turns and the
-  inversion the march needs ceases to exist. Only the amplification rate, which
-  needs no inversion, is read beyond separation.
+  itself is marched on the **combined** family, attached plus reverse flow,
+  from its separation value H = 3.997 up to H = 6.41: H*(H) folds at H = 4.03,
+  so the inversion H = H(H*) is not unique there, but a march arrived
+  continuously and taking the root nearest the previous H carries it across.
+  (This bullet said the shape factor "cannot be continued past the fold", which
+  contradicted the residuals section below, where the same crossing is
+  described as the thing that removed the cap.)
 
 ## Case-study result (AETHER-NLF 25 at cruise)
 
@@ -166,7 +211,7 @@ checked against the compiled report, so this table cannot drift from the solver:
 
 | quantity | value |
 |---|---|
-| Section lift coefficient c_l | 0.517 |
+| Section lift coefficient c_l (swept strip, streamwise) | 0.496 |
 | Section profile drag | 47.3 counts |
 | Fully-turbulent reference (LE trip) | 95.4 counts |
 | Viscous drag reduction | 50.4 % |
@@ -178,6 +223,16 @@ checked against the compiled report, so this table cannot drift from the solver:
 
 The section is quoted at its design incidence, which is not the aircraft trim
 point — the last row is there so the two are not confused.
+
+The section lift is the SWEPT strip's, c_l = c_l,n cos²Λ, from
+`04_solution/integrated_forces.csv`; it is the one that belongs beside a
+streamwise profile drag.  The two-dimensional section on its own returns
+**0.517** at the same incidence and Mach number, and that is what
+`01_geometry/geometry_definition.csv` and the section drawing carry, labelled
+"2-D unswept".  This table used to quote 0.517 beside the swept wing's drag,
+which is a four per cent inconsistency the report's own headline table did not
+have; `verify_outputs.py` now checks both values against the places they belong,
+so the two cannot be swapped again.
 
 ## Results figures
 
@@ -333,12 +388,17 @@ is evaluated there.
 
 | set | critical Re_θ2 | coeff. of variation | points |
 |---|---|---|---|
-| Dagenhart & Saric | 153 | 17.8 % | 6 |
-| Boltz et al. | 234 | 4.0 % | 4 |
-| pooled | 185 | 24.4 % | 10 |
+| Dagenhart & Saric | 153 | 19.5 % | 6 |
+| Boltz et al. | 234 | 4.6 % | 4 |
+| pooled | 185 | 25.7 % | 10 |
 
-Each facility is internally consistent — Boltz to 4 % across four sweep angles
+Each facility is internally consistent — Boltz to 5 % across four sweep angles
 and a factor of three in chord Reynolds number — and the two differ by 53 %.
+(The coefficients of variation are SAMPLE values, ddof = 1.  This table used to
+carry population values, 17.8, 4.0 and 24.4, while the two other tables that
+report the scatter of the same ten numbers used the sample form — so the
+paragraph below compared a population 4.0 with a sample 28.7 as though they were
+the same measure.  One convention now, everywhere.)
 
 **A tempting external corroboration, checked and rejected.** TN D-338 states
 crossflow Reynolds numbers of its own: *"the critical values ... for vortex
@@ -361,7 +421,7 @@ factor of 1.5. So what each experiment *calls* transition remains a candidate
 explanation alongside receptivity — as an argument about event definition, not
 as a numerical match.  Two attempts to close the gap fail and are recorded rather than
 dropped: the exact Falkner–Skan–Cooke factor K(λ) in place of the constant
-surrogate makes it worse (pooled variation 77 % against 24 %, and the ratio
+surrogate makes it worse (pooled variation 81 % against 26 %, and the ratio
 between the two sets inverts), and giving the cross-flow branch its own
 amplification threshold,
 separate from Mack's, does not help either: swept from N = 2 to 12 with C1
@@ -380,8 +440,10 @@ Eight formulations of the branch are scored against both experiments in
 `06_validation/crossflow_formulations.csv`, and none reconciles them: every one
 that helps the independent set costs more on the calibration set, and the three
 that cost nothing there help nothing here — including the solved eigenvalue
-problem of the next section, which is the best of the eight on the calibration
-set and the worst of them on the independent one.  That used to be a claim
+problem of the next section, which is the worst of the eight on the independent
+set and the best but one on the calibration set, behind the streamwise-frame
+variant's 14.5 %.  (This said it was *the* best on the calibration set; it is
+16.7 % there against that 14.5 %.)  That used to be a claim
 about what the author had tried, which nothing could check; it is now a
 generated table.
 Whether the branch needs its own amplification threshold, separate from the
@@ -413,7 +475,9 @@ measured bubble, reproducing the measured dθ/dx = 0.00591 m⁻¹ from the measu
 dU_e/dx and θ requires **H = 19**; the measurement reports 5.17, which gives
 0.00202 m⁻¹ — short by a factor of **2.93**. No integral method closed on any
 physical profile family reproduces this bubble. Combined with the unresolved
-onset station (see † above), the residual is −14.2 % against the bracket, and
+onset station (see † above), the residual is −13.9 % against the bracket
+(`06_validation/validation_summary.csv`; this said −14.2, which the report had
+already corrected and this file had not), and
 what remains of it is a property of the data, not of the closure.
 
 **Cross-flow: the eigenvalue problem is solved now, and it does not close the
@@ -445,8 +509,9 @@ and the present solve reproduces them to **0.50 mean and 0.56 RMS** —
 `06_validation/crossflow_amplification.csv`. On the facility gap it does better
 than the surrogate and still not well enough: the required levels come to
 N_cf = 7.02 and 5.67, a ratio of **1.24** where the critical Re_θ2 differ by
-1.53, but the scatter *within* Boltz's four conditions goes from 4.0 % to
-28.7 %, because N_cf at the measured transition falls monotonically with sweep
+1.53, but the scatter *within* Boltz's four conditions goes from 4.6 % to
+28.7 % — both sample values, which is the point of the note under the table
+above — because N_cf at the measured transition falls monotonically with sweep
 (7.58 at 20° to 3.66 at 50°) and no single threshold passes through all four.
 Through the kernel, with its one constant fitted on the calibration set exactly
 as C1 was, it scores 16.7 % there against the shipped 21.8 % — and 83.7 % on
@@ -471,9 +536,11 @@ formation rate: Re_λ = √(0.412/N̂) Re_θ,t^1.5, and on a Blasius plate
 Re_θ^1.5 = 0.5411 Re_x^0.75, so the two are the same law with C = 16.63 —
 identical over Re_x from 6×10⁴ to 10⁷. What is assumed constant is the spot
 rate, and Re_θ is the variable in which that is exact. The forms agree to
-0.03 % on the four ZPG plates and differ by 2.85 % on T3C4, the one plate with
-a pressure gradient. The wing moves 0.02 counts and no longer sits outside any
-validated range.
+0.03 % on the four ZPG plates and differ by **2.71 %** on T3C4, the one plate
+with a pressure gradient. The wing moves **0.03 counts** and no longer sits
+outside any validated range.  (Both figures are read from
+`06_validation/transition_length_forms.csv` by the report and were 2.85 and 0.02
+here.)
 
 **Conditioning.** Shifting the bypass threshold by ±10 % moves the predicted
 transition location by a factor of 3.5 on T3A, 2.5 on T3A⁻ and 2.0 on T3B
@@ -498,8 +565,10 @@ Sources recorded in `06_validation/sources_and_references.csv`.
 04_solution/      solver outputs: Cp, Cf, theta, H, Re_theta, gamma, polars, fields
 05_postprocessing/ csv_plots/ contours/ profiles/ three_d/  (all curves, contours, 3D)
 06_validation/    experiment vs solver CSVs + plots + sources, the aerofoil
-                  error summary (aerofoil_nlf0416_summary.csv) and the
-                  ablation sweep (ablations.csv)
+                  error summary (aerofoil_nlf0416_summary.csv), the
+                  ablation sweep (ablations.csv) and the transition LENGTH
+                  against the two plates that resolve one
+                  (transition_length_measured.csv)
 07_equations/     equations_index.csv (LaTeX source of every governing equation)
 solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld,
                   Falkner-Skan and Falkner-Skan-Cooke), case_config.py,
@@ -507,7 +576,10 @@ solver/           utss_solver.py (engine), stability.py (Orr-Sommerfeld,
                   committed because they cost minutes and hours to build:
                   amplification_db.npz (streamwise e^N rates) and
                   crossflow_db.npz (stationary cross-flow rates)
-tools/            smoke.py (the whole solver checked in well under a minute),
+tools/            smoke.py (every check over the whole solver, and by far the
+                  cheapest thing here - no time is quoted, because it is a
+                  property of the machine and .pipeline/timings.json holds the
+                  measured ones),
                   pipeline.py (staged regeneration, timings written to
                   .pipeline/timings.json), baseline.py (numeric diff of every
                   generated CSV against a snapshot), docx2pdf.py (renders
@@ -538,11 +610,14 @@ LICENSE, LICENSE-CODE   CC BY-NC 4.0 for data and the report, PolyForm
 
 ## Reproduce
 ```bash
-python3 tools/smoke.py         # every check over the whole solver, in under a minute.
-                               #   Run this FIRST and after every edit: a full
-                               #   regeneration is minutes and the faults
-                               #   that waste it are all visible here in the
-                               #   first second.
+python3 tools/smoke.py         # every check over the whole solver.
+                               #   Run this FIRST and after every edit: it is
+                               #   two orders of magnitude cheaper than a full
+                               #   regeneration and the faults that waste one
+                               #   are all visible here in the first second.
+                               #   (No wall-clock figure is quoted; the
+                               #   measured per-stage times land in
+                               #   .pipeline/timings.json every run.)
 python3 tools/pipeline.py      # the whole regeneration, as dependency-ordered
                                #   stages, two at a time, smoke-gated and
                                #   timed, stopping at the first failure with
@@ -560,8 +635,12 @@ python3 run_solution.py        # run solver, write all output CSVs
 python3 gen_validation.py      # validation vs published data + ablation sweep
                               #   (--no-ablations skips the sweep)
 python3 gen_postprocessing.py  # all plots, contours, profiles, 3D
-                              #   (reads 04_solution/, so run it after
-                              #    run_solution.py)
+                              #   (plots EVERY generated CSV, so it needs
+                              #    01_geometry/, 02_mesh/, 03_model_setup/ AND
+                              #    04_solution/ - all four of the stages above.
+                              #    tools/pipeline.py declared only the last of
+                              #    those and scheduled this stage before the
+                              #    geometry on an empty tree)
 python3 gen_equations.py       # build model.equations.docx (native equations)
 python3 gen_assets.py          # rebuild the README banner and the social card
                               #   from the CSVs (reads 05_postprocessing, so

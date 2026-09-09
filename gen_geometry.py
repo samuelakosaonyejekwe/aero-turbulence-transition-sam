@@ -32,13 +32,24 @@ HID   = "#9aa7b4"   # hidden lines (grey-blue)
 
 
 def section_cl():
-    """Inviscid section lift coefficient at the cruise design incidence.
+    """Inviscid section lift of the UNSWEPT 2-D section at cruise conditions.
 
     The section c_l was typed into the geometry table and onto the drawing as
     a design target, and the two disagreed with each other and with the
     solution the rest of the report tabulates.  It is computed here from the
     same panel method, at the same incidence and Mach number as the cruise
-    case, so the drawing, the geometry table and 04_solution cannot disagree.
+    case.
+
+    IT IS NOT THE CASE-STUDY SECTION LIFT, and calling both "the section c_l"
+    is how the README came to quote 0.517 in a headline table whose drag was
+    0.496's.  This is the two-dimensional section on its own: alpha = 1.5 deg,
+    M = 0.42, no sweep.  The case study is a strip of a 12-degree swept wing,
+    which solve_airfoil solves in the plane normal to the leading edge at
+    alpha_n = atan(tan(alpha)/cos L) and M cos L and then refers back to the
+    streamwise frame as c_l = c_l,n cos^2 L; that is the 0.4962 of
+    04_solution/integrated_forces.csv, four per cent below this, and it is the
+    one that belongs beside the 47.3 counts of streamwise profile drag.  Both
+    are real and they are different quantities, so the labels say which.
     """
     X, Y = C.nlf16_panel_points(130)
     a = C.CRUISE["alpha_deg"]
@@ -264,7 +275,13 @@ def build_geometry():
         # with the rest of them.  Squire-Young's premise is what it decides:
         # a wedge trailing edge is an inviscid stagnation point.
         ("Trailing-edge included angle", f"{te_wedge_deg(co):.1f}", "deg"),
-        (f"Section c_l at cruise design incidence "
+        # "2-D unswept" is not decoration.  This is the section on its own; the
+        # case study runs it as a strip of a 12-degree swept wing and gets
+        # c_l = c_l,n cos^2 L, which is the "Section lift coefficient Cl" row
+        # of 04_solution/integrated_forces.csv and is four per cent lower.  The
+        # two carried the same name, and the README's headline table then
+        # quoted this one beside the swept wing's drag.
+        (f"Section c_l, 2-D unswept "
          f"(alpha = {C.CRUISE['alpha_deg']:.1f} deg, M = {C.CRUISE['mach']:.2f})",
          f"{section_cl():.3f}", "-"),
     ]
@@ -329,10 +346,15 @@ def draw_airfoil_section(co):
                 xytext=(0.80,0.135), color=INK_SOFT, fontsize=10, ha="left",
                 arrowprops=dict(arrowstyle="->", color=INK_SOFT))
     # --- specification box (clear lower-left corner) ---
-    spec=("UTSS-NLF16  natural-laminar-flow section\n"
-          f"t/c = {tmax:.3f} @ {xt:.2f} c   ·   c_l = {section_cl():.2f} "
-          f"at α = {C.CRUISE['alpha_deg']:.1f}°, M = {C.CRUISE['mach']:.2f}\n"
-          f"aft-loaded camber   ·   {te_wedge_deg(co):.1f}° wedge T.E.")
+    # Three lines, re-balanced.  Saying "(2-D, unswept)" beside the c_l is
+    # necessary - the case study's section lift is the swept strip's, four
+    # per cent lower - but adding it to the line that already carried t/c
+    # pushed that line under the legend and hid "M = 0.42".  No line here is
+    # now longer than the longest one this box had before.
+    spec=("UTSS-NLF16  natural-laminar-flow section, aft-loaded camber\n"
+          f"t/c = {tmax:.3f} @ {xt:.2f} c   ·   {te_wedge_deg(co):.1f}° wedge T.E.\n"
+          f"c_l = {section_cl():.2f} (2-D, unswept) "
+          f"at α = {C.CRUISE['alpha_deg']:.1f}°, M = {C.CRUISE['mach']:.2f}")
     ax.text(0.015, -0.222, spec, fontsize=10, color=INK,
             va="bottom", ha="left",
             bbox=dict(boxstyle="round,pad=0.4", fc="#eef4fa", ec=INK_SOFT, lw=0.9))
@@ -434,23 +456,47 @@ def draw_front_side(df_pl):
     ax.grid(False)
     # SIDE VIEW (root + tip profiles)
     ax = axes[1]
+    # The tip is drawn WHERE IT IS: swept back by x_le, raised by the dihedral
+    # and rotated by the washout, exactly as the loft in wing_sections_3d.csv
+    # places it.  It used to be drawn at z = 0 and unrotated - so a view whose
+    # own axis is z, on a sheet whose other panel exists to show the dihedral,
+    # put the tip half a metre from where the wing carries it and hid a -3
+    # degree twist entirely.
     for e,col,lab in [(0,PALETTE[0],"root"),(1,PALETTE[1],"tip")]:
         sub = df_pl.iloc[0 if e==0 else -1]
         co = C.nlf16_coords(n=80)
         cc = sub["chord_m"]; xle = sub["x_le_m"]
-        ax.plot(xle+co["xu"]*cc, co["yu"]*cc, color=col, lw=1.8, label=f"{lab} c={cc:.2f}m")
-        ax.plot(xle+co["xl"]*cc, co["yl"]*cc, color=col, lw=1.8)
+        zz = sub["z_dihedral_m"]; a = np.radians(-sub["twist_deg"])
+        def _place(xs, ys):
+            xq = xs - 0.25
+            xr = 0.25 + xq*np.cos(a) - ys*np.sin(a)
+            yr = xq*np.sin(a) + ys*np.cos(a)
+            return xle + xr*cc, zz + yr*cc
+        _xu, _zu = _place(co["xu"], co["yu"])
+        _xl, _zl = _place(co["xl"], co["yl"])
+        ax.plot(_xu, _zu, color=col, lw=1.8,
+                label=f"{lab} c={cc:.2f}m, z={zz:.2f}m, twist {sub['twist_deg']:.1f}°")
+        ax.plot(_xl, _zl, color=col, lw=1.8)
     ax.set_aspect("equal"); ax.invert_xaxis()
-    # head-room for the legend, which otherwise sits on the tip section
-    _lo, _hi = ax.get_ylim(); ax.set_ylim(_lo, _hi + 0.55*(_hi-_lo))
-    ax.legend(loc="upper left", fontsize=10, framealpha=0.92)
+    # Head-room for the legend, and it is now much less than it was: with the
+    # tip drawn at its own z the two sections already fill three quarters of a
+    # metre, and the old 55 per cent of the range added an empty half-metre on
+    # top.  The legend goes top-right, which on this inverted axis is small x,
+    # high z: the root reaches z = 0.24 and the tip starts at x = 1.86, so that
+    # is the one corner both sections leave clear.
+    _lo, _hi = ax.get_ylim(); ax.set_ylim(_lo, _hi + 0.12*(_hi-_lo))
+    ax.legend(loc="upper right", fontsize=9.5, framealpha=0.92)
     ax.set_xlabel("x [m] (LE right)"); ax.set_ylabel("z [m]")
     ax.set_title("SIDE VIEW  -  root & tip sections", color=INK, fontsize=11)
     ax.grid(False)
     fig.suptitle("WING ORTHOGRAPHIC VIEWS  (GEO-003)", color=INK, fontweight="normal")
-    fig.text(0.5, 0.005, "DRAWN BY: AKOSA SAMUEL ONYEJEKWE  |  PROJECT AETHER-NLF 25  |  "
-             "UTSS-CASE-2026", ha="center", color=INK_SOFT, fontsize=9)
-    finish(fig, f"{DWG}/dwg_03_front_side.png")
+    # Through finish()'s caption slot rather than as a bare fig.text at y=0.005:
+    # tight_layout does not know about a free-floating text, so when the side
+    # panel grew to hold the tip at its true height the x-axis label came down
+    # on top of the title block.  The caption path reserves the strip first.
+    finish(fig, f"{DWG}/dwg_03_front_side.png",
+           caption="DRAWN BY: AKOSA SAMUEL ONYEJEKWE  |  PROJECT AETHER-NLF 25"
+                   "  |  UTSS-CASE-2026")
 
 
 def draw_orthographic(df_pl):
@@ -461,9 +507,13 @@ def draw_orthographic(df_pl):
     # 13.5 x 9.5 sheet each axes shrank to a fifth of the height of the cell it
     # was given and roughly half the drawing was white.  The row heights now
     # follow the two rows' data aspects.
-    fig = plt.figure(figsize=(13.5, 7.0))
+    # 13.5 x 7.0 with hspace 0.42 still left a band of white between the rows
+    # as wide as the panels themselves, because every panel here is set to an
+    # EQUAL data aspect and so does not fill the cell it is given vertically.
+    # Shortening the sheet takes the band out without touching the panels.
+    fig = plt.figure(figsize=(13.5, 6.0))
     gs = fig.add_gridspec(2, 2, height_ratios=[1.1,1], width_ratios=[1.5,1],
-                          hspace=0.42, wspace=0.22)
+                          hspace=0.30, wspace=0.22)
     y = df_pl["y_m"].values; xle=df_pl["x_le_m"].values; xte=df_pl["x_te_m"].values
     z = df_pl["z_dihedral_m"].values; chord=df_pl["chord_m"].values
     # PLAN (top-left)
@@ -499,7 +549,9 @@ def draw_orthographic(df_pl):
     axs.set_xlabel("x [m]"); axs.set_ylabel("z [m]")
     # ISO inset (bottom-right)
     axi = fig.add_subplot(gs[1,1], projection="3d")
-    _iso_wing(axi, df_pl)
+    # zoomed to fill its cell: a 3-D axes leaves a wide margin round its own
+    # box, and the inset was drawn at about a third of the cell it was given
+    _iso_wing(axi, df_pl, zoom=1.45)
     # pictorial inset: drop tick numbers (they collide with axis labels)
     axi.set_xticklabels([]); axi.set_yticklabels([]); axi.set_zticklabels([])
     axi.set_title("ISOMETRIC", fontsize=10, color=INK)
@@ -508,12 +560,17 @@ def draw_orthographic(df_pl):
     fig.text(0.5, 0.01, "All dimensions in metres unless noted  |  Scale 1:120  |  "
              "UTSS-CASE-2026  |  DRAWN BY: AKOSA SAMUEL ONYEJEKWE",
              ha="center", color=INK_SOFT, fontsize=10)
-    fig.tight_layout(rect=[0,0.02,1,0.96])
+    # Explicit margins, not tight_layout.  A 3-D axes is not compatible with it,
+    # so the call warned on every build and then did nothing - the sheet was
+    # laid out by the figure's default subplot parameters all along.  Those
+    # defaults are written down here instead, which produces the identical
+    # sheet without the warning and without pretending the layout is automatic.
+    fig.subplots_adjust(left=0.125, right=0.90, bottom=0.11, top=0.88)
     fig.savefig(f"{DWG}/dwg_04_orthographic.png", dpi=170, facecolor="white")
     plt.close(fig)
 
 
-def _iso_wing(ax, df_pl):
+def _iso_wing(ax, df_pl, zoom=1.0, nticks=None):
     e=df_pl["eta"].values; y=df_pl["y_m"].values; xle=df_pl["x_le_m"].values
     z=df_pl["z_dihedral_m"].values; chord=df_pl["chord_m"].values
     twist=df_pl["twist_deg"].values
@@ -534,8 +591,19 @@ def _iso_wing(ax, df_pl):
         ax.plot_surface(X,Y,Z,color=col,alpha=0.55,linewidth=0,antialiased=True,shade=True)
     ax.set_xlabel("x",fontsize=10); ax.set_ylabel("y",fontsize=10); ax.set_zlabel("z",fontsize=10)
     ax.view_init(elev=22, azim=-58)
-    try: ax.set_box_aspect((3,6,1))
+    # `zoom` fills the sheet.  A 3-D axes leaves a wide margin round its own
+    # bounding box on top of whatever the subplot leaves, so the isometric
+    # sheet had the wing occupying about a third of it and the rest white.
+    try: ax.set_box_aspect((3,6,1), zoom=zoom)
+    except TypeError:                       # matplotlib without the zoom kwarg
+        ax.set_box_aspect((3,6,1))
     except Exception: pass
+    if nticks:
+        from matplotlib.ticker import MaxNLocator
+        # the x labels run along a steeply foreshortened axis and ran into one
+        # another at the default count
+        ax.xaxis.set_major_locator(MaxNLocator(nticks))
+        ax.yaxis.set_major_locator(MaxNLocator(nticks))
     ax.grid(False)
 
 
@@ -545,8 +613,11 @@ def draw_isometric(df_pl):
     # the sheet; the caption is now two lines and the view is raised so the
     # UPPER surface it names is the one facing the reader
     fig = plt.figure(figsize=(10,6.2))
-    ax = fig.add_subplot(111, projection="3d")
-    _iso_wing(ax, df_pl)
+    # add_axes, not add_subplot: the default subplot box leaves a further
+    # margin inside the sheet on top of the 3-D axes' own, and between the two
+    # the wing was drawn at about a third of the area available to it.
+    ax = fig.add_axes([0.01, 0.09, 0.98, 0.85], projection="3d")
+    _iso_wing(ax, df_pl, zoom=1.30, nticks=4)
     ax.view_init(elev=26, azim=-58)
     ax.set_title("AETHER-NLF 25 WING  -  ISOMETRIC VIEW  (DWG GEO-005)",
                  color=INK, fontweight="normal")

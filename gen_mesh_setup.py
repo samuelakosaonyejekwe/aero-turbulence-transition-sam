@@ -141,14 +141,28 @@ def mesh_independence():
                         cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
                         mach=cr["mach"],T_inf_K=cr["T_inf_K"])
         u=r["surfaces"]["upper"]
-        rows.append((2*npan,r["Cl"],r["Cd"],u["x_tr_chord"]))
-    df=pd.DataFrame(rows,columns=["n_surface_panels","Cl","Cd","x_tr_upper_c"])
+        # The two quantities that actually move the drag, recorded so the
+        # explanation is evidence and not assertion.  Both this module and the
+        # report said the residual "is set by which panel the transition point
+        # lands on"; the transition location wanders by under 0.008 chord
+        # across the whole sweep with no trend, while the momentum thickness at
+        # the Squire-Young station rises monotonically by a seventh and the
+        # shape factor there with it, which is where the four counts come from.
+        rows.append((2*npan,r["Cl"],r["Cd"],u["x_tr_chord"],
+                     u["theta_te_c"],u["H_te_squire_young"]))
+    df=pd.DataFrame(rows,columns=["n_surface_panels","Cl","Cd","x_tr_upper_c",
+                                  "theta_at_sy_c","H_at_sy"])
     # Successive relative change, which is what this is.  It was labelled
-    # "Richardson-style", and it is not: Richardson extrapolation fits an
-    # observed order of convergence to a monotone sequence, and this sequence
-    # is not monotone - it goes +2.8, +0.1, +1.8, -0.6 per cent.  Calling the
-    # scatter an extrapolation dresses a sensitivity band as a convergence
-    # study.  The band is the honest statement and it is what the report makes.
+    # "Richardson-style", and it is not.  Richardson extrapolation fits an
+    # observed order of convergence to a sequence whose successive changes
+    # DECAY geometrically, and these do not: they run of order a per cent all
+    # the way to 700 panels without settling, so no order can be fitted and
+    # there is no asymptotic value to extrapolate to.  (This comment gave the
+    # reason as "the sequence is not monotone - +2.8, +0.1, +1.8, -0.6 per
+    # cent"; C_d rises at every refinement, and none of those four numbers is
+    # in the column.  The conclusion was right and the evidence for it was
+    # not.)  The band is the honest statement, and the figure and the report
+    # both compute it from this column rather than quoting one.
     df["dCd_pct"]=(df["Cd"].pct_change()*100).round(3)
     # Rounded to the precision these quantities are meaningful to, the same
     # convention run_solution.py states and every table in the report relies
@@ -156,7 +170,8 @@ def mesh_independence():
     # straight into the document - the report carried 202 of them - and its
     # last bits moved with the BLAS thread count, so a regeneration that
     # changed nothing physical still produced a different file.
-    for c,dp in (("Cl",5),("Cd",7),("x_tr_upper_c",4)):
+    for c,dp in (("Cl",5),("Cd",7),("x_tr_upper_c",4),
+                 ("theta_at_sy_c",6),("H_at_sy",3)):
         df[c]=df[c].round(dp)
     df.to_csv(f"{MESH}/mesh_independence.csv",index=False)
     return df
@@ -239,22 +254,40 @@ def plot_independence(df):
     ax2.plot(df["n_surface_panels"],df["x_tr_upper_c"],"s--",color=PALETTE[1],
              label="x_tr/c (upper)")
     ax2.set_ylabel("upper-surface x_tr / c",color=PALETTE[1])
-    # What the sweep actually shows: C_d settles to within about +/-1 count
-    # above 180 panels and does not tighten further, the residual wander being
-    # set by which panel the transition point lands on.  Calling that
-    # "converged" overstates it - the spread over the whole sweep is 2.1 counts
-    # - so the title says what the data says.
+    # What the sweep actually shows, and it is NOT convergence: C_d rises at
+    # every refinement, from the coarsest grid to the finest, and is still
+    # climbing at 700 panels.  Calling it converged would overstate it, and the
+    # earlier reading here - "settles to within about +/-1 count above 180
+    # panels ... the residual wander being set by which panel the transition
+    # point lands on" - described a scatter the column does not contain: the
+    # transition location moves by under 0.008c across the whole sweep with no
+    # trend, while theta at the Squire-Young station rises monotonically by a
+    # seventh and the shape factor there with it.  The drag is not following the
+    # transition station; it is following the aft integral march, which is not
+    # grid-converged.  Both columns are in the CSV so the statement is evidence.
+    # The half-range above 180 panels is what the title states, computed from
+    # the column so it cannot go stale, and the shipped grid's distance from the
+    # finest is stated beside it because that is the part a reader of the
+    # headline drag needs.
     cdc=df["Cd"].values*1e4
     band=0.5*(cdc[1:].max()-cdc[1:].min())
+    _sel=int(np.argmin(np.abs(df["n_surface_panels"].values-2*N_PANEL_HALF)))
+    _to_finest=cdc[-1]-cdc[_sel]
     ax.set_title("Mesh sensitivity (cruise): C_d within ±%.1f count above 180 "
-                 "panels" % band)
+                 "panels;\nstill rising at 700, %+.1f counts from the shipped "
+                 "grid" % (band, _to_finest))
     # The shipped grid, from the constant this module already declares.  It was
     # a literal 260 in three places on a figure whose subject is the panel
     # count, and the module that draws it defines N_PANEL_HALF ten lines above.
     _np_sel = 2*N_PANEL_HALF
     ax.axvline(_np_sel,color=PALETTE[2],ls=":",lw=1.5)
+    # On a white plate, so it stays readable where it crosses a curve: both
+    # series run high on the left of the selected grid, and the label sat on
+    # top of the transition-location line there.
     ax.text(_np_sel-8,0.96,"selected grid (%d)"%_np_sel,color=PALETTE[2],
-            fontsize=10,ha="right",va="top",transform=ax.get_xaxis_transform())
+            fontsize=10,ha="right",va="top",transform=ax.get_xaxis_transform(),
+            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="none",
+                      alpha=0.85))
     finish(fig,f"{MP}/mesh_03_independence.png")
 
 # ======================================================================
@@ -369,8 +402,19 @@ def setup_tables():
          "spread of any case here, so no result in this study is blended"),
         ("C_len",CAL["C_len"],"transition-length scale, Re_lambda = C_len Re_x_t^0.75",
          "Dhawan & Narasimha (1958) published value; not fitted here"),
+        # The two mean errors were typed here as 14.7 and 18.4 per cent and
+        # stayed there through the normal-plane transformation and the
+        # swept-drag formulation, both of which moved them; they are 21.8 and
+        # 17.6 in the generated tables.  This module runs before the validation
+        # sweep and cannot read them, so it names the files that carry them
+        # instead of carrying a second copy that nothing regenerates.
         ("CF_C1",CAL["CF_C1"],"crossflow critical Re_theta2",
-         "Arnal et al.; facility-dependent: 150 fits Dagenhart (14.7%), 200 fits Boltz (18.4%)"),
+         "Arnal et al.; FITTED on Dagenhart & Saric, and facility-dependent - "
+         "the band C1 = 150-200 is reported rather than one value.  The mean "
+         "error each end returns on each set is in "
+         "06_validation/swept_wing_crossflow.csv and "
+         "06_validation/swept_wing_independent.csv, and every formulation of "
+         "the branch is scored in 06_validation/crossflow_formulations.csv"),
         ("cf_amp",CAL["cf_amp"],"crossflow closed by an amplification integral, not a local threshold",
          "rate computed (0.0435); threshold is the same N_crit; adds no constant"),
         ("CF_ratio",CAL["CF_ratio"],"theta2/theta surrogate for crossflow","FITTED on Dagenhart & Saric; independent check in Sec. IV.C"),
@@ -425,8 +469,10 @@ def setup_tables():
         ("n_freq_max",CAL["n_freq_max"],"cap on the frequency count","guards a degenerate range"),
         ("CF_N",CAL["CF_N"],"separate amplification threshold for the crossflow branch (ablation path only)",
          "0 = use the same N_crit as every other branch; exposed to test whether a "
-         "roughness-seeded branch needs its own threshold, and it does not - see "
-         "06_validation/crossflow_criticals_summary.csv"),
+         "roughness-seeded branch needs its own threshold, and it does not - the "
+         "sweep that settles it, with C1 refitted at every threshold so the two "
+         "constants are not confounded, is "
+         "06_validation/crossflow_threshold_sweep.csv"),
     ]
     declared={r[0] for r in calrows}
     missing=set(CAL) - declared

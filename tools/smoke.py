@@ -529,6 +529,33 @@ def march_output_contract():
 
 
 @check
+def onset_is_converged_in_the_marching_stations():
+    """the onset the plates report does not depend on how finely they are marched"""
+    # The panel count has a published sensitivity study (02_mesh) and the
+    # frequency spacing is stated as a resolution, but the number of MARCHING
+    # STATIONS on a flat plate was a bare npts=900 in gen_validation with
+    # nothing showing that the answer had stopped moving by then.  Measured
+    # over 300 to 2000 stations the onset Reynolds number moves by under 0.2 %
+    # on every plate; this holds two of them to a quarter of a per cent across
+    # a doubling, which is the cheapest form of that statement.
+    import case_config as C
+    from utss_solver import solve_flat_plate
+    for key in ("SS", "T3A"):
+        v = C.VALIDATION[key]
+        got = []
+        for n in (600, 1200):
+            r = solve_flat_plate(v["L"], v["U"], v["nu"], v["Tu_pct"], npts=n,
+                                 dUe=v["dUe"], L_turb=v.get("L_turb"))
+            assert r["i_tr"] is not None, "%s did not transition at npts=%d" % (key, n)
+            got.append(float(r["Re_theta"][r["i_tr"]]))
+        rel = abs(got[1] - got[0])/got[0]
+        assert rel < 0.0025, (
+            "%s onset Re_theta moves %.2f %% between 600 and 1200 marching "
+            "stations (%.2f -> %.2f); the march is not converged in its own "
+            "discretisation" % (key, 100*rel, got[0], got[1]))
+
+
+@check
 def kernel_every_mechanism_fires():
     """each of the four mechanisms is reachable and labels itself"""
     import case_config as C
@@ -889,11 +916,28 @@ def lifting_line_closed_form():
 def verify_outputs_contract():
     """verify_outputs can still find every CSV and column it reads"""
     import verify_outputs as V
-    want, present, absent = V.checks()
-    assert len(want) > 15
-    for label, value, anchor in want:
-        assert isinstance(value, str) and value, "%s has no value" % label
-        assert anchor is None or isinstance(anchor, str)
+    # V.checks() reads the generated CSVs.  They ship, so on an ordinary
+    # checkout this always runs - but the documented way to prove a clean
+    # regeneration is to DELETE every generated output and run the pipeline,
+    # and the pipeline gates on this file.  Unguarded, this check then raised
+    # FileNotFoundError, smoke failed, and tools/pipeline.py refused to start
+    # the very regeneration that would put the files back.  The two checks
+    # below it already skip when their input is absent; this one did not.
+    _needed = ["04_solution/nlf_vs_turbulent.csv",
+               "04_solution/integrated_forces.csv",
+               "04_solution/transition_summary.csv",
+               "01_geometry/geometry_definition.csv",
+               "06_validation/aerofoil_nlf0416_summary.csv",
+               "06_validation/validation_summary.csv",
+               "06_validation/ablations.csv",
+               "06_validation/swept_wing_crossflow.csv",
+               "06_validation/swept_wing_independent.csv"]
+    if all(os.path.exists(p) for p in _needed):
+        want, present, absent = V.checks()
+        assert len(want) > 15
+        for label, value, anchor in want:
+            assert isinstance(value, str) and value, "%s has no value" % label
+            assert anchor is None or isinstance(anchor, str)
     # the matcher itself: a number must not pass on a longer one containing it
     txt = V.flatten("Table 14. NLF vs fully-turbulent drag. 1683 and 0.1685")
     assert not V.find_value(txt, "168", "NLF vs fully-turbulent drag")[0], \
@@ -1113,6 +1157,70 @@ def thin_layer_guard_never_fires_inside_the_envelope():
 
 
 @check
+def pipeline_stages_declare_what_they_read():
+    """every generated file a stage reads is produced by a stage it depends on"""
+    # This is the only fault in this project that a full regeneration on an
+    # ordinary checkout cannot show, because every generated file is committed:
+    # a stage that reads another stage's output without declaring the
+    # dependency finds the file there from the last run and never notices.  It
+    # shows the moment the tree is emptied and rebuilt, which is what the
+    # reproduce instructions ask for - `post` was declared as depending on
+    # `solution` alone while it plots the geometry, mesh and model-setup CSVs
+    # too, so on an empty tree it was scheduled beside `solution`, ran before
+    # `geometry`, and died on FileNotFoundError.
+    #
+    # Only .csv and .png references count.  The section coordinate files in
+    # 01_geometry are hand-authored INPUTS, not products of the geometry stage,
+    # so a stage reading one of those is not depending on anything.
+    import re
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import pipeline as P
+
+    produces = {}
+    for name, (_script, _deps, writes) in P.STAGES.items():
+        for tok in writes.split(","):
+            tok = tok.strip().rstrip("/")
+            if re.fullmatch(r"\d\d_[A-Za-z_]+", tok):
+                produces[tok] = name
+
+    def deps_of(stage, seen=None):
+        seen = set() if seen is None else seen
+        for d in P.STAGES[stage][1]:
+            if d not in seen:
+                seen.add(d)
+                deps_of(d, seen)
+        return seen
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    bad = []
+    for name, (script, _deps, _w) in P.STAGES.items():
+        path = os.path.join(root, script)
+        if not os.path.exists(path):
+            continue
+        src = open(path, encoding="utf-8").read()
+        # resolve the module constants the f-string reads go through
+        # (SOL="04_solution", VAL="06_validation", ...) so those count too
+        for cname, cval in re.findall(r'(\w+)\s*=\s*"(\d\d_[A-Za-z_]+)"', src):
+            src = src.replace("{%s}" % cname, cval)
+        # only at a READ call site.  A directory NAMED in a comment or in a
+        # table's provenance string is not a dependency, and matching every
+        # quoted path made this fire on gen_mesh_setup for pointing a reader at
+        # the validation CSVs.
+        reads = set(re.findall(
+            r'(?:read_csv|imread|table_from_csv|image|np\.load)\(\s*f?["\']'
+            r'(\d\d_[A-Za-z_]+)/[^"\']+\.(?:csv|png|npz)["\']', src))
+        allowed = deps_of(name) | {name}
+        for d in sorted(reads):
+            owner = produces.get(d)
+            if owner is None or owner in allowed:
+                continue
+            bad.append("%s reads %s/, which %s writes, but does not depend on it"
+                       % (script, d, owner))
+    assert not bad, "tools/pipeline.py stage graph is incomplete:\n   " + \
+        "\n   ".join(bad)
+
+
+@check
 def generated_csvs_carry_no_signed_zero():
     """no published data file prints a minus sign in front of zero"""
     import re
@@ -1252,7 +1360,12 @@ def plotters_work_from_their_own_committed_csvs():
     # legend and no error at all.  The committed CSV is the round trip, so it
     # is what the check feeds in.
     n = 0
-    GV.plot_nlf0416(pd.read_csv(p))
+    # into a temporary directory: this used to overwrite the committed
+    # 06_validation/plots/val_aerofoil_nlf0416.png on every run, so a check
+    # dirtied the working tree it exists to protect.
+    import tempfile
+    with tempfile.TemporaryDirectory() as _td:
+        GV.plot_nlf0416(pd.read_csv(p), out=os.path.join(_td, "panel.png"))
     # the figure is written to disk; assert it is not the empty one by counting
     # the rows the selection would find
     df = pd.read_csv(p)
@@ -1266,6 +1379,229 @@ def plotters_work_from_their_own_committed_csvs():
                 % (surf, Rec)
     assert n == len(df), \
         "the panel selections cover %d of the %d rows" % (n, len(df))
+
+
+@check
+def omitted_friction_is_in_the_streamwise_frame():
+    """the friction still ahead converts out of the normal plane like the drag"""
+    import case_config as C
+    import run_solution as R
+    W = C.WING
+    cond = dict(U_inf=100.0, nu_inf=1.5e-5)
+    CF = 3.0e-3
+
+    def plate(sweep, ratio=1.0):
+        """A yawed flat plate: constant C_f, constant edge-velocity ratio.
+
+        The pure-function analogue of swept_drag_factor's own check, and held
+        to the same standard, because the answer is known independently.
+        """
+        cosL = np.cos(np.radians(sweep))
+        n = 401
+        surf = dict(x=np.linspace(0.0, 1.0, n),
+                    Cf=np.full(n, CF),
+                    Ue=np.full(n, cond["U_inf"]*cosL*ratio),
+                    s=np.linspace(0.0, W["MAC"]*cosL, n))
+        return dict(cos_sweep=cosL, sweep_deg=float(sweep),
+                    sweep_transform=sweep > 0.0,
+                    surfaces=dict(upper=surf, lower=surf))
+
+    # 1.  Zero sweep must be the plain chordwise integral this replaced, so no
+    #     unswept result can move: two surfaces, unit normal-plane chord.
+    want = 2.0*CF
+    got = R.omitted_friction(plate(0.0), 0.0, cond)
+    assert abs(got - want) < 1e-9, \
+        "unswept omitted friction moved: %.8f against %.8f" % (got, want)
+
+    # 2.  THE CHECK THAT SETS THE FORM, and it is the one swept_drag_factor is
+    #     held to.  A flat plate at yaw is a flat plate in the free stream, so
+    #     its friction drag is the unswept value at the streamwise run length -
+    #     exactly cos(L), for every sweep.  With U_e,n = U_n the two terms are
+    #     cos^3(L) + cos(L)sin^2(L) = cos(L).  The chordwise term ALONE gives
+    #     cos^3(L), which is short by cos^2(L): 29 per cent at 45 degrees.
+    for L in (5.0, 12.0, 30.0, 45.0, 60.0):
+        g = R.omitted_friction(plate(L), 0.0, cond)
+        c = np.cos(np.radians(L))
+        assert abs(g - want*c) < 1e-9, (
+            "yawed flat plate at %g deg: omitted friction %.8f, cos(L) times "
+            "the unswept value %.8f" % (L, g, want*c))
+        assert abs(g - want*c**3) > 1e-6 or L == 0.0, \
+            "the span-wise term is missing again at %g deg" % L
+
+    # 3.  It must fall as the station moves aft, and vanish at the trailing edge
+    r12 = plate(12.0)
+    seq = [R.omitted_friction(r12, x, cond) for x in (0.0, 0.5, 0.9, 1.01)]
+    assert all(a >= b for a, b in zip(seq, seq[1:])), \
+        "the friction still ahead does not fall with the station: %s" % seq
+    assert seq[-1] == 0.0, "friction remains ahead of the trailing edge"
+
+
+@check
+def report_format_strings_are_well_formed():
+    """every %-formatted literal in the generators formats without raising"""
+    import ast
+    import re
+    # build_docx.py is 1700 lines of %-formatted prose and is the ONE file here
+    # with no cheap check: smoke's imports_generators cannot import it, because
+    # importing it builds the whole document.  So a stray literal per cent in a
+    # sentence - "mixed by cos^3(L) - 6.4 % of the smaller column" - is found
+    # only by running the docx stage, which costs seventy seconds after the
+    # fourteen-minute validation stage it is scheduled behind.  That is exactly
+    # what happened while this audit was being written.  Parsing the format
+    # strings costs milliseconds and catches the whole class: a literal per cent
+    # that was not doubled, and a conversion count that does not match the
+    # argument tuple.
+    _VAL = {"d": 1, "i": 1, "u": 1, "f": 1.0, "F": 1.0, "e": 1.0, "E": 1.0,
+            "g": 1.0, "G": 1.0, "s": "x", "r": "x", "a": "x", "c": "x"}
+
+    def literal(node):
+        """The string if the left operand is entirely literal, else None."""
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            a, b = literal(node.left), literal(node.right)
+            return None if a is None or b is None else a + b
+        return None
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    bad = []
+    for f in ("build_docx.py", "gen_validation.py", "gen_mesh_setup.py",
+              "gen_geometry.py", "gen_postprocessing.py", "gen_assets.py",
+              "run_solution.py", "verify_outputs.py", "gen_equations.py"):
+        p = os.path.join(root, f)
+        if not os.path.exists(p):
+            continue
+        for n in ast.walk(ast.parse(open(p, encoding="utf-8").read())):
+            if not (isinstance(n, ast.BinOp) and isinstance(n.op, ast.Mod)):
+                continue
+            fmt = literal(n.left)
+            # only literal format strings with a literal argument TUPLE: a
+            # name on either side could be anything, including a dict or a
+            # modulo on numbers
+            if fmt is None or not isinstance(n.right, ast.Tuple):
+                continue
+            spec = re.findall(r"%[#0\- +]*(?:\*|\d+)?(?:\.(?:\*|\d+))?"
+                              r"([a-zA-Z%])", fmt)
+            need = [c for c in spec if c != "%"]
+            try:
+                fmt % tuple(_VAL.get(c, "x") for c in need)
+            except Exception as e:                    # noqa: BLE001
+                bad.append("%s:%d %s" % (f, n.lineno, e))
+                continue
+            if len(need) != len(n.right.elts):
+                bad.append("%s:%d %d conversion(s) against %d argument(s)"
+                           % (f, n.lineno, len(need), len(n.right.elts)))
+    assert not bad, "malformed %-format string(s):\n   " + "\n   ".join(bad)
+
+
+@check
+def every_generated_file_the_report_reads_is_tracked():
+    """every generated CSV and figure in a published folder is tracked"""
+    import re
+    import subprocess
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tracked = set(subprocess.run(["git", "ls-files"], cwd=root,
+                                 capture_output=True, text=True).stdout.split())
+    if not tracked:
+        return                       # not a git checkout
+    want = set()
+    for f in ("build_docx.py", "verify_outputs.py", "gen_assets.py",
+              "gen_postprocessing.py"):
+        p = os.path.join(root, f)
+        if not os.path.exists(p):
+            continue
+        src = open(p, encoding="utf-8").read()
+        want |= set(re.findall(
+            r'(?:read_csv|table_from_csv|image|imread)\(\s*f?["\']'
+            r'((?:\d\d_[A-Za-z_]+|assets)/[^"\']+\.(?:csv|png))["\']', src))
+    # literal paths only: the figure lists are emitted from loops as
+    # f"...{f}.png", which is not a path and cannot be resolved by reading the
+    # source.  Those are covered by the second half of this check instead.
+    want = {p for p in want if "{" not in p}
+
+    # And the general form: every generated artefact sitting in a published
+    # directory must be tracked.  This is the half that does not depend on
+    # guessing which strings are paths, and it is what would have caught the
+    # file above on the day it was written rather than on the day someone
+    # cloned the repository.
+    for d in ("01_geometry", "02_mesh", "03_model_setup", "04_solution",
+              "05_postprocessing", "06_validation", "07_equations", "assets"):
+        dd = os.path.join(root, d)
+        if not os.path.isdir(dd):
+            continue
+        for dp, _sub, names in os.walk(dd):
+            if "__pycache__" in dp:
+                continue
+            for n in names:
+                if n.lower().endswith((".csv", ".png")):
+                    want.add(os.path.relpath(os.path.join(dp, n), root))
+    missing = sorted(p for p in want if p not in tracked)
+    # 06_validation/transition_length_measured.csv was generated, read
+    # UNCONDITIONALLY by build_docx.py, embedded as a table, named in the
+    # README - and never added.  A clean clone did not fail politely with the
+    # "[missing CSV]" placeholder table_from_csv writes; it died with
+    # FileNotFoundError before the first heading, because the narrative reads
+    # the same file with a bare pd.read_csv.  Nothing caught it, because every
+    # working tree that had ever run gen_validation.py had the file.
+    assert not missing, (
+        "the report reads generated files that are NOT tracked, so a clean "
+        "clone cannot build it: %s" % ", ".join(missing))
+
+
+@check
+def transition_summary_is_in_the_frame_the_march_ran_in():
+    """the summary's arc length and Re_x belong to the section that was marched"""
+    import case_config as C
+    import run_solution as R
+    from utss_solver import solve_airfoil
+    W = C.WING
+    X, Y = C.nlf16_panel_points(80)
+
+    def solve(cond):
+        return solve_airfoil(X, Y, cond["alpha_deg"], cond["U_inf"],
+                             cond["nu_inf"], W["MAC"], cond["Tu_pct"],
+                             sweep_deg=W["le_sweep_deg"], mach=cond["mach"],
+                             T_inf_K=cond.get("T_inf_K"))
+
+    rc = solve(C.CRUISE); rl = solve(C.CLIMB)
+    # write=False: a check must not overwrite the tracked summary
+    ts = R.transition_summary(rc, rl, write=False)
+    row = ts[(ts.case == "CRUISE") & (ts.surface == "upper")].iloc[0]
+    s = rc["surfaces"]["upper"]
+    assert s["i_tr"] is not None and rc["sweep_transform"]
+    x_tr = float(row.x_tr_c)
+
+    # 1.  Re_x_tr must be the SAME Reynolds number the surface files publish at
+    #     the same station.  It was formed on the STREAMWISE free-stream speed
+    #     while the arc length it multiplies is measured in the plane normal to
+    #     the leading edge, so the two artefacts gave one station two Reynolds
+    #     numbers - 3.554e6 and 3.476e6 - differing by exactly 1/cos(L).
+    rex_surface = float(np.asarray(s["Re_x"], float)[s["i_tr"]])
+    rex_summary = float(row.Re_x_tr)
+    assert abs(rex_summary - rex_surface)/rex_surface < 0.005, (
+        "transition_summary gives Re_x_tr = %.4g where the surface solution "
+        "gives %.4g at the same station, a factor of %.5f - which is what "
+        "mixing the streamwise and normal-plane frames produces"
+        % (rex_summary, rex_surface, rex_summary/rex_surface))
+
+    # 2.  s_tr_c is an arc length from the STAGNATION POINT as a fraction of the
+    #     chord it is measured on, so it cannot be shorter than the arc from the
+    #     LEADING EDGE to the same station - which is a property of the section
+    #     alone, and which the stagnation point lies upstream of at positive
+    #     incidence.  Dividing the normal-plane arc by the streamwise chord made
+    #     it shorter: 0.554 against a leading-edge arc of 0.562.
+    co = C.nlf16_coords(n=4000)
+    arc = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(co["xu"]),
+                                                    np.diff(co["yu"])))])
+    le_arc = float(arc[int(np.argmin(np.abs(co["xu"] - x_tr)))])
+    assert float(row.s_tr_c) >= le_arc, (
+        "s_tr_c = %.4f is SHORTER than the %.4f c arc from the leading edge to "
+        "x/c = %.3f, and the march starts upstream of the leading edge; the "
+        "arc is being referred to the wrong chord"
+        % (row.s_tr_c, le_arc, x_tr))
+    assert float(row.s_tr_c) < 1.15*le_arc, (
+        "s_tr_c = %.4f is implausibly far above the leading-edge arc %.4f c"
+        % (row.s_tr_c, le_arc))
 
 
 def main():

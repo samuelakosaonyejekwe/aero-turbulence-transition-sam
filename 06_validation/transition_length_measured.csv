@@ -1,0 +1,5 @@
+case,resolves_the_length,not_resolved_because,Re_x_at_gamma_025,Re_x_at_gamma_075,Re_lambda_measured,Re_lambda_model,model_over_measured
+ERCOFTAC T3A flat plate (bypass transition),True,,1.867e+05,2.464e+05,5.971e+04,7.881e+04,1.32
+ERCOFTAC T3A- flat plate (low-Tu bypass),False,gamma has only reached 0.38 at the last measured station,,,,2.973e+05,
+ERCOFTAC T3B flat plate (high-Tu bypass),True,,6.470e+04,1.044e+05,3.966e+04,3.623e+04,0.91
+ERCOFTAC T3C4 flat plate (laminar separation bubble),False,"a pressure gradient, so the flat-plate correlations the measured intermittency is formed against do not apply",,,,7.223e+04,

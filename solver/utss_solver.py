@@ -78,9 +78,12 @@ CAL = dict(
                         # single Tu_TS_max = 0.1 gate, which switched the e^N
                         # branch off and the correlation on at the same value
                         # and so made the predicted transition location a STEP
-                        # function of the free-stream turbulence: 0.1000 % and
-                        # 0.1001 % differed by 0.17c and by a third of the
-                        # profile drag.  The window is deliberately wider than
+                        # function of the free-stream turbulence.  The size of
+                        # that step was quoted here as 0.17c and a third of the
+                        # profile drag, from an edition of this solver that no
+                        # longer exists; build_docx._narrative_probes forces
+                        # each closure alone at Tu = 0.1 % and the report prints
+                        # what it measures.  The window is deliberately wider than
                         # the spread of any case in this study - the noisiest
                         # natural case is 0.07 % and the quietest bypass case
                         # 0.87 % - so every result here is computed at one end
@@ -437,9 +440,12 @@ def _swept_drag_factor(ue_ratio, H_te, sweep_deg, swept=True):
     layer here is turbulent, where both components follow the same power law.
     On the laminar family the ratio spans 0.63 at separation to 3.18 at
     beta = 3; at the mild trailing-edge gradients of this study it is within
-    about 15 per cent of unity, and since the span-wise term is itself only
-    4 per cent of the total at 12 degrees of sweep, that is under half a per
-    cent of C_d.
+    about 15 per cent of unity, and the span-wise term carries 6.8 per cent of
+    the total at the 12 degrees of this wing, so a tenth of error in that
+    closure is worth about 0.7 per cent of C_d.  (This said the span-wise term
+    was "only 4 per cent of the total" and concluded "under half a per cent of
+    C_d".  build_docx computes the share from the solve and reports it - it is
+    nearly seven - and the bound that follows from it moves with it.)
 
     THE CHECK THAT SETTLES IT is the yawed flat plate, for which the answer is
     known exactly and independently: a flat plate at yaw is just a flat plate
@@ -1216,8 +1222,11 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
                 # then too small at reattachment and the onset Reynolds number
                 # too low.  Letting the kinetic-energy equation run recovers
                 # that growth: on T3C4 the shape factor rises from 3.34 at
-                # separation to 3.44 at reattachment while Re_theta goes from
-                # 255 to 274.
+                # separation to 3.40 at reattachment while Re_theta goes from
+                # 255 to 266.  (This said 3.44 and 274.  The pair is
+                # regenerated into 06_validation/bubble_diagnostics.csv, which
+                # is where a reader should take it from; it is kept here only
+                # because the sentence is about what this block does.)
                 #
                 # The march now continues ONTO the reverse-flow branch.  It
                 # used to stop at the attached separation profile, H <= 3.997,
@@ -1536,9 +1545,13 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
         # two closures with different ranges of validity, so they are combined
         # rather than switched between.  A hard gate at Tu = 0.1 % made the
         # answer DISCONTINUOUS in the free-stream turbulence: on the cruise
-        # section, 0.1000 % gave x_tr/c = 0.542 and 0.1001 % gave 0.373, a
-        # step of 0.17c and 33 % in profile drag across a change of one part in
-        # a thousand in an input the study quotes to two figures.  A weighted
+        # section the two closures forced separately at that value place
+        # transition a seventh of a chord apart and differ by about a quarter
+        # in profile drag, across a change of one part in a thousand in an
+        # input the study quotes to two figures.  NO PAIR IS QUOTED here: this
+        # said 0.542 and 0.373 and neither reproduces on the current solver,
+        # so build_docx._narrative_probes measures the step and the report
+        # prints what it measured.  A weighted
         # blend of the two progresses over the declared window removes the step
         # without adding a fitted constant to either branch: at the lower edge
         # it is exactly the amplification integral, at the upper edge exactly
@@ -1701,7 +1714,26 @@ def march_bl(s, Ue, nu, Tu_pct=0.2, sweep_deg=0.0, cal=None, a_sound=0.0,
             theta[i] = (1-gamma[i])*th_leg[i] + gamma[i]*th_turb[i]
             H[i]  = (1-gamma[i])*H_leg[i] + gamma[i]*H_turb[i]
             Cf[i] = (1-gamma[i])*Cf_leg[i] + gamma[i]*Cf_turb[i]
-            Reth[i] = Ue[i]*theta[i]/nu_t[i]
+            # The reference-temperature viscosity is blended by the SAME
+            # intermittency as everything else on these four lines.  nu_l and
+            # nu_t differ only through the recovery factor inside Eckert's
+            # reference temperature - Pr^(1/2) laminar against Pr^(1/3)
+            # turbulent - and a half-transitional station recovers at neither.
+            # run_solution.bl_profiles has always blended that factor the same
+            # way; this line did not, and switched to the turbulent value
+            # wholesale from the onset station on.
+            #
+            # At onset gamma is EXACTLY zero - the Narasimha intermittency is
+            # 1 - exp(-0.412 xi^2) and xi = 0 there, which tools/smoke.py
+            # asserts - so the layer is entirely laminar at the station whose
+            # Re_theta this project publishes as the onset value, and it was
+            # being closed on the turbulent viscosity: 1378.1 on the cruise
+            # upper surface against the 1382.0 the laminar closure gives, a
+            # 0.29 % step in a reported quantity where nothing physical steps.
+            # Every incompressible case is untouched, because nu_l and nu_t are
+            # both exactly nu at M_e = 0.
+            nu_b = (1.0-gamma[i])*nu_l[i] + gamma[i]*nu_t[i]
+            Reth[i] = Ue[i]*theta[i]/nu_b
             state[i] = "transitional" if gamma[i] < 0.99 else "turbulent"
             mechanism[i] = onset_mech
 
@@ -1972,8 +2004,11 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         cusp - so the trailing edge is a stagnation point of the inviscid flow
         and U_e goes to zero there PHYSICALLY.  The panel method's collapse is
         not a discretisation artefact to be extrapolated away; it is the
-        answer.  (U_e/U_inf measured on a 400-panel side: 1.03 at 0.90c, 0.86
-        at 0.98, 0.77 at 0.99, 0.66 at 0.999.)  Squire-Young's
+        answer.  (U_e/U_n on the cruise upper surface, in the normal plane the
+        march runs in, 400 panels a side: 1.03 at 0.90c, 0.85 at 0.98, 0.79 at
+        0.99, 0.64 at 0.999.  This read 0.86, 0.77 and 0.66, which is neither
+        this set nor the incompressible one - 1.03, 0.86, 0.80, 0.66 - that the
+        third of them looks as though it came from.)  Squire-Young's
         (U_e/U_inf)^((H+5)/2) therefore DEGENERATES at the trailing edge of
         this section, and every station short of it under-counts the friction
         still to come by a different amount.  The evaluation station is an

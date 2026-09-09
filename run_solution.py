@@ -20,6 +20,26 @@ def run_case(cond, name):
                     mach=cond["mach"],T_inf_K=cond["T_inf_K"])
     for surf in ["upper","lower"]:
         s=r["surfaces"][surf]
+        # THE STAGNATION STATION HAS NO BOUNDARY LAYER, and the columns that
+        # describe one are absent there rather than filled in.
+        #
+        # solve_airfoil clamps the edge velocity to 1e-4 m/s at the stagnation
+        # point so the march does not divide by zero, and every integral
+        # quantity formed on that clamp IS the clamp: theta comes back at its
+        # own 1e-8 m floor and C_f = 2 l nu/(U_e theta) at 1.7e7.  That number
+        # was published in this CSV and carried out of it into the report's
+        # sampled state table as 16804859.1563012 - sixteen significant figures
+        # of a skin-friction coefficient - and the document's "no unrounded
+        # float64" check missed it because that check counts DECIMAL places and
+        # .round(7) has nothing to round on a quantity of order 1e7.
+        # verify_outputs now also counts significant figures.
+        #
+        # A momentum-thickness Reynolds number below one is not a boundary
+        # layer.  Those stations leave as NaN, exactly as Re_theta_t and the
+        # amplification factor already do where they are undefined.  C_p, the
+        # edge velocity and the arc length are properties of the inviscid
+        # solution and stay: C_p = 1.046 at the stagnation point is the answer.
+        _bl=np.where(np.asarray(s["Re_theta"],float) >= 1.0, 1.0, np.nan)
         # Rounded to the precision these quantities are meaningful to, as
         # every other CSV in this project is.  Unrounded, a Reynolds number
         # went into the report's sampled state tables as 1891858.3232883876.
@@ -28,8 +48,10 @@ def run_case(cond, name):
             "Re_x":s["Re_x"].round(0),
             "Cp":s["Cp"].round(5), "Ue_ms":s["Ue"].round(4),
             "Ue_Uinf":(s["Ue"]/cond["U_inf"]).round(5),
-            "theta_mm":(s["theta"]*1e3).round(5), "H_shape":s["H"].round(4),
-            "Cf":s["Cf"].round(7), "Re_theta":s["Re_theta"].round(2),
+            "theta_mm":(s["theta"]*1e3*_bl).round(5),
+            "H_shape":(s["H"]*_bl).round(4),
+            "Cf":(s["Cf"]*_bl).round(7),
+            "Re_theta":(s["Re_theta"]*_bl).round(2),
             "Re_theta_trans":np.round(s["Re_theta_t"],1),
             # The amplification factor is not defined downstream of onset:
             # the laminar march stops there, so the array holds the zeros it
@@ -52,13 +74,45 @@ def _undefined_past_onset(v, i_tr, nd=4):
     return out
 
 
-def transition_summary(rc, rl):
+def transition_summary(rc, rl, write=True):
+    """The per-surface transition summary.
+
+    write=False returns the frame without touching the repository, so a check
+    can exercise the frame conversion below on its own solves - the same guard
+    bl_profiles and run_nlf0416 already carry, and for the same reason: a check
+    that overwrites a tracked output is not a check.
+    """
     rows=[]
     for nm,rr,cond in [("CRUISE",rc,cr),("CLIMB",rl,cl)]:
         for surf in ["upper","lower"]:
             s=rr["surfaces"][surf]
-            xtr=s["x_tr"]/W["MAC"] if not np.isnan(s["x_tr"]) else 1.0
-            rex=cond["U_inf"]*s["x_tr"]/cond["nu_inf"] if not np.isnan(s["x_tr"]) else np.nan
+            # THE ARC LENGTH AND Re_x BELONG TO THE PLANE THE MARCH RUNS IN.
+            # solve_airfoil solves a swept section in the plane normal to the
+            # leading edge: on a chord c_n = c cos(L), at a speed U_n = U cos(L),
+            # and s["x_tr"] is an arc length measured on THAT section.  Dividing
+            # it by the STREAMWISE chord, and forming Re_x on the STREAMWISE
+            # speed, mixes the two frames and is wrong by cos(L) - 2.2 % at the
+            # 12 deg of this wing, and 41 % at the 45 deg of the calibration
+            # wing, had this routine ever been pointed at one.
+            #
+            # It showed as an impossibility: s_tr_c came out at 0.554 on the
+            # cruise upper surface while the arc from the LEADING EDGE alone to
+            # x/c = 0.542 is 0.5623 c, and the march starts at the stagnation
+            # point, which at positive incidence is on the LOWER surface and so
+            # further upstream still.  An arc length cannot be shorter than a
+            # part of itself.  Referred to the chord it is measured on it is
+            # 0.5665, which is longer, as it must be.
+            #
+            # Re_x had the same fault in the other direction, and it contradicted
+            # the file beside it: solve_airfoil writes Re_x = U_n s_n / nu into
+            # every surface CSV, so the same station was published here as
+            # 3.554e6 and there as 3.476e6 - one Reynolds number, two values,
+            # differing by exactly 1/cos(L).
+            _c = rr["cos_sweep"] if rr.get("sweep_transform") else 1.0
+            chord_n = W["MAC"]*_c            # the chord the march ran on
+            U_n = cond["U_inf"]*_c           # the speed it ran at
+            xtr=s["x_tr"]/chord_n if not np.isnan(s["x_tr"]) else 1.0
+            rex=U_n*s["x_tr"]/cond["nu_inf"] if not np.isnan(s["x_tr"]) else np.nan
             it=s["i_tr"]
             has_tr = it is not None
             reth=float(s["Re_theta"][it]) if has_tr else np.nan
@@ -90,7 +144,9 @@ def transition_summary(rc, rl):
                 x_sep_turb_c=(round(float(s["x_sep_turb_chord"]),3)
                               if s["x_sep_turb_chord"]==s["x_sep_turb_chord"]
                               else None)))
-    df=pd.DataFrame(rows); df.to_csv(f"{SOL}/transition_summary.csv",index=False)
+    df=pd.DataFrame(rows)
+    if write:
+        df.to_csv(f"{SOL}/transition_summary.csv",index=False)
     return df
 
 def aero_polar():
@@ -266,7 +322,8 @@ def bl_profiles(rc, write=True):
         # the speed of gas that is at T_e - which is exactly the error
         # _edge_from_cp's docstring records having removed from the solver, and
         # it left the two halves of the same report running different
-        # compressible closures.  At cruise it reads M_e low by 1.4 per cent.
+        # compressible closures.  At cruise it reads M_e low by up to 1.4 per
+        # cent across the four stations below.
         Ue=s["Ue"][i]; Me=float(s["Me"][i])
         r_rec=(1.0-gam)*r_lam+gam*r_turb
         T_Te=1+r_rec*(g-1)/2*Me**2*(1-u_Ue**2)
@@ -315,13 +372,13 @@ def nlf_vs_turbulent(rc):
     # Laminar extent is a CHORDWISE fraction, the same quantity the transition
     # summary, the polar and the span-wise sweep report.  An earlier version
     # formed it from x_tr, which is the arc length from the stagnation point,
-    # and divided that by the chord.  On the cruise section the arc-length form
-    # read 58.3 per cent against the chordwise one, and Table 1 of the report
-    # then quoted the two next to each other.  The chordwise figure is NOT
-    # restated here: this comment gave it as 56.6, which was the mean of the
-    # two transition stations at the time and is 55.4 now, so the sentence
-    # explaining a stale-number bug had itself gone stale.  It is the
-    # mean_laminar_pct column of 04_solution/nlf_vs_turbulent.csv.  A surface that stays laminar to
+    # and divided that by the chord, and Table 1 of the report then quoted the
+    # two next to each other.  NEITHER figure is restated here.  This comment
+    # gave the arc-length form as 58.3 per cent and the chordwise one as 56.6,
+    # and both had gone stale - the sentence explaining a stale-number bug was
+    # itself one.  They are the s_tr_c and x_tr_c columns of
+    # 04_solution/transition_summary.csv, and the mean_laminar_pct column of
+    # 04_solution/nlf_vs_turbulent.csv.  A surface that stays laminar to
     # the trailing edge counts as 1.0, as it does everywhere else.
     def _xtr(sf):
         x=sf["x_tr_chord"]
@@ -489,21 +546,31 @@ def _lifting_line_check():
 def transition_length_sensitivity():
     """What the case-study drag owes to the transition-length closure.
 
-    The length is Dhawan & Narasimha's published correlation,
-    Re_lambda = 9 Re_x_t^0.75, and it is validated here on flat plates spanning
-    Re_x_t = 6e4 to 1.4e6, where it reproduces the measured extent of the
-    skin-friction rise to within a factor of two.  The cruise wing transitions
-    at Re_x_t = 3.7e6, a factor of three beyond that range, and the correlation
-    then returns a transitional zone of a third of the chord - longer than a
-    real natural-laminar-flow section shows at this Reynolds number.
+    The length is Dhawan & Narasimha's published correlation, stated in
+    Re_theta - the variable in which the constant spot-formation rate their
+    correlation assumes is exact - and equal to their published
+    Re_lambda = 9 Re_x_t^0.75 wherever Re_theta = 0.664 sqrt(Re_x).  It is not
+    an extrapolation on the wing; 06_validation/transition_length_forms.csv is
+    that equivalence, measured on every plate and on this section.
+
+    NO FIGURES HERE.  This docstring said the correlation "reproduces the
+    measured extent of the skin-friction rise to within a factor of two" on
+    four flat plates - a claim no artefact in this project supported until
+    06_validation/transition_length_measured.csv was written, and which that
+    file corrects in both halves: two of the four plates resolve a length at
+    all, and on those two the model is within a third.  It also gave the wing's
+    transition Reynolds number as 3.7e6 (transition_summary.csv says 3.554e6),
+    the drag movement over the closing range as "a tenth of a count" (the sweep
+    below returns 0.04), and the point at which the layer stops completing
+    transition as "beyond twice the published value" (it is AT twice).  All
+    four were typed, and none reproduced.
 
     Rather than damp the correlation, which would add an undeclared constant to
     a method whose claim is that it has none, the consequence is measured: the
-    constant is swept over a factor of four and the section drag recorded.  It
-    moves by a tenth of a count, so the reported drag does not depend on the
-    part of the closure that is extrapolated.  Beyond twice the published value
-    the layer no longer completes transition before the trailing edge, and
-    there the closure does matter; that bound is reported too.
+    constant is swept over a factor of four and the section drag recorded,
+    together with the transitional extent and whether it still closes on the
+    section, into 04_solution/transition_length_sensitivity.csv.  That file is
+    the answer; the README and the report read it.
     """
     X,Y=C.nlf16_panel_points(130); rows=[]
     for c in (2.25, 4.5, 9.0, 18.0, 36.0):
@@ -523,6 +590,84 @@ def transition_length_sensitivity():
             completes_before_TE=done))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/transition_length_sensitivity.csv",index=False)
     return df
+
+
+def omitted_friction(r, xr, cond):
+    """Streamwise drag still ahead of the station, integrated directly.
+
+    IN THE SAME FRAME AS THE DRAG IT IS ADDED TO.  This used to return the
+    chordwise integral alone, referred to U_n and c_n - a NORMAL-PLANE
+    coefficient - and add it to Cd_counts, which squire_young() has already
+    converted to the streamwise frame.  Two frames in one sum, worth 6.4
+    per cent of the smaller column at the 12 degrees of this wing.
+
+    The conversion has two terms, exactly as the drag does (E20c), and
+    neither needs a trailing-edge evaluation.
+
+    CHORDWISE.  The wall shear along the chord acts along e_n, whose
+    streamwise component is cos(L); referring 2 theta_n to the streamwise
+    chord c = c_n/cos(L) gives another, and the dynamic pressure a third:
+
+        cos^3(L) * integral C_f (U_e,n/U_n)^2 d(s_n/c_n)
+
+    SPAN-WISE.  Squire-Young's span-wise term carries the span-wise wall
+    shear from the leading edge only as far as the evaluation station, so
+    the friction still ahead has a span-wise part too.  It does NOT need
+    theta_12 at the trailing edge, which is what this docstring previously
+    claimed and is why the term was left out.  Under the same
+    small-cross-flow closure the drag formula already uses, w/W = u/U_e,n,
+    so the span-wise wall shear is the chordwise one scaled by W/U_e,n:
+
+        tau_wz = (W/U_e,n) tau_wx = (1/2) rho Q sin(L) U_e,n C_f
+
+    which integrates directly, over the same stations, to a streamwise
+    share of
+
+        cos(L) sin^2(L) * integral C_f (U_e,n/U_n) d(s_n/c_n)
+
+    - the FIRST power of the velocity ratio against the second above, the
+    same asymmetry _swept_drag_factor carries for the same reason.
+
+    WHY BOTH TERMS.  Squire-Young's span-wise term is the span-wise friction
+    from the leading edge to x_ref; adding x_ref to the trailing edge makes the
+    span-wise total independent of x_ref, so the sum this sweep is about
+    becomes
+
+        C_d + omitted = cos^3(L) [ chordwise wake + chordwise friction ]
+                        + a constant,
+
+    which is a single frame throughout and is what the invariance claim can
+    honestly be made about.
+
+    IT IS NOT CHOSEN FOR GIVING THE SMALLEST SPREAD, and it does not.  Measured
+    from 0.90c up: the unconverted form gave 1.19 counts, the chordwise
+    half-correction gives 1.31, and this gives 1.23.  The mixed form's 1.19 is
+    the smallest of the three and means nothing, because it is two frames added
+    together; the argument for this one is the yawed flat plate below, where
+    the answer is known independently and only this form returns it.  The
+    0.04 counts between 1.19 and 1.23 changes no statement anywhere.
+
+    LIMITS.  At zero sweep this is exactly the integral it replaces.  On a
+    yawed flat plate U_e,n = U_n, so it returns
+    cos(L)(cos^2 L + sin^2 L) integral C_f = cos(L) times the unswept
+    friction, which is the independence principle's answer and the same
+    check _swept_drag_factor is held to.
+    """
+    _tz=getattr(np,"trapezoid",None) or np.trapz
+    cosL=r["cos_sweep"]; chord=W["MAC"]*cosL; Un=cond["U_inf"]*cosL
+    # zero unless the solve actually ran in the normal plane, so
+    # sweep_transform=False recovers the untransformed integral exactly
+    L=np.radians(float(r["sweep_deg"])) if r.get("sweep_transform") else 0.0
+    c3=np.cos(L)**3; cs2=np.cos(L)*np.sin(L)**2
+    chordwise=0.0; spanwise=0.0
+    for _s in (r["surfaces"]["upper"], r["surfaces"]["lower"]):
+        _x=np.asarray(_s["x"],float); _cf=np.asarray(_s["Cf"],float)
+        _ue=np.asarray(_s["Ue"],float)/Un; _a=np.asarray(_s["s"],float)/chord
+        _m=_x>=xr
+        if _m.sum()>1:
+            chordwise+=_tz(_cf[_m]*_ue[_m]**2, _a[_m])
+            spanwise +=_tz(_cf[_m]*_ue[_m],    _a[_m])
+    return float(c3*chordwise + cs2*spanwise)
 
 
 def squire_young_station_sensitivity():
@@ -562,25 +707,13 @@ def squire_young_station_sensitivity():
     """
     X,Y=C.nlf16_panel_points(130); rows=[]
 
-    def _omitted(r, xr, cond):
-        """Skin friction still ahead of the station, integrated directly."""
-        _tz=getattr(np,"trapezoid",None) or np.trapz
-        cosL=r["cos_sweep"]; chord=W["MAC"]*cosL; Un=cond["U_inf"]*cosL
-        omit=0.0
-        for _s in (r["surfaces"]["upper"], r["surfaces"]["lower"]):
-            _x=np.asarray(_s["x"],float); _cf=np.asarray(_s["Cf"],float)
-            _ue=np.asarray(_s["Ue"],float)/Un; _a=np.asarray(_s["s"],float)/chord
-            _m=_x>=xr
-            if _m.sum()>1: omit+=_tz(_cf[_m]*_ue[_m]**2,_a[_m])
-        return float(omit)
-
     for xr in (0.88,0.90,0.92,0.94,0.96,0.98,0.99,1.00):
         r=solve_airfoil(X,Y,cr["alpha_deg"],cr["U_inf"],cr["nu_inf"],W["MAC"],
                         cr["Tu_pct"],sweep_deg=W["le_sweep_deg"],
                         mach=cr["mach"],T_inf_K=cr["T_inf_K"],
                         cal=dict(sy_x_ref=xr))
         u=r["surfaces"]["upper"]; l=r["surfaces"]["lower"]
-        omit=_omitted(r, xr, cr)
+        omit=omitted_friction(r, xr, cr)
         rows.append(dict(x_ref=xr,
             x_evaluated_upper=round(float(u["x_squire_young"]),4),
             Cd_counts=round(r["Cd"]*1e4,2),
@@ -619,7 +752,17 @@ def squire_young_station_sensitivity():
     # condition - so it is computed here too.
     x_lo = float(df.x_ref.min()); x_hi = _ship
     lo = df.iloc[0]; hi = df.iloc[_i]
-    inv = df[(df.x_ref >= 0.90) & (df.x_ref <= x_hi)].Cd_plus_omitted_counts
+    # The station the INVARIANT is measured from.  It is not x_lo: the drag has
+    # not stopped moving by 0.88c, so the sum is quoted from 0.90c up.  Naming
+    # it once is what keeps the two halves of the claim on one range - the
+    # report and the README compared a spread measured over 0.90-0.98 against
+    # "the drag alone moves 4.84", which is the 0.88-0.98 figure, and over the
+    # range the spread is actually taken on the drag moves 3.40.  Both ends of
+    # the comparison are generated here now, so they cannot be taken from
+    # different rows again.
+    X_INV = 0.90
+    _j = int(np.argmin(np.abs(df.x_ref.to_numpy(float) - X_INV)))
+    inv = df[(df.x_ref >= X_INV) & (df.x_ref <= x_hi)].Cd_plus_omitted_counts
     r_cl = solve_airfoil(X, Y, cl["alpha_deg"], cl["U_inf"], cl["nu_inf"],
                          W["MAC"], cl["Tu_pct"], sweep_deg=W["le_sweep_deg"],
                          mach=cl["mach"], T_inf_K=cl["T_inf_K"],
@@ -632,9 +775,14 @@ def squire_young_station_sensitivity():
         difference_counts=round(float((hi.Cd_counts - lo.Cd_counts)
                                       - (lo.friction_omitted_counts
                                          - hi.friction_omitted_counts)), 3),
+        x_invariant_lo=X_INV,
         invariant_spread_from_0p90_counts=round(float(inv.max() - inv.min()), 3),
+        # The drag movement over THE SAME range the spread above is taken on,
+        # which is what that spread has to be compared against.
+        squire_young_moves_from_invariant_lo_counts=round(
+            float(hi.Cd_counts - df.Cd_counts.iloc[_j]), 3),
         friction_omitted_cruise_counts=round(float(hi.friction_omitted_counts), 3),
-        friction_omitted_climb_counts=round(_omitted(r_cl, x_hi, cl)*1e4, 3))])
+        friction_omitted_climb_counts=round(omitted_friction(r_cl, x_hi, cl)*1e4, 3))])
     sm.to_csv(f"{SOL}/squire_young_station_summary.csv", index=False)
     return df, sm
 

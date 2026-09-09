@@ -46,7 +46,19 @@ STAGES = {
     "solution":   ("run_solution.py",       [],  "04_solution/"),
     "validation": ("gen_validation.py",     [],  "06_validation/"),
     "equations":  ("gen_equations.py",      [],  "07_equations/, model.equations.docx"),
-    "post":       ("gen_postprocessing.py", ["solution"], "05_postprocessing/"),
+    # post plots EVERY generated CSV, not only the solution's: it reads
+    # 01_geometry/airfoil_UTSS-NLF16.csv, wing_planform.csv and
+    # wing_sections_3d.csv, 02_mesh/surface_mesh_nodes.csv, bl_normal_grid.csv,
+    # mesh_metrics.csv and mesh_independence.csv, and
+    # 03_model_setup/flow_conditions.csv and calibration_constants.csv.  It was
+    # declared as depending on `solution` alone, which is invisible on any
+    # ordinary checkout because all of those ship - and fatal the moment anyone
+    # does what the audit trail asks and regenerates from an empty tree: post
+    # was scheduled in the first wave beside solution, ran before geometry, and
+    # died on FileNotFoundError.  A dependency that is only satisfied by the
+    # committed outputs is not a dependency, it is a coincidence.
+    "post":       ("gen_postprocessing.py", ["geometry", "mesh", "solution"],
+                   "05_postprocessing/"),
     "docx":       ("build_docx.py",         ["geometry", "mesh", "solution",
                                              "validation", "equations", "post"],
                    "case.docx"),
@@ -174,7 +186,7 @@ def main():
         t = time.time()
         rc = subprocess.run([sys.executable, os.path.join(ROOT, "tools/smoke.py")],
                             cwd=ROOT, env=_env(1)).returncode
-        print("smoke: %s in %.1f s\n" % ("PASS" if rc == 0 else "FAIL", time.time()-t))
+        print("smoke: %s in %.1f s\n" % ("PASS" if rc == 0 else "FAIL", time.time()-t), flush=True)
         if rc:
             print("refusing to start a regeneration on a failing smoke test")
             return rc
@@ -182,29 +194,66 @@ def main():
     done, times, failed = set(), {}, None
     env = _env(args.jobs)
     t_all = time.time()
-    with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-        while pending and failed is None:
-            ready = sorted([s for s in pending
-                            if all(d in done for d in STAGES[s][1])],
-                           key=lambda s: -_WEIGHT.get(s, 1))
+
+    def _ready():
+        return sorted([s for s in pending
+                       if all(d in done for d in STAGES[s][1])],
+                      key=lambda s: -_WEIGHT.get(s, 1))
+
+    def _record(f):
+        name, rc, dt, log = f.result()
+        times[name] = dt
+        print("  %-11s %s  %6.1f s   (%s)"
+              % (name, "ok  " if rc == 0 else "FAIL", dt, log), flush=True)
+        if rc == 0:
+            done.add(name)
+        return name, rc
+
+    if args.dry_run:
+        while pending:
+            ready = _ready()
             if not ready:
                 failed = "dependency cycle among %s" % sorted(pending)
                 break
-            if args.dry_run:
-                print("wave: %s" % ", ".join(ready))
-                done |= set(ready); pending -= set(ready)
-                continue
-            futs = [pool.submit(run_stage, s, args, env) for s in ready[:args.jobs]]
-            for f in futs:
-                name, rc, dt, log = f.result()
-                times[name] = dt
-                print("  %-11s %s  %6.1f s   (%s)"
-                      % (name, "ok  " if rc == 0 else "FAIL", dt, log))
-                if rc:
-                    failed = name
-                else:
-                    done.add(name)
-                pending.discard(name)
+            # Dependency LEVELS, not waves: the scheduler below starts a stage
+            # as soon as a worker frees up, so nothing waits for the rest of
+            # its level.  This is the plan, not the timeline.
+            print("level: %s" % ", ".join(ready), flush=True)
+            done |= set(ready); pending -= set(ready)
+    else:
+        # A stage starts the moment a worker is free and its dependencies are
+        # met, rather than in waves that must all finish before the next
+        # begins.  The wave form cost a MEASURED 81 s of a 22-minute run: the
+        # first wave is {validation, solution}, validation takes 19 minutes and
+        # solution 38 s, so the second worker stood idle for eighteen minutes
+        # while mesh, geometry, equations and post - 95 s between them, and not
+        # one of them depending on validation - waited for the wave to close.
+        # The module docstring has always said this driver "runs the
+        # independent ones concurrently up to a worker cap"; it does now.
+        from concurrent.futures import FIRST_COMPLETED, wait
+        with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
+            running = {}
+            while (pending or running) and failed is None:
+                while len(running) < max(1, args.jobs):
+                    ready = _ready()
+                    if not ready:
+                        break
+                    s = ready[0]
+                    pending.discard(s)
+                    running[pool.submit(run_stage, s, args, env)] = s
+                if not running:
+                    failed = "dependency cycle among %s" % sorted(pending)
+                    break
+                for f in wait(list(running), return_when=FIRST_COMPLETED)[0]:
+                    running.pop(f)
+                    name, rc = _record(f)
+                    if rc:
+                        failed = name
+            # A failure leaves the other worker's stage still running.  Wait for
+            # it and report it, rather than discarding a result that has been
+            # paid for and may say what went wrong.
+            for f in list(running):
+                _record(f)
 
     total = time.time() - t_all
     if times:

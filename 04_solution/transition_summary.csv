@@ -1,5 +1,5 @@
 case,surface,s_tr_c,x_tr_c,Re_x_tr,Re_theta_at_onset,mechanism,laminar_run_pct,Cf_te,H_te,H_te_at_clip,sep_margin_H,x_sy_c,H_sy,H_sy_at_clip,x_sep_turb_c
-CRUISE,upper,0.554,0.542,3.554e+06,1378.1,TS-natural,54.2,0.0002,2.801,True,-0.201,0.9811,2.14,False,0.987
-CRUISE,lower,0.563,0.566,3.609e+06,1222.8,TS-natural,56.6,0.00024,2.802,True,-0.202,0.9804,1.673,False,0.997
-CLIMB,upper,0.046,0.025,4.958e+05,484.6,bypass,2.5,0.00014,2.8,True,-0.2,0.9811,2.8,True,0.978
-CLIMB,lower,0.165,0.166,1.762e+06,611.6,bypass,16.6,0.00019,2.8,True,-0.2,0.9804,1.623,False,0.998
+CRUISE,upper,0.567,0.542,3.476e+06,1382.2,TS-natural,54.2,0.0002,2.801,True,-0.201,0.9811,2.14,False,0.987
+CRUISE,lower,0.575,0.566,3.530e+06,1225.2,TS-natural,56.6,0.00024,2.802,True,-0.202,0.9804,1.673,False,0.997
+CLIMB,upper,0.047,0.025,4.850e+05,485.5,bypass,2.5,0.00014,2.8,True,-0.2,0.9811,2.8,True,0.978
+CLIMB,lower,0.168,0.166,1.724e+06,612.0,bypass,16.6,0.00019,2.8,True,-0.2,0.9804,1.623,False,0.998
