@@ -96,15 +96,36 @@ def dim_linear(ax, p1, p2, offset, text, side=1, fs=10, color=DIM,
                       alpha=0.9))
 
 
-def angle_dim(ax, vertex, p_a, p_b, text, r=0.4, color=DIM, fs=10):
+def angle_dim(ax, vertex, p_a, p_b, fmt, r=0.4, color=DIM, fs=10,
+              expect=None):
+    """Angular dimension whose LABEL is the angle the arc subtends.
+
+    `fmt` is formatted with the subtended angle in degrees, so the two cannot
+    disagree - which they did: the planform's sweep arc was struck between the
+    root CHORD and the leading edge, subtending 78 degrees, and labelled with
+    the 12 the wing actually has.  `expect`, when given, is the value the
+    caller believes it is dimensioning, and a mismatch stops the build rather
+    than drawing a wrong angle.
+    """
     v = np.array(vertex, float)
     a0 = np.arctan2(p_a[1]-v[1], p_a[0]-v[0])
     a1 = np.arctan2(p_b[1]-v[1], p_b[0]-v[0])
+    ang = abs(np.degrees(a1 - a0))
+    ang = min(ang, 360.0 - ang)
+    if expect is not None and abs(ang - expect) > 0.5:
+        raise ValueError("angular dimension subtends %.2f deg but is being "
+                         "used to dimension %.2f: the arc is struck between "
+                         "the wrong two rays" % (ang, expect))
     th = np.linspace(a0, a1, 40)
     ax.plot(v[0]+r*np.cos(th), v[1]+r*np.sin(th), color=color, lw=1.0)
+    # The label sits at a radius PROPORTIONAL to the arc, not a fixed 0.12
+    # further out: the same absolute offset that clears a unit-chord section
+    # leaves the text on top of the arc on a seventeen-metre span.
     am = 0.5*(a0+a1)
-    ax.text(v[0]+(r+0.12)*np.cos(am), v[1]+(r+0.12)*np.sin(am), text,
-            color=color, fontsize=fs, ha="center", va="center")
+    rl = r*1.32
+    ax.text(v[0]+rl*np.cos(am), v[1]+rl*np.sin(am),
+            fmt.format(a=ang), color=color, fontsize=fs, ha="center",
+            va="center")
 
 
 def title_block(ax, title, dwg_no, scale="NTS", view=""):
@@ -355,9 +376,14 @@ def draw_planview(df_pl):
     dim_linear(ax, (-bt/2-0.1, xle[0]),(-bt/2-0.1, xte[0]), -0.5,
                f"c_root = {W['root_chord']:.2f} m", horiz=False, side=-1, fs=10)
     # sweep angle
-    angle_dim(ax, (0, xle[0]), (0, xte[0]), (y[-1], xle[-1]),
-              f"Λ_LE = {W['le_sweep_deg']:.0f}°", r=1.4)
-    ax.annotate("c/4 sweep line", xy=(y[10], xc4[10]), xytext=(2.5, 0.2),
+    # Between the SPAN-WISE direction and the leading edge, which is what
+    # leading-edge sweep means.  The first ray used to be the root chord, so
+    # the arc subtended the complement, 78 degrees.
+    angle_dim(ax, (0, xle[0]), (y[-1], xle[0]), (y[-1], xle[-1]),
+              "Λ_LE = {a:.0f}°", r=2.4, expect=W["le_sweep_deg"])
+    # moved clear of the sweep-angle label, which the arc's own label used to
+    # be written on top of
+    ax.annotate("c/4 sweep line", xy=(y[13], xc4[13]), xytext=(5.6, -0.55),
                 color=CTR, fontsize=10, arrowprops=dict(arrowstyle="->", color=CTR))
     # section cut marker B-B
     ax.plot([3.0,3.0],[xle[0]-0.2, xte.max()+0.2], color=PALETTE[1], lw=1.2, ls=(0,(2,2)))
