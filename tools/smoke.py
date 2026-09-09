@@ -1805,6 +1805,193 @@ def a_blank_bubble_length_always_has_a_reason_beside_it():
         % (int(orphan.sum()), list(np.flatnonzero(orphan))))
 
 
+def _V(rel):
+    import pandas as pd
+    return pd.read_csv(os.path.join(utss_paths.ROOT, "06_validation", rel))
+
+
+@check
+def every_derived_validation_row_is_derivable_from_its_own_columns():
+    """the bubble, transition-length and residual tables against their own arithmetic"""
+    # These relations were checked ONCE, by hand, in a throwaway script, and
+    # nothing in the repository held them afterwards - which is the same fault
+    # as a report that asserts a number instead of reading it.  A check run
+    # once is not a check.  Twenty-five relations across five files, each of
+    # which a regeneration could silently break.
+    bad = []
+
+    def eq(lbl, a, b, tol):
+        if not (abs(a - b) <= tol):
+            bad.append("%s: %.6g vs %.6g" % (lbl, a, b))
+
+    # a bubble's length IS its reattachment minus its separation, on the model
+    # and on the measurement alike
+    d = _V("bubble_diagnostics.csv").set_index("quantity")
+    for col in ("model", "measured"):
+        eq("bubble length (%s)" % col,
+           float(d.loc["reattachment station x [m]", col])
+           - float(d.loc["separation station x [m]", col]),
+           float(d.loc["bubble length [m]", col]), 5e-4)
+
+    # the scaling table is ratios to the T3C4 row it is formed on
+    b = _V("bubble_length_scaling.csv")
+    ref = b[b.dataset.str.contains("T3C4")].iloc[0]
+    for _, r in b.iterrows():
+        assert r.min_len_theta_s <= r.median_len_theta_s <= r.max_len_theta_s, \
+            "%s: median bubble length is outside its own min..max" % r.dataset
+        if r.dataset == ref.dataset:
+            continue
+        eq("%s ratio_to_T3C4" % r.dataset[:18],
+           r.median_len_theta_s/ref.median_len_theta_s, float(r.ratio_to_T3C4), 0.02)
+        eq("%s N_crit_ratio_to_T3C4" % r.dataset[:18],
+           r.N_crit/ref.N_crit, float(r.N_crit_ratio_to_T3C4), 0.02)
+
+    # the two forms of the transition-length correlation, against the per cent
+    # difference the file states between them
+    for _, r in _V("transition_length_forms.csv").iterrows():
+        a, c = r.lam_len_Re_theta_form_m, r.lam_len_Re_x_form_m
+        if a == a and c == c:
+            eq("length forms diff_pct (%s)" % r.case[:20],
+               100.0*(c - a)/a, float(r.diff_pct), 0.02)
+
+    # Narasimha's length IS the interval between the two intermittency stations
+    for _, r in _V("transition_length_measured.csv").iterrows():
+        if r.Re_x_at_gamma_025 == r.Re_x_at_gamma_025 and \
+                r.Re_lambda_measured == r.Re_lambda_measured:
+            eq("Re_lambda measured (%s)" % r.case[:20],
+               r.Re_x_at_gamma_075 - r.Re_x_at_gamma_025,
+               float(r.Re_lambda_measured), 60.0)
+            eq("model/measured (%s)" % r.case[:20],
+               r.Re_lambda_model/r.Re_lambda_measured,
+               float(r.model_over_measured), 0.01)
+
+    # and every residual diagnostic against the summary it is a residual of
+    vs = _V("validation_summary.csv")
+    for _, r in _V("residual_diagnostics.csv").iterrows():
+        v = vs[vs.case == r.case]
+        assert len(v), "residual_diagnostics names a case validation_summary does not: %r" % r.case
+        eq("residual err_pct (%s)" % r.case[:20],
+           float(r.err_pct), float(v.Re_theta_t_err_pct.iloc[0]), 0.05)
+        eq("residual Re_theta_t_pred (%s)" % r.case[:20],
+           float(r.Re_theta_t_pred), float(v.Re_theta_t_pred.iloc[0]), 0.05)
+    assert not bad, "derived validation rows that no longer derive:\n    " + \
+        "\n    ".join(bad)
+
+
+@check
+def every_crossflow_summary_agrees_with_its_detail_file():
+    """means, sample sds, coefficients of variation, extrema and the Re_c trend"""
+    import numpy as _np
+    # The cross-flow branch publishes four summary files over three detail
+    # files, and the summaries were reconciled by hand once and then left
+    # unheld.  Note the SAMPLE standard deviation: pandas' default ddof=1 is
+    # what these files carry, and comparing against the population one makes
+    # all six spreads look wrong by sqrt(n/(n-1)).
+    bad = []
+
+    def eq(lbl, a, b, tol):
+        if not (abs(a - b) <= tol):
+            bad.append("%s: %.6g vs %.6g" % (lbl, a, b))
+
+    cr = _V("crossflow_criticals.csv"); cs = _V("crossflow_criticals_summary.csv")
+    for ds in cr.dataset.unique():
+        d = cr[cr.dataset == ds]
+        s = cs[(cs.dataset == ds) & (cs.criterion == "surrogate Re_theta2")].iloc[0]
+        eq("%s mean surrogate" % ds[:16], d.Re_theta2_surrogate.mean(),
+           float(s.mean_critical_value), 0.06)
+        eq("%s surrogate CoV" % ds[:16],
+           100.0*d.Re_theta2_surrogate.std(ddof=1)/d.Re_theta2_surrogate.mean(),
+           float(s.coeff_of_variation_pct), 0.06)
+        e = cs[(cs.dataset == ds)
+               & (cs.criterion == "exact Falkner-Skan-Cooke Re_cf")].iloc[0]
+        eq("%s mean exact Re_cf" % ds[:16], d.Re_cf_exact_FSC.mean(),
+           float(e.mean_critical_value), 0.06)
+        assert int(s.n_points) == len(d), \
+            "%s: the summary counts %d points and the detail file has %d" % (
+                ds, int(s.n_points), len(d))
+
+    am = _V("crossflow_amplification.csv"); asum = _V("crossflow_amplification_summary.csv")
+    for ds in am.dataset.unique():
+        d = am[am.dataset == ds]; s = asum[asum.dataset == ds].iloc[0]
+        eq("%s mean N_cf" % ds[:16], d.N_cf.mean(), float(s.mean_N_cf), 0.06)
+        eq("%s sd N_cf" % ds[:16], d.N_cf.std(ddof=1), float(s.sd_N_cf), 0.06)
+        eq("%s N_cf CoV" % ds[:16], 100.0*d.N_cf.std(ddof=1)/d.N_cf.mean(),
+           float(s.coeff_of_variation_pct), 0.06)
+
+    rc = _V("crossflow_receptivity.csv"); rs = _V("crossflow_receptivity_summary.csv")
+    # the same per-point quantity is published in two files; they must agree
+    assert _np.allclose(cr.Re_theta2_surrogate.to_numpy(float),
+                        rc.Re_theta2_required.to_numpy(float)), \
+        "crossflow_criticals and crossflow_receptivity disagree on Re_theta2"
+    for ds in rc.dataset.unique():
+        d = rc[rc.dataset == ds]; s = rs[rs.dataset == ds].iloc[0]
+        eq("%s N_cf_min" % ds[:16], d.N_cf_at_measured_station.min(),
+           float(s.N_cf_min), 0.02)
+        eq("%s N_cf_max" % ds[:16], d.N_cf_at_measured_station.max(),
+           float(s.N_cf_max), 0.02)
+
+    for _, s in _V("crossflow_reynolds_trend.csv").iterrows():
+        d = rc[rc.dataset == s.dataset]
+        x = _np.log10(d.Re_c.to_numpy(float)); y = d.Re_theta2_required.to_numpy(float)
+        eq("%s slope per decade" % s.dataset[:16], float(_np.polyfit(x, y, 1)[0]),
+           float(s.slope_per_decade_Re_c), 0.6)
+        eq("%s correlation" % s.dataset[:16], float(_np.corrcoef(x, y)[0, 1]),
+           float(s.correlation), 0.006)
+        eq("%s Re_c_min" % s.dataset[:16], d.Re_c.min(), float(s.Re_c_min), 1e4)
+        eq("%s Re_c_max" % s.dataset[:16], d.Re_c.max(), float(s.Re_c_max), 1e4)
+    assert not bad, "cross-flow summaries that no longer summarise:\n    " + \
+        "\n    ".join(bad)
+
+
+@check
+def no_published_number_is_outside_its_physical_bounds():
+    """intermittency in [0,1], shape factors, signs, and no infinities anywhere"""
+    import pandas as pd
+    import subprocess
+    # Swept once by hand across every tracked CSV and then not held.  The rules
+    # are stated by exact column name rather than by prefix: "H_sy_at_clip" is
+    # a boolean and "Re_theta_t_err_pct" is a percentage, and a prefix rule
+    # flags both as physics violations, which is how a bounds check earns a
+    # reputation for crying wolf and stops being run.
+    # Only the columns that ARE an intermittency, not the ones that merely
+    # mention one: Re_x_at_gamma_025 is a Reynolds number and x_gamma50_upper_c
+    # is a chordwise station, and a substring rule flags both.  This check
+    # caught itself doing exactly that on its first run.
+    GAMMA = {"intermittency_gamma", "gamma"}
+    SHAPE = {"H_shape", "H_upper", "H_lower", "H_te", "H_sy", "H_profile",
+             "H_at_sy", "H_te_squire_young"}
+    NONNEG = {"theta_mm", "theta_te_c", "theta_at_sy_c", "delta_mm", "y_mm",
+              "chord_m", "Re_local", "Re_x", "Re_theta", "Re_c", "Re_MAC",
+              "Re_theta_t", "Re_theta_at_onset", "Re_theta2_surrogate",
+              "Cf", "Cf_solver", "Cf_laminar_blasius", "Cf_turbulent_ref"}
+    bad = []
+    files = subprocess.run(["git", "ls-files", "*.csv"], cwd=utss_paths.ROOT,
+                           capture_output=True, text=True).stdout.split()
+    assert len(files) > 50, "only %d tracked CSVs found; the sweep is not sweeping" % len(files)
+    for rel in files:
+        d = pd.read_csv(os.path.join(utss_paths.ROOT, rel))
+        for c in d.columns:
+            if not pd.api.types.is_numeric_dtype(d[c]) or d[c].dtype == bool:
+                continue
+            v = d[c].to_numpy(float); f = v[np.isfinite(v)]
+            if np.isinf(v).any():
+                bad.append("%s: %s contains inf" % (rel, c))
+            if f.size == 0:
+                continue
+            if c in GAMMA and (f.min() < -1e-9 or f.max() > 1 + 1e-9):
+                bad.append("%s: %s outside [0,1] (%.4g..%.4g)"
+                           % (rel, c, f.min(), f.max()))
+            if c in ("x_gamma50_upper_c", "x_gamma50_lower_c") and (
+                    f.min() < 0.0 or f.max() > 1.0):
+                bad.append("%s: %s is not a chordwise station (%.4g..%.4g)"
+                           % (rel, c, f.min(), f.max()))
+            if c in SHAPE and (f.min() < 1.0 or f.max() > 20.0):
+                bad.append("%s: %s is not a shape factor (%.4g..%.4g)" % (rel, c, f.min(), f.max()))
+            if c in NONNEG and f.min() < -1e-9:
+                bad.append("%s: %s is negative (%.4g)" % (rel, c, f.min()))
+    assert not bad, "physical bounds violated:\n    " + "\n    ".join(bad)
+
+
 @check
 def the_integrated_forces_table_agrees_with_itself_and_its_neighbours():
     """every derivable row of integrated_forces.csv, and the drag it shares"""
