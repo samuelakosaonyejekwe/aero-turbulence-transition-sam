@@ -407,7 +407,96 @@ def structural_checks(txt, raw):
         hits = len(re.findall(r"(?<![A-Za-z])" + re.escape(needle) + r"(?![A-Za-z])",
                               txt, flags))
         out.append((lab, hits == 0, "clean" if not hits else "%d occurrence(s)" % hits))
+
+    out.append(untraceable_numbers(txt))
     return out
+
+
+# Numbers the report is allowed to state that no CSV of this project produces,
+# each with the reason it is not a solver output.  Anything NOT on this list
+# has to trace to a published value; adding to the list is a deliberate act,
+# which is the point of having one.
+LITERATURE_NUMBERS = {
+    "2.59129": "Blasius shape factor, the published value the family is checked against",
+    "2.5913":  "the same, quoted to one digit fewer",
+    "0.46960": "Blasius wall shear f''(0), the published value",
+    "0.36412": "Jordinson (1970) Orr-Sommerfeld eigenvalue at Re_delta* = 998",
+    "0.6643":  "not a number: 0.664 raised to 3/2 in Eq. E17, flattened by text extraction",
+    "2.8e6":   "Schubauer & Skramstad onset Re_x, published in validation_summary.csv as 2800000.0",
+}
+
+
+def untraceable_numbers(txt):
+    """Every number in the report traces to a value some CSV publishes.
+
+    The standard this project holds itself to is that a figure quoted in the
+    document exists somewhere as an artifact, and nothing enforced it: the
+    headline values were checked one by one and the other eighteen hundred were
+    not.  A number typed into prose and never regenerated is the oldest failure
+    mode here and several have been found by hand.
+
+    Every decimal carrying three or more significant figures is matched against
+    every published value at every plausible rounding and exponent format.
+    What survives is either a literature constant - which belongs on the list
+    above, with its reason - or a number nothing in this project produces,
+    which is the fault this check exists to find.
+    """
+    import subprocess
+    vals = set()
+
+    def add(v):
+        v = float(v)
+        for nd in range(0, 8):
+            vals.add(("%%.%df" % nd) % v)
+        for nd in range(1, 7):
+            vals.add(("%%.%de" % nd) % v)
+        vals.add("%g" % v)
+        vals.add("%.10g" % v)
+
+    root = os.path.dirname(os.path.abspath(__file__))
+    files = subprocess.run(["git", "ls-files", "*.csv"], cwd=root,
+                           capture_output=True, text=True).stdout.split()
+    if len(files) < 50:
+        return ("every number traces to a CSV", False,
+                "only %d tracked CSVs found; the sweep is not sweeping" % len(files))
+    for rel in files:
+        d = pd.read_csv(os.path.join(root, rel))
+        for c in d.columns:
+            for v in d[c].values:
+                # numpy is not a dependency of this file and does not become
+                # one for a type test: pandas hands back numpy scalars, and
+                # what matters is whether the value converts to a finite float,
+                # not which class it belongs to.
+                try:
+                    f = float(v)
+                except (TypeError, ValueError):
+                    for tok in re.findall(r"-?\d+\.\d+(?:[eE][+-]?\d+)?", str(v)):
+                        add(tok)
+                    continue
+                if f == f:
+                    add(f)
+    # A LEADING MINUS IS ONLY A MINUS WHEN IT IS NOT A RANGE DASH.  flatten()
+    # normalises the en-dash to a hyphen so that a typeset negative number can
+    # be parsed at all, and that turns the range "43.1-129.2" into something a
+    # naive scan reads as the number -129.2 - which no CSV publishes, because
+    # the report never claimed it.  This check found exactly that on its first
+    # run.  Requiring that the sign is not preceded by a digit or a decimal
+    # point separates the two without losing genuine negatives, which are
+    # preceded by a space or an opening bracket.
+    seen, miss = 0, []
+    for m in re.finditer(r"(?<![\d.])(-?\d{1,9}(?:\.\d+)?(?:[eE][+-]?\d+)?)", txt):
+        s = m.group(1)
+        if "." not in s or len(s.replace("-", "").replace(".", "").lstrip("0")) < 3:
+            continue
+        seen += 1
+        if s not in vals and s not in LITERATURE_NUMBERS:
+            miss.append(s)
+    miss = sorted(set(miss))
+    return ("every number traces to a CSV", not miss,
+            "%d decimals checked, all traced" % seen if not miss
+            else "%d untraceable: %s  (a literature constant belongs in "
+                 "LITERATURE_NUMBERS with its reason)"
+                 % (len(miss), ", ".join(miss[:8])))
 
 
 def check_readme(want):

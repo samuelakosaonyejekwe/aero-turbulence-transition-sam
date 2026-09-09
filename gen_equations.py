@@ -7,7 +7,7 @@ and removes any legacy equation PNGs.
 
 Author: Akosa Samuel Onyejekwe, 2026.
 """
-import os, glob
+import os, glob, re
 import pandas as pd
 import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
                    # sys.path, so this script works from any directory
@@ -273,6 +273,29 @@ def build_doc():
     out = "model.equations.docx"
     doc.save(out)
     print("wrote", out, "with", len(rows), "native equations")
+
+    # THE DOCUMENT MUST CARRY ONE NATIVE EQUATION PER INDEXED KEY, and until
+    # now nothing said so.  The equation document is a build product, so no
+    # smoke check can read it on a clean checkout - but this generator can read
+    # what it has just written, and the equations stage runs in CI.  An
+    # equation that silently fell back to text, or a caption emitted twice,
+    # would otherwise reach the reader as a gap in the one document whose
+    # entire content is equations.
+    from docx.oxml.ns import qn as _qn
+    _chk = Document(out)
+    _n_omml = (len(_chk.element.body.findall(".//" + _qn("m:oMath")))
+               + len(_chk.element.body.findall(".//" + _qn("m:oMathPara"))))
+    _text = "\n".join(p.text for p in _chk.paragraphs)
+    _caps = set(re.findall(r"\((E\d+[a-z]?)\)", _text))
+    _keys = set(r[0] for r in rows)
+    if _n_omml != len(rows):
+        raise SystemExit("%s carries %d native equation objects for %d indexed "
+                         "equations; one has fallen back to text"
+                         % (out, _n_omml, len(rows)))
+    if _caps != _keys:
+        raise SystemExit("%s captions do not match the index: only in the "
+                         "document %s; only in the index %s"
+                         % (out, sorted(_caps - _keys), sorted(_keys - _caps)))
 
     # ---- index csv (LaTeX source, not images) -------------------------
     pd.DataFrame(rows, columns=["key", "section", "equation", "latex"]).to_csv(

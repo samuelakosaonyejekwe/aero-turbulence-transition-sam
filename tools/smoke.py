@@ -1647,7 +1647,7 @@ def transition_summary_is_in_the_frame_the_march_ran_in():
 
 @check
 def the_generators_use_no_name_they_never_bind():
-    """no module-level name in a generator resolves to nothing"""
+    """no name a generator loads, anywhere in it, resolves to nothing"""
     import ast
     import builtins
     # The sibling of report_format_strings_are_well_formed, and it exists for
@@ -1737,17 +1737,22 @@ def the_generators_use_no_name_they_never_bind():
             elif isinstance(n, ast.Global):
                 bound.update(n.names)
 
-        # pass 2: module-level statements only, every name they LOAD
-        for stmt in tree.body:
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef,
-                                 ast.ClassDef)):
-                continue
-            for n in ast.walk(stmt):
-                if (isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-                        and n.id not in bound
-                        and not hasattr(builtins, n.id)):
-                    bad.append("%s:%d %s" % (rel, n.lineno, n.id))
-    assert not bad, ("module-level name(s) that are never bound: %s"
+        # pass 2: EVERY name loaded anywhere in the module, function bodies
+        # included.  This used to stop at module level, on the reasoning that a
+        # function body may use a name from an enclosing scope - but pass 1
+        # already collects every binding form in the file, parameters and
+        # locals and comprehension targets among them, so a name that is not in
+        # `bound` is bound NOWHERE and will raise the moment the line runs.
+        # The narrower version missed `re.findall` inside gen_equations'
+        # build_doc(), in a module that imports os, glob and pandas and not re,
+        # which is exactly the fault this check exists to catch - found at run
+        # time instead, which is what it is meant to prevent.
+        for n in ast.walk(tree):
+            if (isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+                    and n.id not in bound
+                    and not hasattr(builtins, n.id)):
+                bad.append("%s:%d %s" % (rel, n.lineno, n.id))
+    assert not bad, ("name(s) loaded but never bound anywhere in the module: %s"
                      % ", ".join(sorted(set(bad))[:10]))
 
 
