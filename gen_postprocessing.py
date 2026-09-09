@@ -258,7 +258,10 @@ def plot_surface(case):
     ax2.plot(up["x_c"],up["n_factor"],color=PALETTE[4],lw=2.2,label="N (amplification)")
     ax2.plot(up["x_c"],up["n_crit"],color=PALETTE[5],lw=1.6,ls=":",label="N_crit")
     ax2.set_ylabel("amplification factor N",color=PALETTE[4])
-    ax2.set_ylim(0, max(float(up["n_crit"].max()), float(up["n_factor"].max()))*1.35)
+    # nanmax: the amplification factor is NaN downstream of onset, where the
+    # laminar march does not define it
+    ax2.set_ylim(0, max(float(up["n_crit"].max()),
+                        float(np.nanmax(up["n_factor"].to_numpy(float))))*1.35)
     it=_onset_index(up)
     if it is not None:
         xt=up["x_c"][it]

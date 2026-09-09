@@ -31,12 +31,26 @@ def run_case(cond, name):
             "theta_mm":(s["theta"]*1e3).round(5), "H_shape":s["H"].round(4),
             "Cf":s["Cf"].round(7), "Re_theta":s["Re_theta"].round(2),
             "Re_theta_trans":np.round(s["Re_theta_t"],1),
-            "n_factor":np.round(s["n_factor"],4),
+            # The amplification factor is not defined downstream of onset:
+            # the laminar march stops there, so the array holds the zeros it
+            # was initialised with.  Writing those published a hard 0 across
+            # half the chord in a tabulated column, and drew the N curve on the
+            # criterion figure collapsing to nothing just past the station it
+            # had just fired at.  Absent is absent, as it is for Re_theta_t.
+            "n_factor":_undefined_past_onset(s["n_factor"], s["i_tr"]),
             "n_crit":np.round(s["n_crit"],3),
             "intermittency_gamma":s["gamma"].round(5),
             "state":s["state"]})
         df.to_csv(f"{SOL}/surface_{name}_{surf}.csv",index=False)
     return r
+
+def _undefined_past_onset(v, i_tr, nd=4):
+    """v rounded, with everything strictly downstream of onset set to NaN."""
+    out=np.round(np.asarray(v,float),nd)
+    if i_tr is not None and i_tr+1 < out.size:
+        out[i_tr+1:]=np.nan
+    return out
+
 
 def transition_summary(rc, rl):
     rows=[]
