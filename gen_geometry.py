@@ -456,8 +456,14 @@ def draw_front_side(df_pl):
 def draw_orthographic(df_pl):
     """Single 3rd-angle sheet: plan + front + side + iso inset."""
     W = C.WING
-    fig = plt.figure(figsize=(13.5, 9.5))
-    gs = fig.add_gridspec(2, 2, height_ratios=[1.25,1], width_ratios=[1.5,1])
+    # Sized to the panels, not to a square.  Every view here is set to an
+    # EQUAL data aspect, and the plan view is 17 m by 4 - a 4.3:1 box - so on a
+    # 13.5 x 9.5 sheet each axes shrank to a fifth of the height of the cell it
+    # was given and roughly half the drawing was white.  The row heights now
+    # follow the two rows' data aspects.
+    fig = plt.figure(figsize=(13.5, 7.0))
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.1,1], width_ratios=[1.5,1],
+                          hspace=0.42, wspace=0.22)
     y = df_pl["y_m"].values; xle=df_pl["x_le_m"].values; xte=df_pl["x_te_m"].values
     z = df_pl["z_dihedral_m"].values; chord=df_pl["chord_m"].values
     # PLAN (top-left)
