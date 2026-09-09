@@ -1095,6 +1095,31 @@ para("The profiles are reconstructed from the marched state and not from an assu
  "the similarity profile and δ = θ(n+1)(n+2)/n for the power law. Temperature profiles then "
  "follow from the compressible Crocco–Busemann relation (Eq. E21), showing wall-recovery "
  "heating through the boundary layer.")
+_blp = pd.read_csv("04_solution/bl_profiles_cruise.csv").groupby("station").first()
+# the cross term scales as gamma(1-gamma); x/c = 0.95 is 99.7 per cent
+# turbulent and carries none worth naming
+_bl_g = _blp.intermittency_gamma*(1.0 - _blp.intermittency_gamma)
+_bl_tr = _blp[_bl_g >= 0.01]
+_bl_ok = _blp.drop(index=_bl_tr.index)
+para("THE PLOTTED PROFILE DOES NOT CARRY THE MARCHED SHAPE FACTOR AT A TRANSITIONAL STATION, "
+ "and the table gives both numbers rather than letting them disagree in silence. The march "
+ "blends integrals, θ = (1−γ)θ_lam + γθ_turb; this reconstruction blends velocities, "
+ "u = (1−γ)u_lam + γu_turb. Those are different operations. δ* is linear in u and survives "
+ "it — the plotted profile returns δ* to two parts in a thousand of the linear blend — but θ "
+ "is QUADRATIC in u, and the pointwise blend carries a cross term u_lam·u_turb that a blend "
+ "of integrals does not, worth eight per cent of θ. H = δ*/θ inherits all of it: at "
+ "%s, where γ = %.3f, the curve integrates to %.3f against the marched %.3f. Where γ is 0 or "
+ "1 the cross term vanishes and the two agree to %.1f per cent or better, which is "
+ "interpolation error and nothing else. Rescaling does not repair it — stretching y "
+ "multiplies δ* and θ alike and leaves H untouched — and matching H would mean drawing a "
+ "single-family profile AT the marched H, which is the assumed shape this reconstruction "
+ "exists to avoid and would erase the two-layer structure that is the physical content of a "
+ "transitional station. So H_profile is published beside H_shape."
+ % (", ".join(_bl_tr.index.astype(str)),
+    float(_bl_tr.intermittency_gamma.iloc[0]),
+    float(_bl_tr.H_profile.iloc[0]), float(_bl_tr.H_shape.iloc[0]),
+    100.0*float(((_bl_ok.H_profile - _bl_ok.H_shape).abs()
+                 / _bl_ok.H_shape).max())), italic=True, size=10)
 for f,c in [("bl_velocity_profiles","Boundary-layer velocity profiles."),
             ("bl_temperature_profiles","Boundary-layer temperature profiles (K)."),
             ("bl_temperature_ratio","Normalised temperature profiles T/T_e.")]:

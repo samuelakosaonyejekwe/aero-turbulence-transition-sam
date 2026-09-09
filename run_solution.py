@@ -362,6 +362,30 @@ def bl_profiles(rc, write=True):
     which is the one quantity the two-equation march exists to provide, and the
     profiles it produced were the same two curves at every station and every
     flight condition.
+
+    THE BLENDED PROFILE DOES NOT CARRY THE MARCHED SHAPE FACTOR, and the file
+    says both numbers rather than leaving them to disagree in silence.
+
+    The march blends INTEGRALS - theta = (1-g) theta_lam + g theta_turb - and
+    this reconstruction blends VELOCITIES, u = (1-g) u_lam + g u_turb.  Those
+    are not the same operation.  The displacement thickness is linear in u, so
+    it survives: integrating the plotted profile at x/c = 0.60 returns
+    1.5369e-3 m against 1.5396e-3 from the linear blend, two parts in a
+    thousand.  The momentum thickness is QUADRATIC in u, and the pointwise
+    blend carries a cross term u_lam u_turb that a blend of integrals does not:
+    4.626e-4 m against 4.279e-4, eight per cent.  H = delta*/theta inherits the
+    whole of that, so the plotted transitional profile integrates to H = 3.32
+    where the march says 3.71.  At a station that is wholly laminar or wholly
+    turbulent the cross term vanishes and the two agree to within one or two
+    per cent, which is the interpolation error and nothing else.
+
+    This is not repaired by rescaling: stretching y multiplies delta* and theta
+    alike and leaves H exactly where it was.  Matching H would mean drawing a
+    single-family profile AT the marched H - an assumed shape, which is what
+    the paragraph above records having removed, and it would hide the two-layer
+    structure that is the physical content of a transitional station.  So the
+    blend stays and the profile's own shape factor is published beside the
+    march's, as H_profile against H_shape.
     """
     import stability as _stab
     g=cr["gamma_air"]
@@ -404,6 +428,11 @@ def bl_profiles(rc, write=True):
         y=eta*delta
         u_Ue=(1.0-gam)*f_l(y/max(d_l,1e-12))+gam*f_t(y/max(d_t,1e-12))
         u_Ue=np.clip(u_Ue,0.0,1.0)
+        # The shape factor of the profile actually plotted, integrated from it.
+        # See the docstring: it is NOT the marched H at a transitional station,
+        # because theta is quadratic in u and this blend is pointwise.
+        _ds=float(np.trapz(1.0-u_Ue, y)); _th=float(np.trapz(u_Ue*(1.0-u_Ue), y))
+        _Hp=_ds/_th if _th > 0 else float("nan")
         # The edge Mach number comes off the march, where solve_airfoil put
         # the value _edge_from_cp formed from the CORRECTED pressure.  It used
         # to be U_e/a_inf here - the free-stream speed of sound divided into
@@ -427,6 +456,7 @@ def bl_profiles(rc, write=True):
                 y_mm=round(et*delta*1e3,4),u_Ue=round(uu,4),
                 T_Te=round(tt,4),T_K=round(Ta,2),
                 Me_edge=round(Me,3),H_shape=round(float(s["H"][i]),3),
+                H_profile=round(_Hp,3),
                 recovery_r=round(float(r_rec),4),
                 delta_mm=round(delta*1e3,4),
                 intermittency_gamma=round(gam,3),state=s["state"][i]))

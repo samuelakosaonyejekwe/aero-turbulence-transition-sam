@@ -1806,6 +1806,49 @@ def a_blank_bubble_length_always_has_a_reason_beside_it():
 
 
 @check
+def the_plotted_profile_publishes_its_own_shape_factor():
+    """H_profile integrates the plotted profile and matches H_shape where it must"""
+    import pandas as pd
+    # The march blends INTEGRALS, this reconstruction blends VELOCITIES, and
+    # theta is quadratic in u - so at a transitional station the plotted
+    # profile does not carry the marched shape factor.  It integrated to 3.335
+    # where the march said 3.710, and the row published only the march's
+    # number, so the file disagreed with the curve drawn from it.  Both are
+    # published now, and this holds each to what it is: H_profile to the
+    # profile it describes, and the two to each other wherever the cross term
+    # that separates them vanishes.
+    d = pd.read_csv(os.path.join(utss_paths.ROOT,
+                                 "04_solution/bl_profiles_cruise.csv"))
+    for st, p in d.groupby("station"):
+        p = p.sort_values("y_delta")
+        u = p.u_Ue.to_numpy(float); y = p.y_delta.to_numpy(float)
+        H = float(np.trapz(1.0-u, y)/np.trapz(u*(1.0-u), y))
+        got = float(p.H_profile.iloc[0])
+        assert abs(H - got) < 0.02, (
+            "%s: H_profile is %.4f but the published profile integrates to "
+            "%.4f" % (st, got, H))
+        g = float(p.intermittency_gamma.iloc[0])
+        Hm = float(p.H_shape.iloc[0])
+        # The cross term that separates the two scales as gamma(1-gamma), not
+        # as the distance of gamma from an endpoint: at x/c = 0.95 the station
+        # is 99.7 per cent turbulent, the product is 0.003, and the two agree
+        # to 1.6 per cent with the sign going whichever way interpolation
+        # error takes it.  Discriminating on the product is the physical test.
+        if g*(1.0 - g) < 0.01:
+            # no cross term to speak of: the reconstruction must reproduce the march
+            assert abs(got - Hm)/Hm < 0.05, (
+                "%s is essentially wholly %s (gamma = %.4f) so the profile must "
+                "carry the marched shape factor: %.4f against %.4f"
+                % (st, "laminar" if g < 0.5 else "turbulent", g, got, Hm))
+        else:
+            # the cross term is positive, so it inflates theta and lowers H
+            assert got < Hm, (
+                "%s is transitional (gamma = %.4f) and the pointwise blend "
+                "must return a LOWER shape factor than the blend of integrals; "
+                "got %.4f against %.4f" % (st, g, got, Hm))
+
+
+@check
 def the_bucket_edge_is_a_crossing_and_not_a_threshold():
     """the transition jump coincides with N/N_crit crossing one, not with an incidence"""
     import pandas as pd
