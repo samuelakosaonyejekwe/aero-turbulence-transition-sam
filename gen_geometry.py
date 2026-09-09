@@ -297,14 +297,21 @@ def draw_airfoil_section(co):
                 "\ngradient to ~0.40 c",
                 xy=(0.012,0.004), xytext=(0.15,0.125), color=INK_SOFT, fontsize=10,
                 ha="left", arrowprops=dict(arrowstyle="->", color=INK_SOFT))
-    ax.annotate("cusped, aft-loaded\ntrailing edge", xy=(0.985, co["yc"][-3]),
+    # NOT "cusped".  A cusped trailing edge has zero included angle, both
+    # surfaces meeting tangentially; this one closes at te_wedge_deg(co) - 26.8
+    # degrees - which is a WEDGE, and that fact is the whole reason
+    # Squire-Young is evaluated at 0.98c rather than at the trailing edge and
+    # the reason H sits on Head's clamp there.  The drawing said the opposite
+    # of what the report is about.
+    ax.annotate(f"aft-loaded, {te_wedge_deg(co):.1f}° wedge\ntrailing edge",
+                xy=(0.985, co["yc"][-3]),
                 xytext=(0.80,0.135), color=INK_SOFT, fontsize=10, ha="left",
                 arrowprops=dict(arrowstyle="->", color=INK_SOFT))
     # --- specification box (clear lower-left corner) ---
     spec=("UTSS-NLF16  natural-laminar-flow section\n"
           f"t/c = {tmax:.3f} @ {xt:.2f} c   ·   c_l = {section_cl():.2f} "
           f"at α = {C.CRUISE['alpha_deg']:.1f}°, M = {C.CRUISE['mach']:.2f}\n"
-          "aft-loaded camber   ·   sharp T.E.")
+          f"aft-loaded camber   ·   {te_wedge_deg(co):.1f}° wedge T.E.")
     ax.text(0.015, -0.222, spec, fontsize=10, color=INK,
             va="bottom", ha="left",
             bbox=dict(boxstyle="round,pad=0.4", fc="#eef4fa", ec=INK_SOFT, lw=0.9))
