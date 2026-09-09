@@ -39,6 +39,7 @@ from utss_solver import solve_flat_plate, solve_airfoil, panel_solve, CAL
 from uplot import apply_style, INK, INK_SOFT, PALETTE, new_fig, finish
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.ticker import LogLocator, FuncFormatter
 
 apply_style()
 VAL="06_validation"; VP=os.path.join(VAL,"plots"); os.makedirs(VP,exist_ok=True)
@@ -1601,6 +1602,21 @@ def plot_case(key):
                color=PALETTE[4],ls="-.",lw=1.3,label="UTSS predicted onset")
     ax.set_xlabel("Re_x"); ax.set_ylabel("skin-friction  C_f")
     ax.set_ylim(2e-4,8e-3)
+    # A log axis over 2e-4 to 8e-3 contains ONE decade boundary, so the default
+    # locator labelled a single tick - "10^-3" - and left the reader with no
+    # way to read any other value off the axis on all five of these figures.
+    # The minor decades are labelled as plain numbers instead.
+    # Both the major and the minor ticks in the SAME units.  Labelling the
+    # minors as C_f x 10^3 while the one major tick stayed "10^-3" put two
+    # conventions on one axis, which is worse than the single unreadable label
+    # it replaced.
+    _kilo = FuncFormatter(
+        lambda y, _: ("%g" % (y*1e3)) if 2e-4 <= y <= 8e-3 else "")
+    ax.yaxis.set_minor_locator(LogLocator(base=10.0, subs=(2, 3, 5), numticks=12))
+    ax.yaxis.set_minor_formatter(_kilo)
+    ax.yaxis.set_major_formatter(_kilo)
+    ax.tick_params(axis="y", which="minor", labelsize=8.5)
+    ax.set_ylabel(r"skin-friction  $C_f \times 10^{3}$")
     # the march starts at x = 1e-4 m, so autoscaling put two empty decades of
     # Re_x to the left of anything worth reading
     _rx = np.asarray(r["Re_x"], float)
@@ -1611,7 +1627,7 @@ def plot_case(key):
                  f"Re_θt pred {r['Re_theta'][r['i_tr']]:.0f} vs exp {ex['Re_theta_t']:.0f}")
     ax.legend(loc="lower left",fontsize=10)
     finish(fig,f"{VP}/val_{key}.png",
-           caption=f"Source: {v['source'][:95]}...")
+           caption="Source: "+_cite(v["source"]))
 
 def _cite(source, n=95):
     """A figure-caption citation cut at a WORD boundary, not mid-word.
