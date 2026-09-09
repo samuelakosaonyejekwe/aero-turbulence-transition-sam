@@ -2067,6 +2067,23 @@ def solve_airfoil(xb, yb, alpha_deg, U, nu, chord, Tu_pct,
         # Head's clamp is 2.8; on it, H is a bound and not a solved quantity,
         # and the drag formed from it is reporting the bound.
         r["H_sy_at_clip"] = bool(H_te >= 2.8 - 1e-6)
+        # AND WHETHER THE STATION IS STILL IN ATTACHED FLOW AT ALL.  The clamp
+        # flag says the shape factor is a bound; it does not say where the
+        # station sits relative to this march's OWN separation prediction, and
+        # those are different statements.  x_sep_turb_chord - the first station
+        # at which the turbulent shape factor passes 2.6 - has been computed
+        # for every surface and never compared with the station the drag is
+        # evaluated at.  On the climb upper surface it is 0.978 and the
+        # evaluation station is 0.9811, so that surface's drag is formed three
+        # thousandths of a chord DOWNSTREAM of the point the solver itself
+        # calls separated, where Squire-Young has no wake to be a deficit in
+        # and Head's method has no validity to lend it.  Positive margin is
+        # attached, negative is past separation; NaN where the surface never
+        # separates, which is not the same as a large margin and is not
+        # reported as one.
+        _xsep = r.get("x_sep_turb_chord", float("nan"))
+        r["sy_margin_to_sep_c"] = float(_xsep - xs[i])
+        r["sy_past_sep"] = bool(_xsep == _xsep and xs[i] > _xsep)
         return 2.0*th_te/chord*_swept_drag_factor(Ue_te/U, H_te, sweep_deg,
                                                   swept=swept)
     Cd = squire_young(res["upper"]) + squire_young(res["lower"])

@@ -1806,6 +1806,37 @@ def a_blank_bubble_length_always_has_a_reason_beside_it():
 
 
 @check
+def the_squire_young_station_declares_which_side_of_separation_it_is_on():
+    """sy_past_sep and its margin agree with the two stations they compare"""
+    import pandas as pd
+    # The drag is evaluated at x/c = 0.98, and march_bl separately finds the
+    # first station at which the turbulent shape factor passes 2.6.  Those two
+    # were published side by side and never compared, so nothing said that on
+    # the climb upper surface - and on every polar point above 3 degrees - the
+    # wake deficit Squire-Young integrates is read DOWNSTREAM of the point this
+    # same march calls separated.  The columns say it now; this holds them to
+    # the arithmetic, so the flag cannot drift from the stations it describes.
+    t = pd.read_csv(os.path.join(utss_paths.ROOT,
+                                 "04_solution/transition_summary.csv"))
+    m = (t.x_sep_turb_c - t.x_sy_c).to_numpy(float)
+    got = t.sy_margin_to_sep_c.to_numpy(float)
+    ok = np.isnan(m) & np.isnan(got)
+    assert np.all(ok | (np.abs(m - got) < 2e-3)), (
+        "sy_margin_to_sep_c is not x_sep_turb_c - x_sy_c: %s vs %s"
+        % (list(np.round(got, 4)), list(np.round(m, 4))))
+    flag = t.sy_past_sep.astype(bool).to_numpy()
+    assert np.all(flag == (np.nan_to_num(got, nan=1.0) < 0)), (
+        "sy_past_sep disagrees with the margin beside it: %s vs %s"
+        % (list(flag), list(np.round(got, 4))))
+    # a surface past separation is necessarily on the clamp, since the clamp is
+    # reached at H = 2.8 and separation is declared at 2.6
+    clip = t.H_sy_at_clip.astype(bool).to_numpy()
+    assert not (flag & ~clip).any(), (
+        "a surface is past separation but not on the H = 2.8 clamp, which the "
+        "criteria make impossible: %s" % list(zip(t.case, t.surface, flag, clip)))
+
+
+@check
 def the_field_files_mask_every_column_or_none():
     """speed_ms is blank exactly where Vx_ms, Vy_ms are, and equals their magnitude"""
     import pandas as pd

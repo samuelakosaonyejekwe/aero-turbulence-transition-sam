@@ -143,7 +143,17 @@ def transition_summary(rc, rl, write=True):
                 H_sy_at_clip=bool(s["H_sy_at_clip"]),
                 x_sep_turb_c=(round(float(s["x_sep_turb_chord"]),3)
                               if s["x_sep_turb_chord"]==s["x_sep_turb_chord"]
-                              else None)))
+                              else None),
+                # ...and whether the evaluation station is still in attached
+                # flow.  The clamp flag above says the shape factor there is a
+                # bound; this says which side of the march's OWN separation
+                # prediction the station sits on, which the two columns beside
+                # it have always allowed a reader to work out and no column
+                # stated.  On CLIMB upper it is negative.
+                sy_margin_to_sep_c=(round(float(s["sy_margin_to_sep_c"]),4)
+                                    if s["sy_margin_to_sep_c"]==s["sy_margin_to_sep_c"]
+                                    else None),
+                sy_past_sep=bool(s["sy_past_sep"])))
     df=pd.DataFrame(rows)
     if write:
         df.to_csv(f"{SOL}/transition_summary.csv",index=False)
@@ -162,6 +172,13 @@ def aero_polar():
             theta_te_c=round(r["theta_te_c"],5),
             # half this sweep evaluates Squire-Young on the H = 2.8 clamp
             H_sy_at_clip=bool(u["H_sy_at_clip"] or l["H_sy_at_clip"]),
+            # and on part of it the station is past the march's own separation
+            # point, which is a stronger statement than the clamp and was not
+            # published anywhere the reader could see it vary with incidence
+            sy_past_sep=bool(u["sy_past_sep"] or l["sy_past_sep"]),
+            sy_margin_to_sep_c=round(float(min(
+                [v for v in (u["sy_margin_to_sep_c"], l["sy_margin_to_sep_c"])
+                 if v == v] or [float("nan")])), 4),
             xtr_upper_c=round(u["x_tr_chord"],3) if u["x_tr_chord"]==u["x_tr_chord"] else 1.0,
             xtr_lower_c=round(l["x_tr_chord"],3) if l["x_tr_chord"]==l["x_tr_chord"] else 1.0))
     df=pd.DataFrame(rows); df.to_csv(f"{SOL}/aero_polar.csv",index=False)

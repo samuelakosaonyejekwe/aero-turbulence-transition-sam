@@ -1006,7 +1006,27 @@ para("And whether the shape factor at that station is solved. Head's entrainment
  "hazard this report already flagged for the trailing-edge separation margin and had not for "
  "the headline number. Closing it properly needs viscous-inviscid coupling rather than a wake "
  "march, and it is worth the same fifth of a count."
- % (_pol_clip, len(pd.read_csv("04_solution/aero_polar.csv"))), italic=True, size=10)
+ % (_pol_clip, len(_pol)), italic=True, size=10)
+para("The stronger statement, which the clamp flag does not make, is WHICH SIDE OF SEPARATION "
+ "the evaluation station is on. march_bl finds the first station at which the turbulent shape "
+ "factor passes 2.6 and has always written it out; nothing compared it with the station the "
+ "drag is evaluated at. On %d of the %d polar points it is UPSTREAM of that station, so the "
+ "wake deficit Squire-Young integrates is being read in flow this same march calls separated, "
+ "and the margin widens with incidence to %.4f chord at %.0f°. The cruise case is not among "
+ "them — both surfaces are attached at the station, by %.4f and %.4f chord — but the CLIMB "
+ "UPPER surface is, by %.4f chord. Every one of those points is a point at which the clamp "
+ "flag was already true, so no drag quoted here changes; what changes is that the condition is "
+ "now a published column, sy_past_sep and sy_margin_to_sep_c, in the polar and in the "
+ "transition summary, rather than something a reader had to derive by comparing two others."
+ % (int(_pol.sy_past_sep.sum()), len(_pol),
+    float(_pol.sy_margin_to_sep_c.min()),
+    float(_pol.loc[_pol.sy_margin_to_sep_c.idxmin(), "alpha_deg"]),
+    float(_ts_clip.loc[(_ts_clip.case == "CRUISE") & (_ts_clip.surface == "upper"),
+                    "sy_margin_to_sep_c"].iloc[0]),
+    float(_ts_clip.loc[(_ts_clip.case == "CRUISE") & (_ts_clip.surface == "lower"),
+                    "sy_margin_to_sep_c"].iloc[0]),
+    float(_ts_clip.loc[(_ts_clip.case == "CLIMB") & (_ts_clip.surface == "upper"),
+                    "sy_margin_to_sep_c"].iloc[0])), italic=True, size=10)
 table_from_csv("04_solution/squire_young_station_sensitivity.csv", key="sy_station",
                cap="Sensitivity of the section drag to the Squire-Young "
                    "evaluation station (squire_young_station_sensitivity.csv). "
