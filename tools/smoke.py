@@ -1806,6 +1806,40 @@ def a_blank_bubble_length_always_has_a_reason_beside_it():
 
 
 @check
+def the_span_table_carries_the_loading_that_closes_the_wing_lift():
+    """integrating c_l_lifting_line over the span returns the published wing C_L"""
+    import pandas as pd
+    import case_config as C
+    # Two section models sit in this project and only one of them closes the
+    # wing lift.  c_l_section is the panel strip on the LEADING-EDGE sweep,
+    # which is the angle the boundary layer lives on; the wing C_L comes from
+    # the lifting line, whose slope carries cos of the QUARTER-CHORD sweep.
+    # Integrating the strips returns a few per cent low, and nothing said so -
+    # a reader who summed the published table got a different wing from the
+    # published one.  c_l_lifting_line is in the table for that reason, and
+    # this holds it to the job: it must integrate to the tabulated C_L.
+    root = utss_paths.ROOT
+    sp = pd.read_csv(os.path.join(root, "04_solution/spanwise_distribution.csv"))
+    forces = pd.read_csv(os.path.join(root, "04_solution/integrated_forces.csv")
+                         ).set_index("quantity")
+    CL = float(forces.loc["Wing C_L (lifting line, taper + washout + sweep)",
+                          "value"])
+    S = C.WING["area_S"]
+    y = sp.y_m.to_numpy(float); c = sp.chord_m.to_numpy(float)
+    got = 2.0/S*float(np.trapz(sp.c_l_lifting_line.to_numpy(float)*c, y))
+    # the sweep stops at eta = 0.98, so the tip strip is missing: that is worth
+    # a few tenths of a per cent and nothing like the strip/lifting-line gap
+    assert abs(got - CL)/CL < 0.015, (
+        "the lifting-line loading integrates to C_L = %.4f against the "
+        "published %.4f" % (got, CL))
+    strip = 2.0/S*float(np.trapz(sp.c_l_section.to_numpy(float)*c, y))
+    assert strip < got, (
+        "the panel strips no longer sit below the lifting-line loading, which "
+        "is what the two sweep conventions require: %.4f against %.4f"
+        % (strip, got))
+
+
+@check
 def the_plotted_profile_publishes_its_own_shape_factor():
     """H_profile integrates the plotted profile and matches H_shape where it must"""
     import pandas as pd

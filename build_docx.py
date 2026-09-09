@@ -7,6 +7,7 @@ and vectors, validation comparisons, calibration record and sources.
 
 No black: body text and headings use navy ink; tables use accent borders.
 """
+import math
 import os
 import re
 
@@ -1065,6 +1066,45 @@ table_from_csv("04_solution/aero_polar.csv", cap="Aerodynamic polar (aero_polar.
 image("05_postprocessing/csv_plots/aero_polar.png", width=6.3,
       cap="Lift curve, drag polar, L/D and transition vs angle of attack.")
 h2("9.6  Span-wise distribution (3-D)")
+_sp = pd.read_csv("04_solution/spanwise_distribution.csv")
+_sp_S = _C.WING["area_S"]
+_if = pd.read_csv("04_solution/integrated_forces.csv").set_index("quantity")
+# the quarter-chord sweep as the solution PUBLISHES it, not recomputed here
+_geo_sweep_c4 = float(_if.loc["Quarter-chord sweep", "value"])
+_CL_pub = float(_if.loc["Wing C_L (lifting line, taper + washout + sweep)", "value"])
+
+
+def _span_CL(col):
+    """(2/S) * trapezoid of c_l * chord over the tabulated semi-span."""
+    y = list(_sp.y_m); c = list(_sp.chord_m); v = list(_sp[col])
+    tot = sum(0.5*(v[i]*c[i] + v[i+1]*c[i+1])*(y[i+1] - y[i])
+              for i in range(len(y) - 1))
+    return 2.0*tot/_sp_S
+
+
+_CL_strip = _span_CL("c_l_section")
+_CL_ll_int = _span_CL("c_l_lifting_line")
+para("INTEGRATING THIS TABLE DOES NOT RETURN THE WING C_L TWO TABLES EARLIER, and the reason "
+ "is that they are two section models rather than one number computed twice. c_l_section is "
+ "the PANEL section's swept-strip lift, solved on the LEADING-EDGE sweep, because that is the "
+ "angle the boundary layer lives on and transition is what these strips exist to predict. The "
+ "wing C_L comes from the lifting line, whose section slope is reduced by cos of the "
+ "QUARTER-CHORD sweep — %.2f° against %.2f° — which is the convention for a lift-curve slope. "
+ "cos²Λ_LE = %.4f against cos Λ_c/4 = %.4f is three per cent before the panel section's own "
+ "departure from a linear a₀(α−α_L0) is counted, and measured the strips run from %.3f of the "
+ "lifting-line loading at the root to %.3f at the tip. So integrating c_l_section over the "
+ "span returns C_L = %.4f where the wing table says %.4f, a %.1f per cent shortfall, and "
+ "integrating c_l_lifting_line — published beside it for exactly this reason — returns %.4f, "
+ "which is the tabulated value to within the truncation of a twelve-station sweep that stops "
+ "at η = %.2f. Neither number is wrong; they answer different questions, and the column that "
+ "closes the wing lift is now in the table rather than left to be reconstructed."
+ % (float(_geo_sweep_c4), _C.WING["le_sweep_deg"],
+    math.cos(math.radians(_C.WING["le_sweep_deg"]))**2,
+    math.cos(math.radians(_geo_sweep_c4)),
+    float((_sp.c_l_section/_sp.c_l_lifting_line).iloc[0]),
+    float((_sp.c_l_section/_sp.c_l_lifting_line).iloc[-1]),
+    _CL_strip, _CL_pub, 100.0*(_CL_pub-_CL_strip)/_CL_pub, _CL_ll_int,
+    float(_sp.eta.max())), italic=True, size=10)
 table_from_csv("04_solution/spanwise_distribution.csv",
                cap="Span-wise distribution (spanwise_distribution.csv).")
 image("05_postprocessing/csv_plots/spanwise_transition.png", width=5.8,

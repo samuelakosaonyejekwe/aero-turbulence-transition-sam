@@ -244,6 +244,22 @@ def spanwise():
     X,Y=C.nlf16_panel_points(130)
     eta=np.linspace(0.0,0.98,12); rows=[]
     ai=induced_angle_deg(eta)
+    # THE STRIPS AND THE WING LIFT ARE TWO SECTION MODELS, and the file now
+    # carries both rather than leaving a reader to integrate one and get the
+    # other.  c_l_section is the PANEL section's swept-strip lift, solved on
+    # the LEADING-EDGE sweep because that is the angle the boundary layer and
+    # therefore the transition prediction live on.  The wing C_L two tables
+    # earlier comes from the lifting line, whose section slope is reduced by
+    # cos of the QUARTER-CHORD sweep, which is the convention for a lift-curve
+    # slope.  cos^2(12 deg) = 0.9568 against cos(9.89 deg) = 0.9851, so the two
+    # differ by about three per cent before the panel section's own departure
+    # from a linear a0(alpha - alpha_L0) is counted; measured, the strips run
+    # from 0.961 of the lifting-line loading at the root to 0.916 at the tip.
+    # Integrating the strip column therefore returns a wing C_L a few per cent
+    # below the tabulated one, and c_l_lifting_line is here so that the gap is
+    # visible at the station where it arises instead of only in the total.
+    _ll = _LL_CACHE.get(round(float(cr["alpha_deg"]),6)) or lifting_line(cr["alpha_deg"])
+    _a0e = float(_ll["a0_eff"]); _al0 = float(_ll["alpha_L0"])
     for e,a_ind in zip(eta,ai):
         chord=W["root_chord"]+e*(W["tip_chord"]-W["root_chord"])
         Re=cr["U_inf"]*chord/cr["nu_inf"]
@@ -267,6 +283,7 @@ def spanwise():
             alpha_induced_deg=round(float(a_ind),2),
             alpha_eff_deg=round(aeff,2),
             c_l_section=round(r["Cl"],4),
+            c_l_lifting_line=round(_a0e*np.radians(aeff-_al0),4),
             xtr_upper_c=round(xu,3), xtr_lower_c=round(xl,3),
             Cd_section=round(r["Cd"],5),
             laminar_fraction=round(0.5*(xu+xl),3)))
