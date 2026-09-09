@@ -1007,10 +1007,18 @@ image("05_postprocessing/csv_plots/spanwise_transition.png", width=5.8,
 # ======================================================================
 h1("10.  Post-Processing — Contours, Profiles and 3-D Fields")
 h2("10.1  Pressure and velocity contours")
+# Both conditions, both fields.  gen_postprocessing writes the velocity
+# magnitude and the vector field for climb as well as cruise, and this block
+# showed the cruise pair and only the climb pressure - so the two conditions
+# were not the same section twice, which is the fault already corrected in 9.4
+# for the momentum thickness and shape factor.  Two figures were generated on
+# every run and appeared nowhere.
 for f,c in [("contour_Cp_cruise","Pressure-coefficient contour — cruise."),
             ("contour_speed_cruise","Velocity magnitude and streamlines — cruise."),
             ("vectors_cruise","Velocity vector field — cruise."),
-            ("contour_Cp_climb","Pressure-coefficient contour — climb.")]:
+            ("contour_Cp_climb","Pressure-coefficient contour — climb."),
+            ("contour_speed_climb","Velocity magnitude and streamlines — climb."),
+            ("vectors_climb","Velocity vector field — climb.")]:
     image(f"05_postprocessing/contours/{f}.png", width=6.2, cap=c)
 h2("10.2  Boundary-layer velocity and temperature profiles")
 para("The profiles are reconstructed from the marched state and not from an assumed shape. "

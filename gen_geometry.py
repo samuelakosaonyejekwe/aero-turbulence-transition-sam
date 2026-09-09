@@ -15,7 +15,7 @@ import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
                    # sys.path, so this script works from any directory
 import case_config as C
 from utss_solver import panel_solve
-from uplot import apply_style, INK, INK_SOFT, PALETTE, finish
+from uplot import apply_style, INK, INK_SOFT, PALETTE, finish, box_aspect
 import matplotlib.pyplot as plt
 
 apply_style()
@@ -594,10 +594,7 @@ def _iso_wing(ax, df_pl, zoom=1.0, nticks=None):
     # `zoom` fills the sheet.  A 3-D axes leaves a wide margin round its own
     # bounding box on top of whatever the subplot leaves, so the isometric
     # sheet had the wing occupying about a third of it and the rest white.
-    try: ax.set_box_aspect((3,6,1), zoom=zoom)
-    except TypeError:                       # matplotlib without the zoom kwarg
-        ax.set_box_aspect((3,6,1))
-    except Exception: pass
+    box_aspect(ax,(3,6,1),zoom=zoom)
     if nticks:
         from matplotlib.ticker import MaxNLocator
         # the x labels run along a steeply foreshortened axis and ran into one

@@ -599,6 +599,41 @@ H_REVERSE = 4.90      # developed reverse-flow profile: the aft end of the
                       # tabulated Falkner-Skan branch, where the separated
                       # shear layer's amplification rate is evaluated
 
+# WHERE THE RATE AT H_REVERSE IS CONVERGED, AND WHERE IT IS NOT.
+#
+# The separation closure and the cross-flow branch both read
+# sigma_curve(H_REVERSE, Re_theta), and both rest on the same property: that
+# this rate is nearly flat in Reynolds number.  Above Re_theta = 200 it is, and
+# it saturates as an inflectional instability must - 0.0417 at 200, 0.0435 at
+# 400, 0.0448 at 1000, 0.0461 at 8000.
+#
+# BELOW about Re_theta = 200 the Orr-Sommerfeld solve on this profile is NOT
+# converged.  Across neighbouring RET_GRID nodes from 40 to 136 the tabulated
+# rate runs 0.0312, 0.0329, 0.0343, 0.0355, 0.0365, 0.0661, 0.0793, 0.0718,
+# 0.0856, 0.0558 - it jumps by a factor of two between adjacent nodes and the
+# peak-amplified frequency hops bands.  This is NOT the tabulation: a direct
+# eigenvalue sweep at the same shape factor is equally erratic (0.1035 at
+# Re_theta = 40, 0.0356 at 61, 0.0919 at 94, 0.0751 at 144), so it is the
+# eigenvalue problem itself.  A deep reverse-flow profile at low Reynolds
+# number is a stiff operator and the mode filter of os_temporal is not
+# separating the physical mode from the discretised continuous spectrum there.
+#
+# IT REACHES NO PUBLISHED RESULT, and that is measured rather than assumed.
+# Instrumenting every sigma_curve call at this shape factor: the aerofoil
+# bubbles read Re_theta 426 to 1020, the T3C4 plate 256 to 959, the Boltz
+# swept sections 934 upwards.  The Dagenhart sections are the only case that
+# reads lower - down to 122, in the leading-edge bubble that forms before the
+# cross-flow integral starts - and clamping the rate at Re_theta = 200 there
+# leaves all six transition locations, all six selected mechanisms and the
+# 21.8 per cent mean error bit-identical.  The reads happen upstream of
+# anything that decides an answer.
+#
+# So the floor is documented rather than imposed: imposing one would be a
+# constant with no effect, and tools/smoke.py holds the property the model
+# actually leans on - that the rate is monotone and saturating over the range
+# it is read in.  If a rebuilt database ever moved a bubble down into this
+# region, that check is where it would show.
+
 
 def sigma_curve(H, Re_theta):
     """Amplification rate against dimensionless frequency at one (H, Re_theta).

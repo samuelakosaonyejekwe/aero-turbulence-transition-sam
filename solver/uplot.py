@@ -84,6 +84,36 @@ def new_fig(w=8.4, h=5.4):
     return fig, ax
 
 
+def box_aspect(ax, aspect, zoom=1.0):
+    """set_box_aspect on a 3-D axes, with the zoom kwarg where it exists.
+
+    `zoom` was added to Axes3D.set_box_aspect after this project's pinned
+    matplotlib, so the call is guarded - but it was guarded like this:
+
+        try:    ax.set_box_aspect(aspect, zoom=zoom)
+        except TypeError: ax.set_box_aspect(aspect)
+        except Exception: pass
+
+    and that third clause is the pattern stability._combined_family's comment
+    condemns by name: it swallows EVERY other failure, so a matplotlib whose
+    signature changed again would silently leave every 3-D figure at the
+    default aspect with nothing to say so.  Four figures are affected, two of
+    which gen_assets crops for the README banner and the social card, so the
+    first sign would have been a distorted wing on the front page.
+
+    The TypeError fallback is kept, because that one is expected and handled.
+    Anything else is reported and the figure is still drawn - the same
+    treatment gen_postprocessing already gives a failed streamplot.
+    """
+    try:
+        ax.set_box_aspect(aspect, zoom=zoom)
+    except TypeError:                      # matplotlib without the zoom kwarg
+        ax.set_box_aspect(aspect)
+    except Exception as e:                 # noqa: BLE001
+        print("  WARNING: set_box_aspect%r failed (%s); this 3-D figure is at "
+              "the default aspect ratio" % ((aspect,), e))
+
+
 def finish(fig, path, caption=None):
     """Tidy layout (so text never overlaps data) and save."""
     fig.tight_layout(pad=1.4)

@@ -1382,6 +1382,47 @@ def plotters_work_from_their_own_committed_csvs():
 
 
 @check
+def reverse_flow_rate_saturates_above_its_converged_floor():
+    """the bubble and cross-flow rate rises and saturates with Re_theta"""
+    import stability as st
+    # The separation closure and the cross-flow branch both read
+    # sigma_curve(H_REVERSE, Re_theta), and BOTH rest on that rate being
+    # nearly flat in Reynolds number - the solver comment gives 0.0417 at 200
+    # against 0.0461 at 8000, and crossflow_receptivity's whole argument is
+    # that the rate carries no cross-flow physics because of it.
+    #
+    # That is true only ABOVE about Re_theta = 200.  Below it the
+    # Orr-Sommerfeld solve on the developed reverse-flow profile is not
+    # converged: the tabulated rate runs 0.0312, 0.0661, 0.0793, 0.0718,
+    # 0.0856, 0.0558 across neighbouring nodes from Re_theta 40 to 136, and a
+    # DIRECT eigenvalue sweep is equally erratic there (0.1035 at 40, 0.0356 at
+    # 61, 0.0919 at 94), so it is the eigenvalue problem and not the
+    # tabulation.  See the note in stability.py.
+    #
+    # Measured, it reaches no published result: on the aerofoil set the bubble
+    # closure reads only Re_theta 426-1020, on T3C4 255-959, and on the
+    # Dagenhart sections - the one case that does read down to 122 - clamping
+    # the rate at this floor leaves all six transition locations, all six
+    # mechanisms and the 21.8 % mean error bit-identical.  What this check
+    # holds is the property the model actually leans on, over the range it is
+    # read in: a rebuilt database that lost the saturation would be caught.
+    FLOOR = 200.0
+    Re = [200.0, 300.0, 400.0, 600.0, 1000.0, 2000.0, 4000.0, 8000.0]
+    sg = [float(st.sigma_curve(st.H_REVERSE, R).max()) for R in Re]
+    assert all(b >= a - 1e-9 for a, b in zip(sg, sg[1:])), (
+        "the reverse-flow rate is not monotone above Re_theta = %g: %s"
+        % (FLOOR, [round(v, 4) for v in sg]))
+    first, last = sg[2] - sg[0], sg[-1] - sg[-2]
+    assert last < 0.25*first, (
+        "the rate is not saturating: it adds %.5f over the last step against "
+        "%.5f over the first" % (last, first))
+    assert 0.040 < sg[0] < 0.047 and 0.040 < sg[-1] < 0.050, (
+        "the reverse-flow rate has left the band the report and README quote "
+        "(0.042-0.045 over the range the bubbles span): %.4f .. %.4f"
+        % (sg[0], sg[-1]))
+
+
+@check
 def omitted_friction_is_in_the_streamwise_frame():
     """the friction still ahead converts out of the normal plane like the drag"""
     import case_config as C

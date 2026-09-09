@@ -11,7 +11,7 @@ import utss_paths  # noqa: F401  - anchors the repo root and solver/ on
 import case_config as C
 from utss_solver import solve_airfoil
 from uplot import (apply_style, INK, INK_SOFT, PALETTE, FIELD_CMAP, CF_CMAP,
-                   GAMMA_CMAP, new_fig, finish)
+                   GAMMA_CMAP, new_fig, finish, box_aspect)
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator, FuncFormatter
@@ -648,9 +648,7 @@ def plot_3d(field):
         # bounding box, so these renders were a wing in the middle of a great
         # deal of white - and gen_assets crops this very figure for the README
         # banner and the social card
-        try: ax.set_box_aspect((3.0,7.0,1.2), zoom=1.25)
-        except TypeError: ax.set_box_aspect((3.0,7.0,1.2))
-        except Exception: pass
+        box_aspect(ax,(3.0,7.0,1.2),zoom=1.25)
         ax.set_title(f"3D wing surface contour: {lab} (cruise) — AETHER-NLF 25",
                      color=INK,fontweight="normal")
         fig.text(0.5,0.02,f"Upper+lower surfaces, lofted {W['section']} sections; "
@@ -690,9 +688,7 @@ def plot_3d_vectors(field):
     cb=fig.colorbar(m,ax=ax,shrink=0.6,pad=0.10); cb.set_label("C_f")
     ax.set_xlabel("x [m]"); ax.set_ylabel("y span [m]"); ax.set_zlabel("z [m]")
     ax.view_init(elev=40,azim=-65); _tidy3d(ax)
-    try: ax.set_box_aspect((3.0,7.0,1.2), zoom=1.25)
-    except TypeError: ax.set_box_aspect((3.0,7.0,1.2))
-    except Exception: pass
+    box_aspect(ax,(3.0,7.0,1.2),zoom=1.25)
     ax.set_title("Upper-surface flow direction, coloured by C_f (strip "
                  "formulation: chordwise only)",
                  color=INK,fontweight="normal")
@@ -717,9 +713,7 @@ def plot_remaining_csvs():
             ax.plot(s["X_m"],s["Y_m"],s["Z_m"],color=col,lw=1.1)
     ax.set_xlabel("x [m]"); ax.set_ylabel("y span [m]"); ax.set_zlabel("z [m]")
     ax.view_init(elev=26,azim=-60); _tidy3d(ax)
-    try: ax.set_box_aspect((3,7,1.2), zoom=1.25)
-    except TypeError: ax.set_box_aspect((3,7,1.2))
-    except Exception: pass
+    box_aspect(ax,(3,7,1.2),zoom=1.25)
     ax.set_title("Lofted wing sections (from wing_sections_3d.csv)",color=INK)
     ax.grid(False)
     fig.savefig(f"{CSVP}/geo_sections_3d.png",dpi=170,facecolor="white",
